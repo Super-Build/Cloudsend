@@ -1,6 +1,6 @@
 # Android 运行时工程文档 / Android Runtime Engineering Notes
 
-最后一次从全仓源码核验：2026-04-18
+最后一次从全仓源码核验：2026-04-22
 
 > 本文件记录的是**当前代码真正体现出来的 Android 运行时模型**。
 > 中文用于解释状态和风险；English symbol / path 用于把结论牢牢钉回源码。
@@ -54,6 +54,26 @@
 - Android server 每秒在 `src/server/connection.rs` 的 `second_timer.tick()` 内发送 `Misc.daxian_status`。
 - PC 端 `src/client/io_loop.rs` 接收 `misc::Union::DaxianStatus(json)` 后推送 Flutter 事件 `update_daxian_status`。
 - Flutter 端 `DaxianStatusModel` 解析 JSON，`DaxianStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
+
+### 0.4 共享视频流启动前必须清互斥状态
+
+2026-04-22 已修复"开共享后一直处于截屏流"状态残留问题：
+
+- `nZW99cdXQ0COhB2o.resetCaptureStates(reason)` 是 `shouldRun=false` 与 `SKL=false` 的统一清理入口。
+- `DFm8Y8iMScvB2YDw.startCapture()` 在创建 ImageReader/VirtualDisplay 前必须调用 `resetCaptureStates("before-start-capture")` 与 `ClsFx9V0S.rEqMB3nD(255)`。
+- `DFm8Y8iMScvB2YDw.destroy()` 必须清理 `savedMediaProjectionIntent`、`PIXEL_SIZEBack8`、黑屏 `gohome/BIS`、防触 `touchBlockEnabled` 与 VIDEO_RAW enable。
+- `XerQvgpGBzr8FDFr` 授权取消必须发 `on_media_projection_canceled`，Flutter 侧由 `ServerModel.onMediaProjectionDenied()` 回滚 `_isStart`。
+- PC 首帧 fallback 第一次自动开无视延迟为 3000ms，降低 Android 授权/启动期间的竞争窗口。
+
+### 0.5 双通道受无障碍状态守卫
+
+2026-04-22 已新增无障碍权限感知的自动 fallback 守卫：
+
+- Android `daxian_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
+- Flutter `DaxianStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
+- `_canRequestAndroidBackupFrame` 是 PC 自动发送"开无视"前的唯一守卫。
+- 无障碍未开/未知时，首帧 fallback 只调用 `sessionRefreshVideo(...)`。
+- 监测面板"加密状态"即无障碍服务连接状态，不是网络连接状态。
 
 ---
 

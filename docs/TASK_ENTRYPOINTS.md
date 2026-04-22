@@ -1,6 +1,6 @@
 # 任务入口点 / Task Entrypoints
 
-最后一次从全仓源码核验：2026-04-18
+最后一次从全仓源码核验：2026-04-22
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -65,6 +65,38 @@
 - `RemoteStatusMonitors`
 - `show-daxian-status-monitor`
 - `show_daxian_status_monitor`
+
+开共享后卡截屏流相关任务，第一入口固定为：
+
+- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/daxian/dev/XerQvgpGBzr8FDFr.kt`
+- `flutter/lib/models/server_model.dart`
+- `flutter/lib/mobile/pages/server_page.dart`
+- `flutter/lib/models/model.dart`
+
+排查关键词：
+
+- `resetCaptureStates`
+- `before-start-capture`
+- `on_media_projection_canceled`
+- `onMediaProjectionDenied`
+- `savedMediaProjectionIntent = null`
+- `Duration(milliseconds: 3000)`
+
+无障碍感知双通道相关任务，第一入口固定为：
+
+- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
+- `flutter/lib/models/model.dart`
+- `flutter/lib/common/widgets/overlay.dart`
+
+排查关键词：
+
+- `accessibility`
+- `_canRequestAndroidBackupFrame`
+- `_requestAndroidBackupFrame`
+- `sessionRefreshVideo`
+- `加密状态`
 
 ---
 

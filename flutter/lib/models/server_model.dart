@@ -464,6 +464,18 @@ class ServerModel with ChangeNotifier {
     }
   }
 
+  void onMediaProjectionDenied() {
+    if (_isStart) {
+      debugPrint("MediaProjection denied by user, rollback _isStart");
+      _isStart = false;
+      notifyListeners();
+    }
+    updateClientState();
+    if (isAndroid) {
+      androidUpdatekeepScreenOn();
+    }
+  }
+
   /// Stop the screen sharing service.
   Future<void> stopService() async {
     _isStart = false;

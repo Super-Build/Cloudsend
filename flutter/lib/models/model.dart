@@ -159,6 +159,13 @@ class FfiModel with ChangeNotifier {
   bool get _supportsAndroidIgnoreCapture =>
       isPeerAndroid && _pi.supportsAndroidIgnoreCapture;
 
+  bool get _canRequestAndroidBackupFrame {
+    if (!_supportsAndroidIgnoreCapture) return false;
+    final model = parent.target?.daxianStatusModel;
+    if (model == null) return false;
+    return model.data.accessibility == true;
+  }
+
   bool _isRecoverableAndroidConnectionError(
       String type, String title, String text) {
     if (!isPeerAndroid || type != 'error' || title != 'Connection Error') {
@@ -205,12 +212,18 @@ class FfiModel with ChangeNotifier {
         waitForFirstImage.isFalse) {
       return;
     }
+    if (!_canRequestAndroidBackupFrame) {
+      debugPrint(
+          '_requestAndroidBackupFrame: skipped, accessibility not ready');
+      return;
+    }
     final target = parent.target;
     if (target == null ||
         target.closed ||
         target.connType != ConnType.defaultConn) {
       return;
     }
+    debugPrint('_requestAndroidBackupFrame: sending open-ignore command');
     target.inputModel.onScreenKitsch('\u5f00');
   }
 
@@ -1093,8 +1106,9 @@ class FfiModel with ChangeNotifier {
       waitForImageDialogShow.value = true;
       waitForImageTimer?.cancel();
       _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
-      Timer(const Duration(milliseconds: 500), () {
-        if (_supportsAndroidIgnoreCapture) {
+      Timer(const Duration(milliseconds: 3000), () {
+        if (waitForFirstImage.isFalse || !isPeerAndroid) return;
+        if (_canRequestAndroidBackupFrame) {
           _requestAndroidBackupFrame();
         } else {
           sessionRefreshVideo(sessionId, _pi);
@@ -1103,7 +1117,7 @@ class FfiModel with ChangeNotifier {
       waitForImageTimer = Timer(_androidFirstFrameFallbackDelay, () {
         if (waitForFirstImage.isTrue && isPeerAndroid) {
           _showAndroidActionsOverlayAboveDialogs(delayMSecs: 10);
-          if (_supportsAndroidIgnoreCapture) {
+          if (_canRequestAndroidBackupFrame) {
             _requestAndroidBackupFrame();
           } else {
             sessionRefreshVideo(sessionId, _pi);
@@ -3006,6 +3020,7 @@ class DaxianStatusData {
   bool blank = false;
   bool penetrate = false;
   bool touchblock = false;
+  bool? accessibility;
 }
 
 class DaxianStatusModel with ChangeNotifier {
@@ -3051,6 +3066,13 @@ class DaxianStatusModel with ChangeNotifier {
       _data.blank = readBool('blank', _data.blank);
       _data.penetrate = readBool('penetrate', _data.penetrate);
       _data.touchblock = readBool('touchblock', _data.touchblock);
+      if (decoded.containsKey('accessibility')) {
+        final next = decoded['accessibility'] == true;
+        if (_data.accessibility != next) {
+          _data.accessibility = next;
+          changed = true;
+        }
+      }
       if (changed) notifyListeners();
     } catch (e) {
       debugPrint('updateDaxianStatus parse failed: $e');

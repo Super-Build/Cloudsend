@@ -1532,6 +1532,7 @@ class DaxianStatusMonitor extends StatelessWidget {
                     _row("黑屏状态：", m.data.blank),
                     _row("穿透状态：", m.data.penetrate),
                     _row("防触状态：", m.data.touchblock),
+                    _row("加密状态：", m.data.accessibility == true),
                   ],
                 ),
               )

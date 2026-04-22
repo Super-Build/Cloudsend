@@ -37,6 +37,13 @@ class XerQvgpGBzr8FDFr: Activity() {
                 launchService(data)
             } else {
                 setResult(RES_FAILED)
+                try {
+                    oFtTiPzsqzBHGigp.flutterMethodChannel?.invokeMethod(
+                        "on_media_projection_canceled", null
+                    )
+                } catch (e: Exception) {
+                    Log.e("PermissionActivity", "notify flutter denied failed", e)
+                }
             }
         }
 

@@ -1,6 +1,6 @@
 # 工程基线 / Engineering Baseline
 
-最后一次从全仓源码核验：2026-04-18
+最后一次从全仓源码核验：2026-04-22
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -61,6 +61,25 @@
 - Toolbar 会话开关：`show-daxian-status-monitor`。
 - UI Widget：`RemoteStatusMonitors` 组合 `QualityMonitor` 与 `DaxianStatusMonitor`，只有两者同时显示时插入 6px 间距。
 - Sciter UI 只保留 `update_daxian_status` 空实现，当前面板只在 Flutter UI 显示。
+
+### 0.4 2026-04-22 共享/截屏流状态生命周期基线
+
+当前基线：
+
+- 任意路径进入 `startCapture()`，都必须先清 `shouldRun/SKL/PIXEL_SIZEBack8`，保证视频流入口幂等。
+- `destroy()` 是停服务全清入口，必须清 `savedMediaProjectionIntent`、黑屏、防触、无视/穿透残留状态。
+- 授权取消回调为 `on_media_projection_canceled`，Flutter 端必须调用 `ServerModel.onMediaProjectionDenied()`。
+- PC 首帧 fallback 首次自动开无视延迟为 3000ms，不再是 500ms。
+
+### 0.5 2026-04-22 无障碍感知双通道基线
+
+当前基线：
+
+- Android 状态推送必须包含 `accessibility` 字段。
+- PC 端自动"开无视"只能通过 `_canRequestAndroidBackupFrame` 判断。
+- `accessibility == null` 或 `false` 时，PC 只刷新视频流，不发送"开无视"。
+- `accessibility == true` 时，PC 才允许视频丢失 fallback 到截屏流。
+- 安卓状态监测面板的"加密状态"显示此字段。
 
 ---
 

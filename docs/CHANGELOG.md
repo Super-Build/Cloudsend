@@ -1,5 +1,47 @@
 # Changelog
 
+## [v5.2.1-hotfix-6] 无障碍权限感知的双通道控制 — 2026-04-17
+
+### 核心特性
+
+- PC 以 Android 无障碍（网络加密）服务状态为权威，动态决定是否启用双通道
+- 无障碍未开或状态未知时，PC 只刷新/等待视频流，不发送"开无视"命令
+- 无障碍已开时，PC 才允许视频流丢失 fallback 到截屏流
+- 支持运行时动态切换：`daxian_status` 每秒同步 `accessibility` 字段
+- 监测面板新增"加密状态"行
+
+### 实现方式
+
+- `DFm8Y8iMScvB2YDw.kt`: `daxian_status` JSON 增加 `accessibility`
+- `model.dart`: `DaxianStatusData.accessibility` 使用 `bool?`，`null` 表示尚未收到状态推送
+- `model.dart`: 新增 `_canRequestAndroidBackupFrame`，作为所有自动"开无视"命令的守卫
+- `model.dart`: 首帧 3s/10s fallback 在无障碍未知或未开时只执行 `sessionRefreshVideo`
+- `overlay.dart`: 安卓状态监测显示"加密状态"
+
+## [v5.2.1-hotfix-5] 修复 "开共享后一直卡在截屏流" 深度状态管理问题 — 2026-04-15
+
+### P0: 状态残留 Bug 修复
+
+- 修复用户取消 MediaProjection 授权后 Flutter `_isStart` 不回滚导致后续状态错乱
+- 修复停服务再开服务时 `SKL` / `PIXEL_SIZEBack8` / `savedMediaProjectionIntent` / 黑屏 / 防触等状态残留
+- 修复 `startCapture()` 启动前未强制清除三模式互斥状态，导致视频帧可能被 `SKL || shouldRun` 早退逻辑丢弃
+- 修复 PC 端首帧 fallback 与 Android 授权流程的时序竞争：首次自动开无视从 500ms 延长到 3000ms
+
+### 代码改动
+
+- `nZW99cdXQ0COhB2o.kt`: 新增 `resetCaptureStates()`，统一清理 `shouldRun` / `SKL`
+- `DFm8Y8iMScvB2YDw.kt`: `startCapture()` 开头强制重置；`destroy()` 补齐静态变量、黑屏、防触、token 清理
+- `XerQvgpGBzr8FDFr.kt`: 授权失败时主动通知 Flutter `on_media_projection_canceled`
+- `server_model.dart`: 新增 `onMediaProjectionDenied()` 回滚方法
+- `server_page.dart`: 授权失败回调改为回滚服务状态
+- `model.dart`: 首帧 fallback 延迟 500ms -> 3000ms
+
+### 不受影响的功能
+
+- 侧按钮协议和命令链路不变
+- 画面传输协议、网络连接、安卓状态监测面板不变
+- 黑屏、穿透、无视、防触功能本身不变，仅在关闭服务/启动共享时清理残留状态
+
 ## [v5.2.1-hotfix-4] 新增安卓状态监测面板 — 2026-04-17
 
 ### 功能新增

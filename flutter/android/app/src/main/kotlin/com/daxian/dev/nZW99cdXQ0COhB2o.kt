@@ -129,6 +129,18 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         val isTouchBlockOn: Boolean
             get() = ctx?.touchBlockEnabled ?: false
 
+        fun resetCaptureStates(reason: String) {
+            pendingIgnoreCapture = false
+            val service = ctx
+            if (service != null) {
+                service.stopIgnoreCaptureLoop(reason)
+            } else {
+                shouldRun = false
+            }
+            SKL = false
+            Log.i("InputService", "resetCaptureStates: shouldRun=false, SKL=false, reason=$reason")
+        }
+
         fun requestIgnoreCapture(reason: String = "request"): Boolean {
             val service = ctx
             if (service == null) {
