@@ -1,6 +1,7 @@
 # 工程基线 / Engineering Baseline
 
 最后一次从全仓源码核验：2026-04-22
+最近一次文档一致性复核：2026-04-27
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -586,9 +587,9 @@ Feature gate：
 
 ### 6.2 `CLAUDE.md`
 
-- deep link 写成单一 `daxian://`
-- 当前源码实际是 manifest scheme 与 Rust `get_uri_prefix()` 并存且不完全一致
-- 因此 `CLAUDE.md` 只能当导航，不是最终真相层
+- 当前 `Deep Link` 小节已经区分 Android manifest scheme 与 Rust `get_uri_prefix()`
+- 代码事实仍是 manifest scheme 与 Rust `get_uri_prefix()` 并存且不完全一致
+- 因此 `CLAUDE.md` 可作为导航，但最终仍以源码与 `docs/ENGINEERING_*` 为准
 
 ### 6.3 对 Android JNI 的旧误解
 

@@ -1,6 +1,6 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从全仓源码核验：2026-04-14
+最后一次从关键源码锚点与文档一致性核验：2026-04-27
 
 > 本文件用于回答两个问题：
 >
@@ -94,21 +94,22 @@
 
 - 是现有 Claude Code 入口
 - 包含 Android 类名映射、构建命令、关键文件速查
+- 当前 `Deep Link` 小节已经明确区分 Android manifest scheme 与 Rust `get_uri_prefix()`
 
-已确认的漂移：
+已确认的边界：
 
-1. **Deep link 叙述过度简化**
-   - 它写为 `daxian://`
-   - 但当前源码存在：
-     - Android manifest：`daxian`
-     - Rust `get_uri_prefix()`：由 `APP_NAME` 推导，更接近 `daxianmeeting://`
-
-2. **应服从工程文档主套件**
+1. **应服从工程文档主套件**
    - 它适合作为补充导航
    - 不应高于 `docs/ENGINEERING_*`
 
-3. **终端与 Android 运行时细节不够完整**
-   - 没有覆盖 `hbbs_http`、旧 `src/ui/`、Windows 隐私模式、文档漂移审计
+2. **实现细节不如工程文档主套件完整**
+   - Android runtime、terminal、文档漂移审计等细节必须回到 `docs/ENGINEERING_*` 与源码核验
+
+3. **Deep link 风险已经从 `CLAUDE.md` 漂移转为代码/配置并存风险**
+   - `CLAUDE.md` 当前不再把 deep link 简化成单一 `daxian://`
+   - 但当前源码仍同时存在：
+     - Android manifest：`daxian`
+     - Rust `get_uri_prefix()`：由 `APP_NAME` 推导，更接近 `daxianmeeting://`
 
 结论：
 

@@ -1,6 +1,7 @@
 # 工程总索引 / Engineering Index
 
 最后一次基于全仓源码核验：2026-04-14
+最近一次文档一致性复核：2026-04-27
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -227,7 +228,8 @@ rg -n "privacy_mode|daxian_virtual_displays|supported_privacy_mode_impl|win_virt
 ## 7. 当前核验到的外部文档风险
 
 - `terminal.md` 中 terminal `service_id` 仍描述为 `tmp_` / `persist_`，但当前源码主实现使用的是 `ts_<uuid>`。
-- `CLAUDE.md` 把 deep link 简化成 `daxian://`，而实际代码存在：
+- `CLAUDE.md` 当前已经提示不要把 deep link 简化成唯一真相；不要再依据旧审计把它当作 `daxian://` 单一说法。
+- 但 deep link 本身仍有代码/配置并存风险：
   - Android manifest scheme：`daxian`
   - Rust `get_uri_prefix()`：从 `APP_NAME` 推导，当前更接近 `daxianmeeting://`
 - 这些差异在 `docs/DOCUMENT_AUDIT.md` 中有更完整说明。
