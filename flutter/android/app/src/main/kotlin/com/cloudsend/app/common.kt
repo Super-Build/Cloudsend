@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 import android.Manifest.permission.*
 import android.annotation.SuppressLint

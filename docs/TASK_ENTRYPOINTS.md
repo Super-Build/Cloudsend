@@ -8,6 +8,47 @@
 
 ---
 
+## Current Branding / SO Rename Entrypoints (2026-05-05)
+
+For Android package, product identity, status protocol, or SO loading tasks, start here:
+
+- `Cargo.toml`
+- `build.sh`
+- `libs/hbb_common/src/config.rs`
+- `libs/hbb_common/protos/message.proto`
+- `src/server/connection.rs`
+- `src/client/io_loop.rs`
+- `src/flutter.rs`
+- `src/ui_session_interface.rs`
+- `src/ui/remote.rs`
+- `flutter/android/app/src/main/AndroidManifest.xml`
+- `flutter/android/app/build.gradle`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/`
+- `flutter/android/app/src/main/kotlin/ffi.kt`
+- `flutter/android/app/src/main/kotlin/pkg2230.kt`
+- `flutter/lib/models/native_model.dart`
+- `flutter/lib/models/model.dart`
+- `flutter/lib/common/widgets/overlay.dart`
+- `flutter/lib/generated_bridge.dart`
+
+Current canonical keywords:
+
+- `CloudSend`
+- `com.cloudsend.app`
+- `cloudsend_status`
+- `CloudSendStatusModel`
+- `CloudSendStatusMonitor`
+- `show-cloudsend-status-monitor`
+- `show_cloudsend_status_monitor`
+- `cloudsend_virtual_displays`
+- `libcloudsend.so`
+- `System.loadLibrary("cloudsend")`
+- `DynamicLibrary.open('libcloudsend.so')`
+- `cloudsend_core_main`
+- `cloudsend_core_main_args`
+
+Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` in Android work.
+
 ## 0. 当前任务纪律与最新热修入口（Current Task Guard）
 
 后续任务必须遵守：
@@ -19,7 +60,7 @@
 
 黑屏 overlay / 远程输入卡顿相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 - `docs/ENGINEERING_ANDROID_RUNTIME.md`
 
 防止误改范围：
@@ -35,8 +76,8 @@
 - `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 
 防触摸排查关键词：
 
@@ -49,7 +90,7 @@
 
 安卓状态监测相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
 - `src/server/connection.rs`
 - `libs/hbb_common/protos/message.proto`
 - `src/client/io_loop.rs`
@@ -59,18 +100,18 @@
 
 安卓状态监测排查关键词：
 
-- `daxian_status`
-- `DaxianStatusModel`
-- `DaxianStatusMonitor`
+- `cloudsend_status`
+- `CloudSendStatusModel`
+- `CloudSendStatusMonitor`
 - `RemoteStatusMonitors`
-- `show-daxian-status-monitor`
-- `show_daxian_status_monitor`
+- `show-cloudsend-status-monitor`
+- `show_cloudsend_status_monitor`
 
 开共享后卡截屏流相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/XerQvgpGBzr8FDFr.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/XerQvgpGBzr8FDFr.kt`
 - `flutter/lib/models/server_model.dart`
 - `flutter/lib/mobile/pages/server_page.dart`
 - `flutter/lib/models/model.dart`
@@ -86,7 +127,7 @@
 
 无障碍感知双通道相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
 - `flutter/lib/models/model.dart`
 - `flutter/lib/common/widgets/overlay.dart`
 
@@ -157,8 +198,8 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 - `libs/hbb_common/protos/message.proto`
 - `src/server/connection.rs`
 - `libs/scrap/src/android/pkg2230.rs`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 
 新增命令时必须逐项确认：
 
@@ -177,9 +218,9 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 先看：
 
 - `docs/ENGINEERING_ANDROID_RUNTIME.md`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/common.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
 - `src/server/connection.rs`
@@ -384,7 +425,7 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 重点核对：
 
 - `supported_privacy_mode_impl`
-- `daxian_virtual_displays`
+- `cloudsend_virtual_displays`
 - 连接侧 turn on / turn off 路径
 - Windows-only 假设是否成立
 

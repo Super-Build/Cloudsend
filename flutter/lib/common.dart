@@ -3000,7 +3000,7 @@ Future<void> updateSystemWindowTheme() async {
 ///
 /// Note: not found a general solution for rust based AVFoundation bingding.
 /// [AVFoundation] crate has compile error.
-const kMacOSPermChannel = MethodChannel("com.daxian.dev/macos");
+const kMacOSPermChannel = MethodChannel("com.cloudsend.app/macos");
 
 enum PermissionAuthorizeType {
   undetermined,

@@ -8,11 +8,29 @@
 
 ---
 
+### 2026-05-05 CloudSend Android runtime naming baseline
+
+Current Android runtime identity after Parts 1-4:
+
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
+- Android package/applicationId: `com.cloudsend.app`.
+- Android label / foreground notification title: `CloudSend`.
+- Android deep link scheme: `cloudsend`.
+- Native library loaded by Kotlin: `System.loadLibrary("cloudsend")`.
+- Native library opened by Dart on Android: `DynamicLibrary.open('libcloudsend.so')`.
+- JNI output name: `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
+- Status query key: `DFm8Y8iMScvB2YDwGYN("cloudsend_status")`.
+- Status protocol field: `Misc.cloudsend_status = 39`.
+- PC event: `update_cloudsend_status`.
+- Flutter status model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
+
+Older notes using `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, or `libdaxian.so` are historical and must not be copied into new work.
+
 ## 0. 最近运行时修复（Recent Runtime Fix）
 
 ### 0.1 黑屏 overlay 不再动态切换触摸 flag
 
-2026-04-16 已按源码修复 `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`：
+2026-04-16 已按源码修复 `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`：
 
 - 删除 `isBlackScreenActive` / `restoreBlockRunnable` / `setOverlayTouchBlock` 三件套。
 - `onMouseInput(...)` 不再因黑屏状态向主线程 `handler` 提交 per-mouse-event 任务。
@@ -48,12 +66,12 @@
 
 2026-04-18 已新增 Android 被控端状态 JSON 聚合与 PC 端监测面板：
 
-- Android 查询键：`DFm8Y8iMScvB2YDwGYN("daxian_status")`。
+- Android 查询键：`DFm8Y8iMScvB2YDwGYN("cloudsend_status")`。
 - JSON 字段：`video` / `screenshot` / `share` / `ignore` / `blank` / `penetrate` / `touchblock`。
 - 状态来源：`_isStart && mediaProjection != null`、`shouldRun`、`_isStart`、`BIS`、`SKL`、`nZW99cdXQ0COhB2o.isTouchBlockOn`。
-- Android server 每秒在 `src/server/connection.rs` 的 `second_timer.tick()` 内发送 `Misc.daxian_status`。
-- PC 端 `src/client/io_loop.rs` 接收 `misc::Union::DaxianStatus(json)` 后推送 Flutter 事件 `update_daxian_status`。
-- Flutter 端 `DaxianStatusModel` 解析 JSON，`DaxianStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
+- Android server 每秒在 `src/server/connection.rs` 的 `second_timer.tick()` 内发送 `Misc.cloudsend_status`。
+- PC 端 `src/client/io_loop.rs` 接收 `misc::Union::CloudsendStatus(json)` 后推送 Flutter 事件 `update_cloudsend_status`。
+- Flutter 端 `CloudSendStatusModel` 解析 JSON，`CloudSendStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
 
 ### 0.4 共享视频流启动前必须清互斥状态
 
@@ -69,8 +87,8 @@
 
 2026-04-22 已新增无障碍权限感知的自动 fallback 守卫：
 
-- Android `daxian_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
-- Flutter `DaxianStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
+- Android `cloudsend_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
+- Flutter `CloudSendStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
 - `_canRequestAndroidBackupFrame` 是 PC 自动发送"开无视"前的唯一守卫。
 - 无障碍未开/未知时，首帧 fallback 只调用 `sessionRefreshVideo(...)`。
 - 监测面板"加密状态"即无障碍服务连接状态，不是网络连接状态。
@@ -93,9 +111,9 @@
 
 关键锚点：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/common.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
 - `flutter/lib/models/model.dart`
 - `libs/scrap/src/android/pkg2230.rs`
 

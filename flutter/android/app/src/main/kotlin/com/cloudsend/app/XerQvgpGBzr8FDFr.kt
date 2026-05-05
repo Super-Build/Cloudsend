@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 import android.app.Activity
 import android.content.Intent

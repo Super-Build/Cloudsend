@@ -1478,9 +1478,9 @@ class QualityMonitor extends StatelessWidget {
               : const SizedBox.shrink()));
 }
 
-class DaxianStatusMonitor extends StatelessWidget {
-  final DaxianStatusModel daxianStatusModel;
-  DaxianStatusMonitor(this.daxianStatusModel);
+class CloudSendStatusMonitor extends StatelessWidget {
+  final CloudSendStatusModel cloudSendStatusModel;
+  CloudSendStatusMonitor(this.cloudSendStatusModel);
 
   Widget _row(String label, bool positive,
       {String positiveText = '开', String negativeText = '关'}) {
@@ -1513,8 +1513,8 @@ class DaxianStatusMonitor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider.value(
-      value: daxianStatusModel,
-      child: Consumer<DaxianStatusModel>(
+      value: cloudSendStatusModel,
+      child: Consumer<CloudSendStatusModel>(
         builder: (context, m, child) => m.show
             ? Container(
                 constraints: const BoxConstraints(maxWidth: 200),
@@ -1542,20 +1542,20 @@ class DaxianStatusMonitor extends StatelessWidget {
 
 class RemoteStatusMonitors extends StatelessWidget {
   final QualityMonitorModel qualityMonitorModel;
-  final DaxianStatusModel daxianStatusModel;
-  RemoteStatusMonitors(this.qualityMonitorModel, this.daxianStatusModel);
+  final CloudSendStatusModel cloudSendStatusModel;
+  RemoteStatusMonitors(this.qualityMonitorModel, this.cloudSendStatusModel);
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: Listenable.merge([qualityMonitorModel, daxianStatusModel]),
+        animation: Listenable.merge([qualityMonitorModel, cloudSendStatusModel]),
         builder: (context, child) => Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
           children: [
             if (qualityMonitorModel.show) QualityMonitor(qualityMonitorModel),
-            if (qualityMonitorModel.show && daxianStatusModel.show)
+            if (qualityMonitorModel.show && cloudSendStatusModel.show)
               const SizedBox(height: 6),
-            if (daxianStatusModel.show) DaxianStatusMonitor(daxianStatusModel),
+            if (cloudSendStatusModel.show) CloudSendStatusMonitor(cloudSendStatusModel),
           ],
         ),
       );

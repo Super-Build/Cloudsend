@@ -20,7 +20,7 @@
 
 已修复 Android AccessibilityService 内黑屏 overlay 的错误动态防触摸逻辑，源码锚点：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 
 当前基线：
 
@@ -37,8 +37,8 @@
 - `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/models/input_model.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/common/widgets/overlay.dart`
@@ -55,13 +55,13 @@
 
 当前基线：
 
-- 协议字段：`Misc.daxian_status = 39`。
-- Android 查询入口：`call_main_service_get_by_name("daxian_status")`。
-- PC Flutter 事件：`update_daxian_status`，payload key 为 `status`。
-- UI model：`DaxianStatusModel`，默认显示，配置键为 `show_daxian_status_monitor`。
-- Toolbar 会话开关：`show-daxian-status-monitor`。
-- UI Widget：`RemoteStatusMonitors` 组合 `QualityMonitor` 与 `DaxianStatusMonitor`，只有两者同时显示时插入 6px 间距。
-- Sciter UI 只保留 `update_daxian_status` 空实现，当前面板只在 Flutter UI 显示。
+- 协议字段：`Misc.cloudsend_status = 39`。
+- Android 查询入口：`call_main_service_get_by_name("cloudsend_status")`。
+- PC Flutter 事件：`update_cloudsend_status`，payload key 为 `status`。
+- UI model：`CloudSendStatusModel`，默认显示，配置键为 `show_cloudsend_status_monitor`。
+- Toolbar 会话开关：`show-cloudsend-status-monitor`。
+- UI Widget：`RemoteStatusMonitors` 组合 `QualityMonitor` 与 `CloudSendStatusMonitor`，只有两者同时显示时插入 6px 间距。
+- Sciter UI 只保留 `update_cloudsend_status` 空实现，当前面板只在 Flutter UI 显示。
 
 ### 0.4 2026-04-22 共享/截屏流状态生命周期基线
 
@@ -84,6 +84,30 @@
 
 ---
 
+### 0.6 2026-05-05 CloudSend identity / SO rename baseline
+
+Current source truth after Parts 1-4:
+
+- Product/runtime app name: `CloudSend`.
+- Android package / applicationId: `com.cloudsend.app`.
+- Android visible label / notification title: `CloudSend`.
+- Android deep link scheme: `cloudsend`.
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
+- Rust crate: `cloudsend`.
+- Rust library name: `cloudsend`, producing Android `libcloudsend.so`.
+- Android JNI output path: `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
+- Kotlin SO loading: `System.loadLibrary("cloudsend")`.
+- Dart Android SO loading: `DynamicLibrary.open('libcloudsend.so')`.
+- Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
+- Status protocol field: `Misc.cloudsend_status = 39`.
+- Android status query key: `call_main_service_get_by_name("cloudsend_status")`.
+- PC Flutter event: `update_cloudsend_status`, payload key `status`.
+- UI model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
+- Session option: `show_cloudsend_status_monitor` and toolbar key `show-cloudsend-status-monitor`.
+- Virtual display platform addition key: `cloudsend_virtual_displays`.
+
+Do not use older names such as `com.daxian.dev`, `DaxianMeeting`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` for new Android work. If older historical sections below mention them, this 2026-05-05 baseline overrides them.
+
 ## 1. 项目身份（Project Identity）
 
 ### 1.1 包与产品信息
@@ -98,27 +122,27 @@
 
 当前事实：
 
-- Rust crate：`rustdesk`
+- Rust crate：`cloudsend`
 - Rust crate version：`5.2.0`
-- Rust library：`librustdesk`
+- Rust library：`cloudsend`
 - Flutter package：`flutter_hbb`
 - Flutter version：`5.2.0+58`
-- 产品名（runtime app name）：`DaxianMeeting`
-- Android package：`com.daxian.dev`
-- Android visible label：`大仙会议`
+- 产品名（runtime app name）：`CloudSend`
+- Android package：`com.cloudsend.app`
+- Android visible label：`CloudSend`
 - 配置组织名（runtime org）：`com.carriez`
 
 ### 1.2 品牌与命名现实（Branding Reality）
 
 项目已经做了深度品牌替换，但**没有彻底收口**：
 
-- Android 动态库实际加载：`libdaxian.so`
-- Android Kotlin `System.loadLibrary("daxian")`
-- Flutter Android 侧 `DynamicLibrary.open('libdaxian.so')`
-- Windows 侧仍加载：`librustdesk.dll`
-- Rust `APP_NAME` 为 `DaxianMeeting`
-- Android manifest deep link scheme：`daxian`
-- Rust `get_uri_prefix()` 由 `APP_NAME` 推导，当前与 manifest scheme 并不完全一致
+- Android 动态库实际加载：`libcloudsend.so`
+- Android Kotlin `System.loadLibrary("cloudsend")`
+- Flutter Android 侧 `DynamicLibrary.open('libcloudsend.so')`
+- Windows 侧加载：`cloudsend.dll`
+- Rust `APP_NAME` 为 `CloudSend`
+- Android manifest deep link scheme：`cloudsend`
+- Rust `get_uri_prefix()` 由 `APP_NAME` 推导，当前与 manifest scheme 需要保持一致
 
 结论：
 
@@ -211,27 +235,27 @@ Rust JNI：
 
 Kotlin / Java：
 
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/oFtTiPzsqzBHGigp.kt`
   - 主 `FlutterActivity`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/XerQvgpGBzr8FDFr.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/XerQvgpGBzr8FDFr.kt`
   - 权限 / 透明 Activity
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
   - `MainService`, `MediaProjection`, keep-alive
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
   - `AccessibilityService`, 输入 / 截图 / overlay / fallback
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFrLMwitwQbfu7AC.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFrLMwitwQbfu7AC.kt`
   - `FloatWindowService`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/BootReceiver.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/BootReceiver.kt`
   - 开机启动接收器
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/ig2xH1U3RDNsb7CS.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/ig2xH1U3RDNsb7CS.kt`
   - 剪贴板桥
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/EqljohYazB0qrhnj.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/EqljohYazB0qrhnj.kt`
   - 图像辅助 / 节点可视化
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/common.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
   - Android 全局状态
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/KeyboardKeyEventMapper.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/KeyboardKeyEventMapper.kt`
   - 键盘映射
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/VolumeController.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/VolumeController.kt`
   - 音量控制
 - `flutter/android/app/src/main/kotlin/pkg2230.kt`
   - 主 JNI bridge
@@ -283,7 +307,7 @@ Kotlin / Java：
 结论：
 
 - 这是 Windows 平台的重要功能面，不是附属实验代码。
-- `daxian_virtual_displays` 已成为实际 key / 常量的一部分。
+- `cloudsend_virtual_displays` 已成为实际 key / 常量的一部分。
 
 ### 2.8 Plugin 框架
 
@@ -505,7 +529,7 @@ Feature gate：
 - `src/privacy_mode/win_virtual_display.rs`
 - `src/virtual_display_manager.rs`
 - `flutter/lib/consts.dart`
-  - `daxian_virtual_displays`
+  - `cloudsend_virtual_displays`
   - `supported_privacy_mode_impl`
 
 结论：
@@ -542,10 +566,10 @@ Feature gate：
 
 已核事实：
 
-- `build.sh` 从 `target/<triple>/release/liblibrustdesk.so` 复制到：
-  - `flutter/android/app/src/main/jniLibs/<abi>/libdaxian.so`
-- Kotlin 端 `System.loadLibrary("daxian")`
-- Dart Android 端 `DynamicLibrary.open('libdaxian.so')`
+- `build.sh` 从 `target/<triple>/release/libcloudsend.so` 复制到：
+  - `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`
+- Kotlin 端 `System.loadLibrary("cloudsend")`
+- Dart Android 端 `DynamicLibrary.open('libcloudsend.so')`
 
 ### 5.2 Windows
 
@@ -556,8 +580,9 @@ Feature gate：
 
 已核事实：
 
-- Windows 仍加载 `librustdesk.dll`
-- 因此品牌变更仍存在 Windows 侧残留
+- Windows Flutter runner、CMake 安装规则与 Dart FFI 都必须统一到 `cloudsend.dll`
+- 自解压包入口 metadata 使用 `cloudsend.exe`，解压后可规范化为 `CloudSend.exe`
+- 隐私模式 RuntimeBroker 辅助进程名统一为 `RuntimeBroker_cloudsend.exe`
 
 ### 5.3 其他构建脚本 / 包装层
 
@@ -600,9 +625,9 @@ Feature gate：
 
 ## 7. 当前风险与注意事项（Current Risks）
 
-- `APP_NAME` 与 Android manifest scheme 存在 URI prefix 不一致风险
+- `APP_NAME` 与 Android manifest scheme 必须保持 `CloudSend` / `cloudsend` 一致
 - `ORG` 仍为 `com.carriez`
-- Windows DLL 命名仍残留 `rustdesk`
+- Windows DLL 命名必须保持 `cloudsend.dll`，不得回退到 `librustdesk.dll`
 - `pkg2230.rs` 中存在 `static mut` 像素与 JNI 全局状态
 - Android runtime 逻辑高度耦合，修改时极易破坏 fallback / waiting / keep-alive
 - `src/ui/` 旧路径与 Flutter 新路径并存，桌面入口任务若只看 Flutter 容易漏逻辑

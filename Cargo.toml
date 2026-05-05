@@ -1,15 +1,15 @@
 [package]
-name = "rustdesk"
+name = "cloudsend"
 version = "5.2.0"
-authors = ["daxian <dev@daxian.dev>"]
+authors = ["cloudsend <dev@cloudsend.app>"]
 edition = "2021"
 build= "build.rs"
-description = "DaxianMeeting Remote Desktop Service"
-default-run = "rustdesk"
+description = "CloudSend Remote Desktop Service"
+default-run = "cloudsend"
 rust-version = "1.75"
 
 [lib]
-name = "librustdesk"
+name = "cloudsend"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [[bin]]
@@ -192,10 +192,10 @@ members = ["libs/scrap", "libs/hbb_common", "libs/enigo", "libs/clipboard", "lib
 exclude = ["vdi/host", "examples/custom_plugin"]
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 DaxianMeeting Ltd. All rights reserved."
-ProductName = "DaxianMeeting"
-FileDescription = "DaxianMeeting Remote Desktop Service"
-OriginalFilename = "rustdesk.exe"
+LegalCopyright = "Copyright © 2025 CloudSend Ltd. All rights reserved."
+ProductName = "CloudSend"
+FileDescription = "CloudSend Remote Desktop Service"
+OriginalFilename = "cloudsend.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"
@@ -211,8 +211,8 @@ hound = "3.5"
 docopt = "1.1"
 
 [package.metadata.bundle]
-name = "DaxianMeeting"
-identifier = "com.daxian.dev"
+name = "CloudSend"
+identifier = "com.cloudsend.app"
 icon = ["res/32x32.png", "res/128x128.png", "res/128x128@2x.png"]
 osx_minimum_system_version = "10.14"
 

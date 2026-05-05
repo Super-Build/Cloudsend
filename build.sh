@@ -609,12 +609,12 @@ build_rust_lib_for_target() {
     return 1
   fi
 
-  src_so="$REPO_ROOT/target/$target/release/liblibrustdesk.so"
+  src_so="$REPO_ROOT/target/$target/release/libcloudsend.so"
   require_file "$src_so"
 
   dst_dir="$REPO_ROOT/flutter/android/app/src/main/jniLibs/$jni_dir"
   mkdir -p "$dst_dir"
-  cp "$src_so" "$dst_dir/libdaxian.so"
+  cp "$src_so" "$dst_dir/libcloudsend.so"
   cp "$libcpp" "$dst_dir/libc++_shared.so"
 
   ok "JNI 库已放置: $dst_dir"

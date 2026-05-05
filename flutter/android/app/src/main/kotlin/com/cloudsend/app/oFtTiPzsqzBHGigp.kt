@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 /**
  * Handle events from flutter

@@ -161,7 +161,7 @@ class FfiModel with ChangeNotifier {
 
   bool get _canRequestAndroidBackupFrame {
     if (!_supportsAndroidIgnoreCapture) return false;
-    final model = parent.target?.daxianStatusModel;
+    final model = parent.target?.cloudSendStatusModel;
     if (model == null) return false;
     return model.data.accessibility == true;
   }
@@ -448,8 +448,8 @@ class FfiModel with ChangeNotifier {
         parent.target?.serverModel.onClientRemove(evt);
       } else if (name == 'update_quality_status') {
         parent.target?.qualityMonitorModel.updateQualityStatus(evt);
-      } else if (name == 'update_daxian_status') {
-        parent.target?.daxianStatusModel.updateFromEvent(evt);
+      } else if (name == 'update_cloudsend_status') {
+        parent.target?.cloudSendStatusModel.updateFromEvent(evt);
       } else if (name == 'update_block_input_state') {
         updateBlockInputState(evt, peerId);
       } else if (name == 'update_privacy_mode') {
@@ -1573,7 +1573,7 @@ tryShowAndroidActionsOverlay({int delayMSecs = 10}) {
     }
 
     if (updateData.isEmpty) {
-      _pi.platformAdditions.remove(kPlatformAdditionsRustDeskVirtualDisplays);
+      _pi.platformAdditions.remove(kPlatformAdditionsCloudSendVirtualDisplays);
       _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
     } else {
       try {
@@ -1582,9 +1582,9 @@ tryShowAndroidActionsOverlay({int delayMSecs = 10}) {
           _pi.platformAdditions[key] = updateJson[key];
         }
         if (!updateJson
-            .containsKey(kPlatformAdditionsRustDeskVirtualDisplays)) {
+            .containsKey(kPlatformAdditionsCloudSendVirtualDisplays)) {
           _pi.platformAdditions
-              .remove(kPlatformAdditionsRustDeskVirtualDisplays);
+              .remove(kPlatformAdditionsCloudSendVirtualDisplays);
         }
         if (!updateJson.containsKey(kPlatformAdditionsAmyuniVirtualDisplays)) {
           _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
@@ -3012,7 +3012,7 @@ class QualityMonitorModel with ChangeNotifier {
   }
 }
 
-class DaxianStatusData {
+class CloudSendStatusData {
   bool video = false;
   bool screenshot = false;
   bool share = false;
@@ -3023,27 +3023,27 @@ class DaxianStatusData {
   bool? accessibility;
 }
 
-class DaxianStatusModel with ChangeNotifier {
+class CloudSendStatusModel with ChangeNotifier {
   WeakReference<FFI> parent;
-  DaxianStatusModel(this.parent);
+  CloudSendStatusModel(this.parent);
 
   var _show = true;
-  final _data = DaxianStatusData();
+  final _data = CloudSendStatusData();
 
   bool get show => _show;
-  DaxianStatusData get data => _data;
+  CloudSendStatusData get data => _data;
 
-  Future<void> checkShowDaxianStatusMonitor(SessionID sessionId) async {
+  Future<void> checkShowCloudSendStatusMonitor(SessionID sessionId) async {
     try {
       final raw = await bind.sessionGetToggleOption(
-          sessionId: sessionId, arg: 'show-daxian-status-monitor');
+          sessionId: sessionId, arg: 'show-cloudsend-status-monitor');
       final show = raw ?? true;
       if (_show != show) {
         _show = show;
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('checkShowDaxianStatusMonitor failed: $e');
+      debugPrint('checkShowCloudSendStatusMonitor failed: $e');
     }
   }
 
@@ -3075,7 +3075,7 @@ class DaxianStatusModel with ChangeNotifier {
       }
       if (changed) notifyListeners();
     } catch (e) {
-      debugPrint('updateDaxianStatus parse failed: $e');
+      debugPrint('updateCloudSendStatus parse failed: $e');
     }
   }
 }
@@ -3153,7 +3153,7 @@ class FFI {
   late final UserModel userModel; // global
   late final PeerTabModel peerTabModel; // global
   late final QualityMonitorModel qualityMonitorModel; // session
-  late final DaxianStatusModel daxianStatusModel; // session
+  late final CloudSendStatusModel cloudSendStatusModel; // session
   late final RecordingModel recordingModel; // session
   late final InputModel inputModel; // session
   late final ElevationModel elevationModel; // session
@@ -3183,7 +3183,7 @@ class FFI {
     abModel = AbModel(WeakReference(this));
     groupModel = GroupModel(WeakReference(this));
     qualityMonitorModel = QualityMonitorModel(WeakReference(this));
-    daxianStatusModel = DaxianStatusModel(WeakReference(this));
+    cloudSendStatusModel = CloudSendStatusModel(WeakReference(this));
     recordingModel = RecordingModel(WeakReference(this));
     inputModel = InputModel(WeakReference(this));
     elevationModel = ElevationModel(WeakReference(this));
@@ -3594,8 +3594,8 @@ class PeerInfo with ChangeNotifier {
   bool get isInstalled =>
       platform != kPeerPlatformWindows ||
       platformAdditions[kPlatformAdditionsIsInstalled] == true;
-  List<int> get RustDeskVirtualDisplays => List<int>.from(
-      platformAdditions[kPlatformAdditionsRustDeskVirtualDisplays] ?? []);
+  List<int> get CloudSendVirtualDisplays => List<int>.from(
+      platformAdditions[kPlatformAdditionsCloudSendVirtualDisplays] ?? []);
   int get amyuniVirtualDisplayCount =>
       platformAdditions[kPlatformAdditionsAmyuniVirtualDisplays] ?? 0;
 
@@ -3623,7 +3623,7 @@ class PeerInfo with ChangeNotifier {
 
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
 
-  bool get isRustDeskIdd =>
+  bool get isCloudSendIdd =>
       platformAdditions[kPlatformAdditionsIddImpl] == 'rustdesk_idd';
   bool get isAmyuniIdd =>
       platformAdditions[kPlatformAdditionsIddImpl] == 'amyuni_idd';

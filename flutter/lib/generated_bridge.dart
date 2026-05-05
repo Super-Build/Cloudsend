@@ -13560,14 +13560,14 @@ class RustdeskWire implements FlutterRustBridgeWireBase {
   late final _free_WireSyncReturn =
       _free_WireSyncReturnPtr.asFunction<void Function(WireSyncReturn)>();
 
-  bool rustdesk_core_main() {
-    return _rustdesk_core_main();
+  bool cloudsend_core_main() {
+    return _cloudsend_core_main();
   }
 
-  late final _rustdesk_core_mainPtr =
-      _lookup<ffi.NativeFunction<ffi.Bool Function()>>('rustdesk_core_main');
-  late final _rustdesk_core_main =
-      _rustdesk_core_mainPtr.asFunction<bool Function()>();
+  late final _cloudsend_core_mainPtr =
+      _lookup<ffi.NativeFunction<ffi.Bool Function()>>('cloudsend_core_main');
+  late final _cloudsend_core_main =
+      _cloudsend_core_mainPtr.asFunction<bool Function()>();
 
   void handle_applicationShouldOpenUntitledFile() {
     return _handle_applicationShouldOpenUntitledFile();
@@ -13580,19 +13580,19 @@ class RustdeskWire implements FlutterRustBridgeWireBase {
       _handle_applicationShouldOpenUntitledFilePtr
           .asFunction<void Function()>();
 
-  ffi.Pointer<ffi.Pointer<ffi.Char>> rustdesk_core_main_args(
+  ffi.Pointer<ffi.Pointer<ffi.Char>> cloudsend_core_main_args(
     ffi.Pointer<ffi.Int> args_len,
   ) {
-    return _rustdesk_core_main_args(
+    return _cloudsend_core_main_args(
       args_len,
     );
   }
 
-  late final _rustdesk_core_main_argsPtr = _lookup<
+  late final _cloudsend_core_main_argsPtr = _lookup<
       ffi.NativeFunction<
           ffi.Pointer<ffi.Pointer<ffi.Char>> Function(
-              ffi.Pointer<ffi.Int>)>>('rustdesk_core_main_args');
-  late final _rustdesk_core_main_args = _rustdesk_core_main_argsPtr.asFunction<
+              ffi.Pointer<ffi.Int>)>>('cloudsend_core_main_args');
+  late final _cloudsend_core_main_args = _cloudsend_core_main_argsPtr.asFunction<
       ffi.Pointer<ffi.Pointer<ffi.Char>> Function(ffi.Pointer<ffi.Int>)>();
 
   void free_c_args(
@@ -13612,21 +13612,21 @@ class RustdeskWire implements FlutterRustBridgeWireBase {
   late final _free_c_args = _free_c_argsPtr
       .asFunction<void Function(ffi.Pointer<ffi.Pointer<ffi.Char>>, int)>();
 
-  int get_rustdesk_app_name(
+  int get_cloudsend_app_name(
     ffi.Pointer<ffi.Uint16> buffer,
     int length,
   ) {
-    return _get_rustdesk_app_name(
+    return _get_cloudsend_app_name(
       buffer,
       length,
     );
   }
 
-  late final _get_rustdesk_app_namePtr = _lookup<
+  late final _get_cloudsend_app_namePtr = _lookup<
       ffi.NativeFunction<
           ffi.Int32 Function(
-              ffi.Pointer<ffi.Uint16>, ffi.Int32)>>('get_rustdesk_app_name');
-  late final _get_rustdesk_app_name = _get_rustdesk_app_namePtr
+              ffi.Pointer<ffi.Uint16>, ffi.Int32)>>('get_cloudsend_app_name');
+  late final _get_cloudsend_app_name = _get_cloudsend_app_namePtr
       .asFunction<int Function(ffi.Pointer<ffi.Uint16>, int)>();
 
   ffi.Pointer<ffi.Uint8> session_get_rgba(

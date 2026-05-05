@@ -9,6 +9,22 @@
 
 ---
 
+## Current CloudSend Source Truth (2026-05-05)
+
+- Product/runtime app name: `CloudSend`.
+- Android package/applicationId: `com.cloudsend.app`.
+- Android visible label: `CloudSend`.
+- Android scheme: `cloudsend`.
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
+- Rust crate and library name: `cloudsend`.
+- Android SO artifact: `libcloudsend.so`.
+- Android SO loading: `System.loadLibrary("cloudsend")` and `DynamicLibrary.open('libcloudsend.so')`.
+- Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
+- Android status protocol: `cloudsend_status`, `CloudSendStatusModel`, `CloudSendStatusMonitor`, `show_cloudsend_status_monitor`.
+- Virtual display platform addition key: `cloudsend_virtual_displays`.
+
+This section overrides any older Daxian/RustDesk naming text that remains in historical notes below.
+
 ## 0. 使用约定（必须遵守）
 
 ### 0.1 真相优先级（Source of Truth Order）
@@ -146,11 +162,11 @@
 ## 3. 快速事实（Quick Facts）
 
 - 本项目是**基于 RustDesk 深度定制**的远程控制产品。
-- Rust 主 crate：`rustdesk`
-- Rust library 名称：`librustdesk`
-- 产品运行时名称：`DaxianMeeting`
-- Android package：`com.daxian.dev`
-- Android 可见标签：`大仙会议`
+- Rust main crate: `cloudsend`.
+- Rust library name: `cloudsend`, Android cdylib output `libcloudsend.so`.
+- 产品运行时名称：`CloudSend`
+- Android package：`com.cloudsend.app`
+- Android visible label: `CloudSend`.
 - Flutter package：`flutter_hbb`
 - Android 自定义链路并非轻量修补，而是包含：
   - Flutter UI 命令入口
@@ -186,7 +202,7 @@ rg -n "waitForFirstImage|waitForImageTimer|onEvent2UIRgba|showConnectedWaitingFo
 rg -n "account_auth|OidcSession|download_file|get_download_data|record_upload|sync::start|is_pro" src flutter
 
 # 隐私模式 / 虚拟显示
-rg -n "privacy_mode|daxian_virtual_displays|supported_privacy_mode_impl|win_virtual_display" src flutter
+rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_virtual_display" src flutter
 ```
 
 ---
@@ -228,10 +244,10 @@ rg -n "privacy_mode|daxian_virtual_displays|supported_privacy_mode_impl|win_virt
 ## 7. 当前核验到的外部文档风险
 
 - `terminal.md` 中 terminal `service_id` 仍描述为 `tmp_` / `persist_`，但当前源码主实现使用的是 `ts_<uuid>`。
-- `CLAUDE.md` 当前已经提示不要把 deep link 简化成唯一真相；不要再依据旧审计把它当作 `daxian://` 单一说法。
+- Current Android deep link scheme is `cloudsend://`; do not treat older audit notes as current truth.
 - 但 deep link 本身仍有代码/配置并存风险：
-  - Android manifest scheme：`daxian`
-  - Rust `get_uri_prefix()`：从 `APP_NAME` 推导，当前更接近 `daxianmeeting://`
+  - Android manifest scheme: `cloudsend`.
+  - Rust URI prefix: derived from `APP_NAME = CloudSend`, keep aligned with `cloudsend://`.
 - 这些差异在 `docs/DOCUMENT_AUDIT.md` 中有更完整说明。
 
 ---

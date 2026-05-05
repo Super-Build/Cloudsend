@@ -5,7 +5,7 @@ package ffi
 import android.content.Context
 import java.nio.ByteBuffer
 
-import com.daxian.dev.ig2xH1U3RDNsb7CS
+import com.cloudsend.app.ig2xH1U3RDNsb7CS
 
 
 import android.graphics.Bitmap
@@ -21,7 +21,7 @@ import android.app.Activity
 
 object FFI {
     init {
-        System.loadLibrary("daxian")
+        System.loadLibrary("cloudsend")
     }
     //aivk15da91xnklkrx947o7fu7b7gstvv setLayoutInScreen
     external fun aivk15da91xnklkrx947o7fu7b7gstvv(activity: Activity)

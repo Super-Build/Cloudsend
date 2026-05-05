@@ -1,6 +1,6 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-04-27
+最后一次从关键源码锚点与文档一致性核验：2026-05-05
 
 > 本文件用于回答两个问题：
 >
@@ -12,6 +12,23 @@
 - **A = 高可信**：大部分结论与当前源码一致
 - **B = 部分可信**：方向对，但有局部漂移
 - **C = 历史参考**：只能当背景，不能直接驱动改代码
+
+---
+
+## 0. 2026-05-05 CloudSend 四阶段同步审计
+
+当前工程文档主套件已同步 Part 1-4 的最终源码事实：
+
+- Android package/applicationId: `com.cloudsend.app`；可见应用名与通知标题：`CloudSend`。
+- Android Kotlin 主包路径：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`。
+- Android deep link scheme: `cloudsend://`。
+- Rust crate / lib name: `cloudsend`；Android SO: `libcloudsend.so`。
+- Kotlin 加载：`System.loadLibrary("cloudsend")`；Dart Android 加载：`DynamicLibrary.open('libcloudsend.so')`。
+- FFI 导出符号：`cloudsend_core_main` / `cloudsend_core_main_args`。
+- Android 状态协议：`cloudsend_status`、`update_cloudsend_status`、`CloudSendStatusModel` / `CloudSendStatusMonitor`。
+- 配置键：`show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`；虚拟显示 key：`cloudsend_virtual_displays`。
+
+审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md`、`CHANGELOG.md` 已作为当前可信项目记忆同步。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
 
 ---
 
@@ -106,10 +123,10 @@
    - Android runtime、terminal、文档漂移审计等细节必须回到 `docs/ENGINEERING_*` 与源码核验
 
 3. **Deep link 风险已经从 `CLAUDE.md` 漂移转为代码/配置并存风险**
-   - `CLAUDE.md` 当前不再把 deep link 简化成单一 `daxian://`
+   - `CLAUDE.md` 必须服从工程主文档；当前 Android scheme 是 `cloudsend://`。
    - 但当前源码仍同时存在：
-     - Android manifest：`daxian`
-     - Rust `get_uri_prefix()`：由 `APP_NAME` 推导，更接近 `daxianmeeting://`
+     - Android manifest：`cloudsend`
+     - Rust `get_uri_prefix()`：由 `APP_NAME = CloudSend` 推导，应与 `cloudsend://` 保持一致。
 
 结论：
 
@@ -189,14 +206,14 @@
 
 错误旧印象：
 
-- 既然产品名是 DaxianMeeting，则所有平台命名都已一致
+- 既然产品名是 CloudSend，则所有平台命名都已一致
 
 当前源码事实：
 
-- Android 加载 `libdaxian.so`
+- Android 当前加载 `libcloudsend.so`。
 - Windows 仍加载 `librustdesk.dll`
 - `ORG` 仍是 `com.carriez`
-- deep link scheme 与 Rust URI prefix 仍有不一致风险
+- deep link scheme 与 Rust URI prefix 当前已统一到 `cloudsend` / `CloudSend`。
 
 ---
 

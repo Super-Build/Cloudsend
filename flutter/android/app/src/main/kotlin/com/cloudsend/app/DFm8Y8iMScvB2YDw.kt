@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 import pkg2230.ClsFx9V0S
 
@@ -156,7 +156,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             "sdk_int" -> {
                 Build.VERSION.SDK_INT.toString()
             }
-            "daxian_status" -> {
+            "cloudsend_status" -> {
                 try {
                     JSONObject().apply {
                         put("video", _isStart && mediaProjection != null)
@@ -169,7 +169,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                         put("accessibility", nZW99cdXQ0COhB2o.isOpen)
                     }.toString()
                 } catch (e: Exception) {
-                    Log.e("MainService", "daxian_status build failed", e)
+                    Log.e("MainService", "cloudsend_status build failed", e)
                     "{}"
                 }
             }
@@ -298,12 +298,12 @@ class DFm8Y8iMScvB2YDw : Service() {
     private val wakeLock: PowerManager.WakeLock by lazy { powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "android:sys:sync_wakelock")}
 
     private val cpuWakeLock: PowerManager.WakeLock by lazy {
-        powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "daxian:cpu_wakelock")
+        powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cloudsend:cpu_wakelock")
     }
 
     private val wifiLock: android.net.wifi.WifiManager.WifiLock by lazy {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
-        wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "daxian:wifi_lock")
+        wifiManager.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "cloudsend:wifi_lock")
     }
 
     companion object {
@@ -314,7 +314,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         var ctx: DFm8Y8iMScvB2YDw? = null
         private var savedMediaProjectionIntent: Intent? = null
         private var explicitStopRequested = false
-        private const val ACT_KEEP_ALIVE_SERVICE = "com.daxian.dev.KEEP_ALIVE_SERVICE"
+        private const val ACT_KEEP_ALIVE_SERVICE = "com.cloudsend.app.KEEP_ALIVE_SERVICE"
         
         val isReady: Boolean
             get() = _isReady
@@ -1344,7 +1344,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationChannel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = DEFAULT_NOTIFY_CHANNEL
-            val channelName = "大仙会议"
+            val channelName = "CloudSend"
             val channel = NotificationChannel(
                 channelId,
                 channelName, NotificationManager.IMPORTANCE_LOW
@@ -1385,7 +1385,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentTitle("大仙会议")
+            .setContentTitle("CloudSend")
             .setContentText("正在保持远程连接服务")
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)

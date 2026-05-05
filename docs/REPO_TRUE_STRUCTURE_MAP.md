@@ -289,7 +289,7 @@ Android 重点：
 - `flutter/android/app/build.gradle`
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/src/main/jniLibs/`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/`
 
 Kotlin / Java 文件：
 

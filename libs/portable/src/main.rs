@@ -18,8 +18,8 @@ const APP_METADATA: &[u8] = include_bytes!("../app_metadata.toml");
 const APP_METADATA: &[u8] = &[];
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
-const APP_PREFIX: &str = "DaXianMeeting";
-const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
+const APP_PREFIX: &str = "CloudSend";
+const APPNAME_RUNTIME_ENV_KEY: &str = "CLOUDSEND_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
 
@@ -137,9 +137,10 @@ fn setup(
     for file in reader.files.iter() {
         file.write_to_file(&dir);
     }
-    let custom_appname = "大仙会议.exe";
+    let custom_appname = "CloudSend.exe";
 
     rename_file_if_exists(dir.to_str().unwrap(), "rustdesk.exe", custom_appname);
+    rename_file_if_exists(dir.to_str().unwrap(), "cloudsend.exe", custom_appname);
     
     let xname_exists = fs::metadata(&dir)
         .map(|metadata| {
@@ -155,13 +156,24 @@ fn setup(
     if xname_exists {
         
         remove_file_if_exists(dir.to_str().unwrap(), "rustdesk.exe");
+        remove_file_if_exists(dir.to_str().unwrap(), "cloudsend.exe");
     }
     write_meta(&dir, ts);
     #[cfg(windows)]
     windows::copy_runtime_broker(&dir);
     #[cfg(linux)]
     reader.configure_permission(&dir);
-    Some(dir.join(custom_appname))
+    let custom_exe = dir.join(custom_appname);
+    if custom_exe.exists() {
+        Some(custom_exe)
+    } else {
+        let packaged_exe = dir.join(&reader.exe);
+        if packaged_exe.exists() {
+            Some(packaged_exe)
+        } else {
+            Some(custom_exe)
+        }
+    }
 }
 
 fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
@@ -239,7 +251,7 @@ mod windows {
 
     // Used for privacy mode(magnifier impl).
     pub const RUNTIME_BROKER_EXE: &'static str = "C:\\Windows\\System32\\RuntimeBroker.exe";
-    pub const WIN_TOPMOST_INJECTED_PROCESS_EXE: &'static str = "RuntimeBroker_rustdesk.exe";
+    pub const WIN_TOPMOST_INJECTED_PROCESS_EXE: &'static str = "RuntimeBroker_cloudsend.exe";
 
     pub(super) fn copy_runtime_broker(dir: &Path) {
         let src = RUNTIME_BROKER_EXE;
@@ -255,7 +267,7 @@ mod windows {
             }
         }
         let _allow_err = Command::new("taskkill")
-            .args(&["/F", "/IM", "RuntimeBroker_rustdesk.exe"])
+            .args(&["/F", "/IM", WIN_TOPMOST_INJECTED_PROCESS_EXE])
             .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
             .output();
         let _allow_err = std::fs::copy(src, &format!("{}\\{}", dir.to_string_lossy(), tgt));

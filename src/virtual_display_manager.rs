@@ -52,7 +52,7 @@ pub fn get_platform_additions() -> serde_json::Map<String, serde_json::Value> {
             let virtual_displays = rustdesk_idd::get_virtual_displays();
             if !virtual_displays.is_empty() {
                 map.insert(
-                    "daxian_virtual_displays".into(),
+                    "cloudsend_virtual_displays".into(),
                     serde_json::json!(virtual_displays),
                 );
             }

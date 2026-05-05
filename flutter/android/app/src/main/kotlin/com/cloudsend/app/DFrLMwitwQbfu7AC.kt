@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent

@@ -1,5 +1,56 @@
 # Changelog
 
+## [v5.2.1-hotfix-8] PC CloudSend DLL / portable startup fix — 2026-05-05
+
+### P0: Fix Windows startup after CloudSend rename
+- Fixed Windows Dart FFI loading: `native_model.dart` now opens `cloudsend.dll` instead of `librustdesk.dll`.
+- Kept Linux Dart FFI naming aligned with the renamed Rust library by opening `libcloudsend.so`.
+- Updated portable packer defaults from `rustdesk.exe` to `cloudsend.exe`.
+- The portable extractor now renames both legacy `rustdesk.exe` and current `cloudsend.exe` to `CloudSend.exe`, and falls back to the packaged executable path if the renamed file is unavailable.
+- Renamed the portable app-name runtime environment key from `RUSTDESK_APPNAME` to `CLOUDSEND_APPNAME` across the packer, Rust core, and Flutter constant.
+- Updated Windows portable build output names from `rustdesk_portable.exe` / `rustdesk-{version}-install.exe` to `cloudsend_portable.exe` / `cloudsend-{version}-install.exe`.
+- Renamed the privacy-mode RuntimeBroker helper from `RuntimeBroker_rustdesk.exe` to `RuntimeBroker_cloudsend.exe` across portable packaging, runtime privacy mode, and MSI cleanup.
+- Renamed Android wake-lock tags from `daxian:*` to `cloudsend:*`.
+- Renamed the Windows app-name export from `get_rustdesk_app_name` to `get_cloudsend_app_name` and synchronized the runner lookup.
+
+### Root cause
+- Part 4 changed the Windows Rust cdylib output to `cloudsend.dll`, and `flutter/windows/CMakeLists.txt` installs `cloudsend.dll`.
+- The Flutter runtime still tried to open `librustdesk.dll`, causing FFI initialization failure and a white-screen startup.
+- The self-extracting portable wrapper still had old `rustdesk.exe` defaults, making the extracted startup path fragile after the executable rename.
+
+### Guardrails
+- Windows Flutter builds must keep these three names aligned: `flutter/windows/CMakeLists.txt` installs `cloudsend.dll`, `flutter/windows/runner/main.cpp` loads `cloudsend.dll`, and `flutter/lib/models/native_model.dart` opens `cloudsend.dll`.
+- Portable packages should use `cloudsend.exe` as the metadata startup executable and may normalize the extracted visible executable to `CloudSend.exe`.
+- No build, clean, or git commit was executed by Codex.
+
+## [v5.2.1-hotfix-7] CloudSend identity migration Parts 1-4 — 2026-05-05
+
+### Branding / Android identity
+- Android package changed from `com.daxian.dev` to `com.cloudsend.app`.
+- Android visible app label and notification title changed to `CloudSend`.
+- Android deep link scheme changed to `cloudsend://`.
+- Kotlin package directory changed to `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
+
+### Rust runtime / protocol / Flutter UI
+- Rust `APP_NAME` changed to `CloudSend`.
+- Version check type values changed to `cloudsend-client` / `cloudsend-server`; RustDesk public version URL was disabled with `https://127.0.0.1/version/latest`.
+- Android status protocol field renamed from `daxian_status` to `cloudsend_status` while keeping field number 39.
+- Flutter event renamed to `update_cloudsend_status`; model/widget renamed to `CloudSendStatusModel` / `CloudSendStatusMonitor`.
+- Session option renamed to `show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`.
+- Virtual display platform addition key renamed to `cloudsend_virtual_displays`.
+
+### Android SO / FFI
+- Cargo crate renamed to `cloudsend`; `[lib] name = "cloudsend"` now builds `libcloudsend.so`.
+- Android build script copies `target/<target>/release/libcloudsend.so` to `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
+- Kotlin now uses `System.loadLibrary("cloudsend")`.
+- Dart Android FFI now opens `libcloudsend.so`.
+- Exported FFI symbols changed from `rustdesk_core_main*` to `cloudsend_core_main*` and generated bridge lookup strings were synchronized.
+
+### Guardrails
+- Do not revive `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, or `rustdesk_core_main` in new Android work.
+- `Cargo.lock` was intentionally not edited by Codex; it should update when the user builds.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-6] 无障碍权限感知的双通道控制 — 2026-04-17
 
 ### 核心特性
@@ -7,13 +58,13 @@
 - PC 以 Android 无障碍（网络加密）服务状态为权威，动态决定是否启用双通道
 - 无障碍未开或状态未知时，PC 只刷新/等待视频流，不发送"开无视"命令
 - 无障碍已开时，PC 才允许视频流丢失 fallback 到截屏流
-- 支持运行时动态切换：`daxian_status` 每秒同步 `accessibility` 字段
+- 支持运行时动态切换：`cloudsend_status` 每秒同步 `accessibility` 字段
 - 监测面板新增"加密状态"行
 
 ### 实现方式
 
-- `DFm8Y8iMScvB2YDw.kt`: `daxian_status` JSON 增加 `accessibility`
-- `model.dart`: `DaxianStatusData.accessibility` 使用 `bool?`，`null` 表示尚未收到状态推送
+- `DFm8Y8iMScvB2YDw.kt`: `cloudsend_status` JSON 增加 `accessibility`
+- `model.dart`: `CloudSendStatusData.accessibility` 使用 `bool?`，`null` 表示尚未收到状态推送
 - `model.dart`: 新增 `_canRequestAndroidBackupFrame`，作为所有自动"开无视"命令的守卫
 - `model.dart`: 首帧 3s/10s fallback 在无障碍未知或未开时只执行 `sessionRefreshVideo`
 - `overlay.dart`: 安卓状态监测显示"加密状态"
@@ -54,17 +105,17 @@
 
 ### 协议变更
 
-- `Misc` 消息新增 field 39: `string daxian_status`，proto3 向后兼容
-- `InvokeUiSession` trait 新增 `update_daxian_status(json: String)` 方法
-- 新增会话配置 `show_daxian_status_monitor`，toolbar 使用 `show-daxian-status-monitor`
+- `Misc` 消息新增 field 39: `string cloudsend_status`，proto3 向后兼容
+- `InvokeUiSession` trait 新增 `update_cloudsend_status(json: String)` 方法
+- 新增会话配置 `show_cloudsend_status_monitor`，toolbar 使用 `show-cloudsend-status-monitor`
 
 ### 涉及文件
 
 - `libs/hbb_common/protos/message.proto`, `libs/hbb_common/src/config.rs`
 - `src/client.rs`, `src/ui_session_interface.rs`, `src/flutter.rs`, `src/ui/remote.rs`
 - `src/server/connection.rs`, `src/client/io_loop.rs`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/consts.dart`, `flutter/lib/common/widgets/setting_widgets.dart`, `flutter/lib/common/widgets/toolbar.dart`
 - `flutter/lib/models/model.dart`, `flutter/lib/common/widgets/overlay.dart`
 - `flutter/lib/desktop/pages/remote_page.dart`, `flutter/lib/desktop/pages/view_camera_page.dart`
@@ -97,8 +148,8 @@
 
 - `src/common.rs`, `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`, `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/daxian/dev/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/models/input_model.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/common/widgets/overlay.dart`

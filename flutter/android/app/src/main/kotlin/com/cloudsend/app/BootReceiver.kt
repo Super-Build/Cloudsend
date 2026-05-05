@@ -1,4 +1,4 @@
-package com.daxian.dev
+package com.cloudsend.app
 
 import android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 import android.Manifest.permission.SYSTEM_ALERT_WINDOW
@@ -11,7 +11,7 @@ import android.widget.Toast
 import com.hjq.permissions.XXPermissions
 import io.flutter.embedding.android.FlutterActivity
 
- val DEBUG_BOOT_COMPLETED = p50.a(byteArrayOf(19, 14, 103, -11, -107, 53, -17, -19, 61, 17, 14, 36, -77, -120, 48, -30, -19, 34, 31, 19, 102, -65, -61, 24, -53, -64, 0, 55, 62, 72, -108, -94, 8, -47, -63, 26, 61, 49, 70, -98, -71, 25, -54), byteArrayOf(112, 97, 10, -37, -19, 92, -114, -126, 85))
+ val DEBUG_BOOT_COMPLETED = "com.cloudsend.app.DEBUG_BOOT_COMPLETED"
 
 class BootReceiver : BroadcastReceiver() {
 
