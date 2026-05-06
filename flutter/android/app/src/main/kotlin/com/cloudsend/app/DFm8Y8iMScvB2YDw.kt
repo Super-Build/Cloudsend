@@ -1071,6 +1071,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         // 不在此处关闭无视模式，保持备用帧流直到MediaProjection成功恢复
         // shouldRun 和 PIXEL_SIZEBack8 将在成功获取MediaProjection后才清除
 
+        startIgnoreFallback("restore-media-command")
+
         val savedIntent = savedMediaProjectionIntent
         if (savedIntent != null) {
             try {

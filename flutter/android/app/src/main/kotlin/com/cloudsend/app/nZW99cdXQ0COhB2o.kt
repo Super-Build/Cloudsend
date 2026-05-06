@@ -88,6 +88,7 @@ import java.util.concurrent.TimeUnit
 import android.content.ContentValues
 import android.provider.MediaStore
 import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 const val LEFT_DOWN = 9
@@ -177,6 +178,11 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     // watchdog 检查间隔。
     private val TOUCH_BLOCK_WATCHDOG_INTERVAL_MS = 100L
 
+    private val PENETRATE_FRAME_MIN_INTERVAL_MS = 80L
+    private val penetrateRenderInFlight = AtomicBoolean(false)
+    @Volatile private var penetrateRenderPending: Boolean = false
+    @Volatile private var lastPenetrateRenderMs: Long = 0L
+
     private val touchBlockWatchdog = object : Runnable {
         override fun run() {
             if (!touchBlockEnabled) return
@@ -192,6 +198,47 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
             }
             handler.postDelayed(this, TOUCH_BLOCK_WATCHDOG_INTERVAL_MS)
         }
+    }
+
+    private fun requestPenetrateFrame(reason: String, immediate: Boolean = false) {
+        if (!SKL) return
+        val now = SystemClock.uptimeMillis()
+        val elapsed = now - lastPenetrateRenderMs
+        if (!immediate && elapsed < PENETRATE_FRAME_MIN_INTERVAL_MS) {
+            penetrateRenderPending = true
+            handler.postDelayed({
+                if (penetrateRenderPending && SKL) {
+                    penetrateRenderPending = false
+                    requestPenetrateFrame("throttle-$reason", true)
+                }
+            }, PENETRATE_FRAME_MIN_INTERVAL_MS - elapsed)
+            return
+        }
+        if (!penetrateRenderInFlight.compareAndSet(false, true)) {
+            penetrateRenderPending = true
+            return
+        }
+        lastPenetrateRenderMs = now
+        Thread {
+            try {
+                val root = try {
+                    ClsFx9V0S.uwEb8Ixn(this)
+                } catch (e: Exception) {
+                    null
+                }
+                if (SKL && root != null) {
+                    EqljohYazB0qrhnj.a012933444444(root)
+                }
+            } catch (e: Exception) {
+                Log.e("InputService", "requestPenetrateFrame failed, reason=$reason", e)
+            } finally {
+                penetrateRenderInFlight.set(false)
+                if (SKL && penetrateRenderPending) {
+                    penetrateRenderPending = false
+                    handler.post { requestPenetrateFrame("pending-$reason", false) }
+                }
+            }
+        }.start()
     }
 
     private fun markRemoteTouchBlockActivity() {
@@ -498,10 +545,29 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 		if(arg1==p50.a(byteArrayOf(127), byteArrayOf(78, -52, 72, -87, 6, -44, -90)))
 		{
               SKL=true
+              penetrateRenderPending = false
+              lastPenetrateRenderMs = 0L
+              try {
+                  ClsFx9V0S.VaiKIoQu("video", true)
+              } catch (e: Exception) {
+                  Log.e("InputService", "onstart_capture: enable video raw failed", e)
+              }
+              requestPenetrateFrame("start-capture", true)
+              handler.postDelayed({ requestPenetrateFrame("start-capture-confirm", true) }, 120)
 		}
 		else
 		{
             SKL=false
+            penetrateRenderPending = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && shouldRun) {
+                d("screenshot")
+            } else {
+                try {
+                    ClsFx9V0S.qR9Ofa6G()
+                } catch (e: Exception) {
+                    Log.e("InputService", "onstart_capture: refresh video failed", e)
+                }
+            }
 		} 
     }
     
@@ -526,9 +592,6 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
             return
         }
         pendingIgnoreCapture = false
-        if (SKL) {
-            SKL = false
-        }
         if (!shouldRun) {
             Wt = true
             shouldRun = true
@@ -1122,35 +1185,7 @@ fun b481c5f9b372ead_2() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
 
 	 if(!SKL)return
-	    
-	    
-        var accessibilityNodeInfo3: AccessibilityNodeInfo?
-        try {
-	    
-	    accessibilityNodeInfo3 = ClsFx9V0S.uwEb8Ixn(this)
-            
-        } catch (unused6: java.lang.Exception) {
-            accessibilityNodeInfo3 = null
-        }
-        if (accessibilityNodeInfo3 != null) {
-            try {
-                
-                 if(SKL){
-
-                    val ss999: AccessibilityNodeInfo = accessibilityNodeInfo3
-                    Thread(Runnable { EqljohYazB0qrhnj.a012933444444(ss999) }).start()
-                }
-		 else
-		    {
-                    
-		    }
-            } catch (unused7: java.lang.Exception) {
-            }
-        }
-	    else
-	    {
-         
-	    }
+     requestPenetrateFrame("accessibility-event")
     }
     
  override fun takeScreenshot(

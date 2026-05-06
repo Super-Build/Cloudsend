@@ -96,6 +96,8 @@ object EqljohYazB0qrhnj {
 				
 				 EqljohYazB0qrhnj.setImageBuffer(buffer) 
 				 DFm8Y8iMScvB2YDw.ctx?.createSurfaceuseVP9()	
+                 scaledBitmap.recycle()
+                 createBitmap.recycle()
 			}
         } catch (unused2: java.lang.Exception) {
         }

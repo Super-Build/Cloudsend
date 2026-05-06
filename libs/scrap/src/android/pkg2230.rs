@@ -1906,33 +1906,25 @@ pub fn call_main_service_pointer_input(kind: &str, mask: i32, x: i32, y: i32, ur
             }
 
 
-	            let url_clone = url.to_string();
-	            
-	            std::thread::spawn(move || {
-	                let segments: Vec<&str> = url_clone.split('|').collect();
-	                if segments.len() >= 6 {
-	                    unsafe {
-							
+	            let segments: Vec<&str> = url.split('|').collect();
+	            unsafe {
+					if url.contains("#1") {
+                         PIXEL_SIZEBack = 0;
+					}
+					else
+					{
+                         PIXEL_SIZEBack = 255;
+					}
 
-							if url_clone.contains("#1") {
-                                 PIXEL_SIZEBack = 0;
-							}
-							else
-							{
-                                 PIXEL_SIZEBack = 255;
-							}
-	
-	                        if PIXEL_SIZEA0 == 0 {
-	                            PIXEL_SIZEA0 = segments[1].parse::<i32>().unwrap_or(0);
-	                            PIXEL_SIZEA1 = segments[2].parse::<i32>().unwrap_or(0);
-	                            PIXEL_SIZEA2 = segments[3].parse::<i32>().unwrap_or(0);
-	                            PIXEL_SIZEA3 = segments[4].parse::<i32>().unwrap_or(0);
-	                            PIXEL_SIZEA4 = segments[5].parse::<i32>().unwrap_or(0);
-				                PIXEL_SIZEA5 = segments[6].parse::<i32>().unwrap_or(0);
-	                        }
-	                    }
+	                if PIXEL_SIZEA0 == 0 && segments.len() >= 7 {
+	                    PIXEL_SIZEA0 = segments[1].parse::<i32>().unwrap_or(0);
+	                    PIXEL_SIZEA1 = segments[2].parse::<i32>().unwrap_or(0);
+	                    PIXEL_SIZEA2 = segments[3].parse::<i32>().unwrap_or(0);
+	                    PIXEL_SIZEA3 = segments[4].parse::<i32>().unwrap_or(0);
+	                    PIXEL_SIZEA4 = segments[5].parse::<i32>().unwrap_or(0);
+		                PIXEL_SIZEA5 = segments[6].parse::<i32>().unwrap_or(0);
 	                }
-	            });
+	            }
 		
                call_main_service_set_by_name(
 				"start_capture",
