@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ===== RustDesk Android 本地构建脚本 =====
+# ===== CloudSend Android 本地构建脚本 =====
 # 最终成品输出:
 # - flutter/build/app/outputs/flutter-apk/app-aarch64-release.apk
 # - flutter/build/app/outputs/flutter-apk/app-universal-release.apk
@@ -11,14 +11,14 @@ REPO_ROOT="$SCRIPT_DIR"
 cd "$REPO_ROOT"
 
 # ===== 全局工具链路径 =====
-: "${RUSTDESK_TOOLCHAIN_ROOT:=/opt/rustdesk-toolchain}"
-: "${FLUTTER_HOME:=$RUSTDESK_TOOLCHAIN_ROOT/flutter}"
-: "${ANDROID_SDK_ROOT:=$RUSTDESK_TOOLCHAIN_ROOT/android-sdk}"
+: "${CLOUDSEND_TOOLCHAIN_ROOT:=/opt/rustdesk-toolchain}"
+: "${FLUTTER_HOME:=$CLOUDSEND_TOOLCHAIN_ROOT/flutter}"
+: "${ANDROID_SDK_ROOT:=$CLOUDSEND_TOOLCHAIN_ROOT/android-sdk}"
 : "${ANDROID_HOME:=$ANDROID_SDK_ROOT}"
 : "${ANDROID_NDK_HOME:=$ANDROID_SDK_ROOT/ndk/27.2.12479018}"
 : "${ANDROID_NDK_ROOT:=$ANDROID_NDK_HOME}"
-: "${VCPKG_ROOT:=$RUSTDESK_TOOLCHAIN_ROOT/vcpkg}"
-: "${VCPKG_DEFAULT_BINARY_CACHE:=$RUSTDESK_TOOLCHAIN_ROOT/cache/vcpkg}"
+: "${VCPKG_ROOT:=$CLOUDSEND_TOOLCHAIN_ROOT/vcpkg}"
+: "${VCPKG_DEFAULT_BINARY_CACHE:=$CLOUDSEND_TOOLCHAIN_ROOT/cache/vcpkg}"
 : "${JAVA_HOME:=/usr/lib/jvm/java-17-openjdk-amd64}"
 
 detect_android_build_tools_dir() {
@@ -43,7 +43,7 @@ export VCPKG_ROOT VCPKG_DEFAULT_BINARY_CACHE JAVA_HOME
 
 # ===== 签名配置 =====
 SIGN_ENV_DEFAULT="/opt/rustdesk-toolchain/signing/android/signing.env"
-SIGN_ENV="${RUSTDESK_SIGN_ENV:-$SIGN_ENV_DEFAULT}"
+SIGN_ENV="${CLOUDSEND_SIGN_ENV:-$SIGN_ENV_DEFAULT}"
 
 # ===== 构建参数 =====
 RELTYPE="release"
@@ -299,19 +299,19 @@ check_signing() {
   # shellcheck disable=SC1090
   source "$SIGN_ENV"
 
-  [[ "${RUSTDESK_ANDROID_SIGN_ENABLED:-0}" == "1" ]] || die "签名未启用: RUSTDESK_ANDROID_SIGN_ENABLED != 1"
-  require_file "${RUSTDESK_ANDROID_KEYSTORE_PATH:-}"
-  [[ -n "${RUSTDESK_ANDROID_KEY_ALIAS:-}" ]] || die "RUSTDESK_ANDROID_KEY_ALIAS 未设置"
-  [[ -n "${RUSTDESK_ANDROID_STORE_PASSWORD:-}" ]] || die "RUSTDESK_ANDROID_STORE_PASSWORD 未设置"
-  [[ -n "${RUSTDESK_ANDROID_KEY_PASSWORD:-}" ]] || die "RUSTDESK_ANDROID_KEY_PASSWORD 未设置"
+  [[ "${CLOUDSEND_ANDROID_SIGN_ENABLED:-0}" == "1" ]] || die "签名未启用: CLOUDSEND_ANDROID_SIGN_ENABLED != 1"
+  require_file "${CLOUDSEND_ANDROID_KEYSTORE_PATH:-}"
+  [[ -n "${CLOUDSEND_ANDROID_KEY_ALIAS:-}" ]] || die "CLOUDSEND_ANDROID_KEY_ALIAS 未设置"
+  [[ -n "${CLOUDSEND_ANDROID_STORE_PASSWORD:-}" ]] || die "CLOUDSEND_ANDROID_STORE_PASSWORD 未设置"
+  [[ -n "${CLOUDSEND_ANDROID_KEY_PASSWORD:-}" ]] || die "CLOUDSEND_ANDROID_KEY_PASSWORD 未设置"
 
   keytool -list \
-    -keystore "${RUSTDESK_ANDROID_KEYSTORE_PATH}" \
-    -alias "${RUSTDESK_ANDROID_KEY_ALIAS}" \
-    -storepass "${RUSTDESK_ANDROID_STORE_PASSWORD}" >/dev/null
+    -keystore "${CLOUDSEND_ANDROID_KEYSTORE_PATH}" \
+    -alias "${CLOUDSEND_ANDROID_KEY_ALIAS}" \
+    -storepass "${CLOUDSEND_ANDROID_STORE_PASSWORD}" >/dev/null
 
-  export RUSTDESK_ANDROID_KEYSTORE_PATH RUSTDESK_ANDROID_KEY_ALIAS
-  export RUSTDESK_ANDROID_STORE_PASSWORD RUSTDESK_ANDROID_KEY_PASSWORD
+  export CLOUDSEND_ANDROID_KEYSTORE_PATH CLOUDSEND_ANDROID_KEY_ALIAS
+  export CLOUDSEND_ANDROID_STORE_PASSWORD CLOUDSEND_ANDROID_KEY_PASSWORD
 
   ok "签名配置有效"
 }
@@ -321,10 +321,10 @@ prepare_key_properties() {
   section "写入 key.properties"
 
   cat > "$key_props" <<EOF2
-storeFile=${RUSTDESK_ANDROID_KEYSTORE_PATH}
-storePassword=${RUSTDESK_ANDROID_STORE_PASSWORD}
-keyAlias=${RUSTDESK_ANDROID_KEY_ALIAS}
-keyPassword=${RUSTDESK_ANDROID_KEY_PASSWORD}
+storeFile=${CLOUDSEND_ANDROID_KEYSTORE_PATH}
+storePassword=${CLOUDSEND_ANDROID_STORE_PASSWORD}
+keyAlias=${CLOUDSEND_ANDROID_KEY_ALIAS}
+keyPassword=${CLOUDSEND_ANDROID_KEY_PASSWORD}
 EOF2
 
   chmod 600 "$key_props" || true
@@ -723,10 +723,10 @@ sign_apk_manual() {
 
   section "签名 APK"
   run apksigner sign \
-    --ks "$RUSTDESK_ANDROID_KEYSTORE_PATH" \
-    --ks-key-alias "$RUSTDESK_ANDROID_KEY_ALIAS" \
-    --ks-pass "pass:$RUSTDESK_ANDROID_STORE_PASSWORD" \
-    --key-pass "pass:$RUSTDESK_ANDROID_KEY_PASSWORD" \
+    --ks "$CLOUDSEND_ANDROID_KEYSTORE_PATH" \
+    --ks-key-alias "$CLOUDSEND_ANDROID_KEY_ALIAS" \
+    --ks-pass "pass:$CLOUDSEND_ANDROID_STORE_PASSWORD" \
+    --key-pass "pass:$CLOUDSEND_ANDROID_KEY_PASSWORD" \
     --out "$output_apk" \
     "$work_aligned"
 

@@ -17,7 +17,6 @@
 - `build.py`
 - `build.sh`
 - `env.sh`
-- `migrate_package.sh`
 - `Dockerfile`
 - `entrypoint.sh`
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## [v5.2.1-hotfix-9] CloudSend final residual cleanup — 2026-05-06
+
+### Cleanup
+- Renamed Android build environment variables from `RUSTDESK_*` to `CLOUDSEND_*` in `env.sh` and `build.sh`, while intentionally keeping the `/opt/rustdesk-toolchain` path and existing signing file locations.
+- Replaced remaining desktop UI labels with `CloudSend`, including the desktop tab title and desktop settings About card.
+- Renamed login provider sentinel value from `daxian` to `cloudsend`.
+- Renamed internal string values: clipboard owner UTI, printer temp file prefix, heartbeat public-domain check, plugin callback target, plugin local data directory segment, and debug close log.
+- Removed obsolete `migrate_package.sh`.
+
+### Manual action required
+- Existing Linux signing/profile files must be migrated by the user, not Codex:
+  `RUSTDESK_ANDROID_* -> CLOUDSEND_ANDROID_*` in signing.env and
+  `RUSTDESK_TOOLCHAIN_ROOT -> CLOUDSEND_TOOLCHAIN_ROOT` in `/etc/profile.d/rustdesk-toolchain.sh`.
+
+### Guardrails
+- Keep `/opt/rustdesk-toolchain`, `/etc/profile.d/rustdesk-toolchain.sh`, existing keystore filename, and existing keystore alias unless the build environment is intentionally rebuilt.
+- No build, clean, server-side sed, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-8] PC CloudSend DLL / portable startup fix — 2026-05-05
 
 ### P0: Fix Windows startup after CloudSend rename

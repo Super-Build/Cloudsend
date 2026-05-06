@@ -503,7 +503,6 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 - `env.sh`
 - `build.py`
 - `build.rs`
-- `migrate_package.sh`
 - `flutter/build_android.sh`
 - `flutter/build_android_deps.sh`
 - `flutter/android/app/build.gradle`

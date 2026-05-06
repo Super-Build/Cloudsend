@@ -108,6 +108,18 @@ Current source truth after Parts 1-4:
 
 Do not use older names such as `com.daxian.dev`, `DaxianMeeting`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` for new Android work. If older historical sections below mention them, this 2026-05-05 baseline overrides them.
 
+### 0.7 2026-05-06 CloudSend residual cleanup baseline
+
+Current cleanup truth:
+
+- Android build scripts use `CLOUDSEND_TOOLCHAIN_ROOT`, `CLOUDSEND_SIGN_ENV`, and `CLOUDSEND_ANDROID_*` signing variables.
+- The Linux toolchain path intentionally remains `/opt/rustdesk-toolchain`; this is a server path, not a shipped product string.
+- Existing server files still require user-side migration: signing.env must use `CLOUDSEND_ANDROID_*`, and `/etc/profile.d/rustdesk-toolchain.sh` must export `CLOUDSEND_TOOLCHAIN_ROOT`.
+- Desktop UI hardcoded labels should say `CloudSend`, not `RustDesk`.
+- OAuth/provider sentinel values should use `cloudsend`, not `daxian`.
+- Internal string values now use `dyn.com.cloudsend.owner`, `cloudsend_printer_*`, `cloudsend.`, plugin target `cloudsend`, and plugin local data directory segment `CloudSend`.
+- The obsolete `migrate_package.sh` script has been removed.
+
 ## 1. 项目身份（Project Identity）
 
 ### 1.1 包与产品信息
