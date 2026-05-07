@@ -1541,6 +1541,18 @@ impl Connection {
         let mut msg_out = Message::new();
         msg_out.set_login_response(res);
         self.send(msg_out).await;
+        #[cfg(target_os = "android")]
+        if self.authorized {
+            if let Ok(json) = call_main_service_get_by_name("cloudsend_status") {
+                if !json.is_empty() {
+                    let mut misc = Misc::new();
+                    misc.set_cloudsend_status(json);
+                    let mut msg_out_status = Message::new();
+                    msg_out_status.set_misc(misc);
+                    self.send(msg_out_status).await;
+                }
+            }
+        }
         if let Some(o) = self.options_in_login.take() {
             self.update_options(&o).await;
         }

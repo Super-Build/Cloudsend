@@ -61,7 +61,9 @@ var gohome = 8
 var HomeWidth = 0    
 var HomeHeight = 0
 var HomeDpi = 0
+@Volatile
 var SKL = false
+@Volatile
 var BIS = false
 
  @Volatile

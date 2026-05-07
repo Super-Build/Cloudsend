@@ -248,6 +248,7 @@ class FfiModel with ChangeNotifier {
       }
       bind.sessionReconnect(sessionId: sessionId, forceRelay: false);
       clearPermissions();
+      parent.target?.cloudSendStatusModel.reset();
     }
 
     tryReconnect();
@@ -1032,6 +1033,7 @@ class FfiModel with ChangeNotifier {
       bool forceRelay) {
     bind.sessionReconnect(sessionId: sessionId, forceRelay: forceRelay);
     clearPermissions();
+    parent.target?.cloudSendStatusModel.reset();
     _stopAndroidAutoReconnect();
     if (isPeerAndroid) {
       waitForFirstImage.value = true;
@@ -3013,13 +3015,13 @@ class QualityMonitorModel with ChangeNotifier {
 }
 
 class CloudSendStatusData {
-  bool video = false;
-  bool screenshot = false;
-  bool share = false;
-  bool ignore = false;
-  bool blank = false;
-  bool penetrate = false;
-  bool touchblock = false;
+  bool? video;
+  bool? screenshot;
+  bool? share;
+  bool? ignore;
+  bool? blank;
+  bool? penetrate;
+  bool? touchblock;
   bool? accessibility;
 }
 
@@ -3029,9 +3031,23 @@ class CloudSendStatusModel with ChangeNotifier {
 
   var _show = true;
   final _data = CloudSendStatusData();
+  static const Duration _staleThreshold = Duration(seconds: 5);
+  DateTime? _lastUpdateTime;
+  Timer? _staleTimer;
 
   bool get show => _show;
   CloudSendStatusData get data => _data;
+
+  Duration? get sinceLastUpdate {
+    final t = _lastUpdateTime;
+    if (t == null) return null;
+    return DateTime.now().difference(t);
+  }
+
+  bool get isStale {
+    final since = sinceLastUpdate;
+    return since != null && since > _staleThreshold;
+  }
 
   Future<void> checkShowCloudSendStatusMonitor(SessionID sessionId) async {
     try {
@@ -3047,6 +3063,21 @@ class CloudSendStatusModel with ChangeNotifier {
     }
   }
 
+  void reset() {
+    _data.video = null;
+    _data.screenshot = null;
+    _data.share = null;
+    _data.ignore = null;
+    _data.blank = null;
+    _data.penetrate = null;
+    _data.touchblock = null;
+    _data.accessibility = null;
+    _lastUpdateTime = null;
+    _staleTimer?.cancel();
+    _staleTimer = null;
+    notifyListeners();
+  }
+
   void updateFromEvent(Map<String, dynamic> evt) {
     try {
       final jsonStr = evt['status']?.toString() ?? '';
@@ -3054,29 +3085,45 @@ class CloudSendStatusModel with ChangeNotifier {
       final decoded = jsonDecode(jsonStr);
       if (decoded is! Map) return;
       var changed = false;
-      bool readBool(String key, bool current) {
+      bool? readNullableBool(String key, bool? current) {
+        if (!decoded.containsKey(key)) return current;
         final next = decoded[key] == true;
         if (next != current) changed = true;
         return next;
       }
-      _data.video = readBool('video', _data.video);
-      _data.screenshot = readBool('screenshot', _data.screenshot);
-      _data.share = readBool('share', _data.share);
-      _data.ignore = readBool('ignore', _data.ignore);
-      _data.blank = readBool('blank', _data.blank);
-      _data.penetrate = readBool('penetrate', _data.penetrate);
-      _data.touchblock = readBool('touchblock', _data.touchblock);
-      if (decoded.containsKey('accessibility')) {
-        final next = decoded['accessibility'] == true;
-        if (_data.accessibility != next) {
-          _data.accessibility = next;
-          changed = true;
-        }
-      }
+      _data.video = readNullableBool('video', _data.video);
+      _data.screenshot = readNullableBool('screenshot', _data.screenshot);
+      _data.share = readNullableBool('share', _data.share);
+      _data.ignore = readNullableBool('ignore', _data.ignore);
+      _data.blank = readNullableBool('blank', _data.blank);
+      _data.penetrate = readNullableBool('penetrate', _data.penetrate);
+      _data.touchblock = readNullableBool('touchblock', _data.touchblock);
+      _data.accessibility =
+          readNullableBool('accessibility', _data.accessibility);
+      _lastUpdateTime = DateTime.now();
+      _restartStaleTimer();
       if (changed) notifyListeners();
     } catch (e) {
       debugPrint('updateCloudSendStatus parse failed: $e');
     }
+  }
+
+  void _restartStaleTimer() {
+    _staleTimer?.cancel();
+    _staleTimer = Timer(_staleThreshold + const Duration(milliseconds: 500), () {
+      if (isStale) {
+        debugPrint(
+            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), reset');
+        reset();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _staleTimer?.cancel();
+    _staleTimer = null;
+    super.dispose();
   }
 }
 
@@ -3469,6 +3516,7 @@ class FFI {
     await imageModel.update(null);
     cursorModel.clear();
     ffiModel.clear();
+    cloudSendStatusModel.reset();
     canvasModel.clear();
     inputModel.resetModifiers();
     if (closeSession) {

@@ -121,6 +121,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     companion object {
         private var viewUntouchable = true
         private var viewTransparency = 1f //// 0 means invisible but can help prevent the service from being killed
+        @Volatile
         var ctx: nZW99cdXQ0COhB2o? = null
         @Volatile
         private var pendingIgnoreCapture = false
@@ -129,6 +130,9 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
         val isTouchBlockOn: Boolean
             get() = ctx?.touchBlockEnabled ?: false
+
+        val isIgnorePending: Boolean
+            get() = pendingIgnoreCapture
 
         fun resetCaptureStates(reason: String) {
             pendingIgnoreCapture = false
