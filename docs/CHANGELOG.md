@@ -1,5 +1,27 @@
 # Changelog
 
+## [v5.2.1-hotfix-10] CloudSend status monitor synchronization fix — 2026-05-08
+
+### Status Panel Correctness
+- Fixed first-connection status flicker: Android now pushes one `cloudsend_status` packet immediately after authorization, instead of waiting for the next 1s timer tick.
+- Changed `CloudSendStatusData` fields to nullable booleans so the monitor can render an explicit waiting state (`—`) instead of showing all-red false defaults before the first packet arrives.
+- Added a 5s stale-status watchdog in `CloudSendStatusModel`; if status packets stop arriving, the panel resets to waiting state instead of keeping misleading old values.
+- Reset the monitor on manual reconnect, Android auto-reconnect, and session close.
+
+### Android Status Semantics
+- Added `@Volatile` visibility protection for cross-thread Android status fields: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.
+- `cloudsend_status` now snapshots Android values before building JSON to avoid mixed-state reads.
+- Split status meanings:
+  - `screenshot`: special screenshot stream is actually running (`shouldRun && accessibility`).
+  - `ignore`: ignore switch is logically on (`shouldRun || pendingIgnoreCapture`), including pending wait for accessibility.
+- Added `nZW99cdXQ0COhB2o.isIgnorePending` for status aggregation.
+- Kept the UI label "加密状态" unchanged; it still means Android accessibility service connection state.
+
+### Guardrails
+- Do not restore false-default status UI for the monitor; `null` means waiting/unknown and must render gray.
+- Do not collapse `screenshot` and `ignore` back to the same source; they intentionally represent actual running stream vs requested switch state.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-9] CloudSend final residual cleanup — 2026-05-06
 
 ### Cleanup

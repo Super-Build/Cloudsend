@@ -93,6 +93,27 @@ Older notes using `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, or `li
 - 无障碍未开/未知时，首帧 fallback 只调用 `sessionRefreshVideo(...)`。
 - 监测面板"加密状态"即无障碍服务连接状态，不是网络连接状态。
 
+
+### 0.6 2026-05-08 status monitor synchronization fix
+
+Current runtime truth after Part 7:
+
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` snapshots status values before constructing JSON.
+- Android status JSON field semantics are:
+  - `video = _isStart && mediaProjection != null`.
+  - `screenshot = shouldRun && nZW99cdXQ0COhB2o.isOpen`; this means the special screenshot stream is actually runnable.
+  - `share = _isStart`.
+  - `ignore = shouldRun || nZW99cdXQ0COhB2o.isIgnorePending`; this means ignore has been requested, including pending accessibility wait.
+  - `blank = BIS`.
+  - `penetrate = SKL`.
+  - `touchblock = nZW99cdXQ0COhB2o.isTouchBlockOn`.
+  - `accessibility = nZW99cdXQ0COhB2o.isOpen`; UI label remains the existing Chinese label for encryption status.
+- Cross-thread Android status variables must remain `@Volatile`: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.
+- `src/server/connection.rs` pushes `cloudsend_status` immediately after authorization and also keeps the 1s timer push.
+- Flutter status values are `bool?`; `null` is a valid waiting state and must render as gray `--`, not red.
+- `CloudSendStatusModel.reset()` is required on close, manual reconnect, and Android auto-reconnect.
+- If no status packet arrives for 5 seconds, `CloudSendStatusModel` resets the panel to waiting state to avoid stale green/red indicators.
+
 ---
 
 ## 1. 核心原则（Core Runtime Principles）

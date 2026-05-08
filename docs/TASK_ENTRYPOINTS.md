@@ -40,6 +40,10 @@ Current canonical keywords:
 - `CloudSendStatusMonitor`
 - `show-cloudsend-status-monitor`
 - `show_cloudsend_status_monitor`
+- `CloudSendStatusModel.reset`
+- `_staleThreshold`
+- `isIgnorePending`
+- `set_cloudsend_status`
 - `cloudsend_virtual_displays`
 - `libcloudsend.so`
 - `System.loadLibrary("cloudsend")`

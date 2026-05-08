@@ -120,6 +120,33 @@ Current cleanup truth:
 - Internal string values now use `dyn.com.cloudsend.owner`, `cloudsend_printer_*`, `cloudsend.`, plugin target `cloudsend`, and plugin local data directory segment `CloudSend`.
 - The obsolete `migrate_package.sh` script has been removed.
 
+
+### 0.8 2026-05-08 Android status monitor synchronization baseline
+
+Current source truth:
+
+- Android status field `Misc.cloudsend_status = 39` remains the single status transport.
+- Android sends one `cloudsend_status` packet immediately after authorization, then continues the existing 1s timer push.
+- `CloudSendStatusData` fields are nullable booleans:
+  - `null` means waiting / unknown and must render gray `--`.
+  - `true` means on / exists and renders green.
+  - `false` means off / missing and renders red.
+- `CloudSendStatusModel.reset()` resets all eight status fields to `null` and cancels the stale timer.
+- Reset is required on session close, manual reconnect, and Android auto-reconnect.
+- `CloudSendStatusModel` treats status as stale after 5 seconds without packets and resets to waiting state.
+- Android cross-thread status fields must stay volatile: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and `nZW99cdXQ0COhB2o.ctx`.
+- Status JSON must snapshot Android values before building the `JSONObject`.
+- Status semantics:
+  - `video`: `_isStart && mediaProjection != null`.
+  - `screenshot`: `shouldRun && accessibility`; this means the special screenshot stream is actually runnable.
+  - `share`: `_isStart`.
+  - `ignore`: `shouldRun || pendingIgnoreCapture`; this means the ignore switch/request is on, including pending accessibility wait.
+  - `blank`: `BIS`.
+  - `penetrate`: `SKL`.
+  - `touchblock`: `nZW99cdXQ0COhB2o.isTouchBlockOn`.
+  - `accessibility`: `nZW99cdXQ0COhB2o.isOpen`.
+- The visible UI label for `accessibility` intentionally remains the existing Chinese encryption-status label.
+
 ## 1. 项目身份（Project Identity）
 
 ### 1.1 包与产品信息
