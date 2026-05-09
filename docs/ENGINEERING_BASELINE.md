@@ -147,6 +147,20 @@ Current source truth:
   - `accessibility`: `nZW99cdXQ0COhB2o.isOpen`.
 - The visible UI label for `accessibility` intentionally remains the existing Chinese encryption-status label.
 
+### 0.9 2026-05-09 Android status fallback and penetrate combination baseline
+
+Current source truth:
+
+- `src/server/connection.rs` must use `cloudsend_status_message()` for both immediate-after-authorization status push and the 1s timer status push.
+- If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, or returns `{}`, the server must still send a complete 8-field JSON payload with false defaults. The PC monitor must not remain indefinitely in the waiting dash state because of an Android service-query failure.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` must never intentionally return `{}`; exception fallback must also be a full status payload.
+- `CloudSendStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must not keep the UI stuck at `null` forever.
+- `关穿透` must produce or request a clean frame immediately. A plain Rust `video_service::refresh()` is insufficient on static Android screens and some OEM compositors.
+- `nZW99cdXQ0COhB2o.requestOneShotScreenshotFrame(...)` is the close-penetrate cleanup path on Android R+; Android 9/10 or screenshot failure paths must fall back to `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`.
+- `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` may rebind the current `VirtualDisplay` surface to force a fresh MediaProjection frame when normal composition is static.
+- Combination rule: `开无视 -> 开穿透 -> 关穿透` must preserve ignore mode. Closing penetrate must not call `stopIgnoreCaptureLoop()`, must not clear `shouldRun`, and must not restore `PIXEL_SIZEBack8` to 255 while `shouldRun == true`.
+- The one-shot clean-frame gate may temporarily set `PIXEL_SIZEBack8 = 0` only when ignore is not running, and must restore `PIXEL_SIZEBack8 = 255` immediately after the one-shot frame write.
+
 ## 1. 项目身份（Project Identity）
 
 ### 1.1 包与产品信息

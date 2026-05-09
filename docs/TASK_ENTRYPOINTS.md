@@ -239,6 +239,9 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 - `VIDEO_RAW`
 - `PIXEL_SIZEBack`
 - `PIXEL_SIZEBack8`
+- `requestOneShotScreenshotFrame`
+- `forceVideoFrameRefresh`
+- `cloudsend_status_message`
 - `force_next`
 - `killMediaProjection()`
 - `handleProjectionStoppedKeepService()`

@@ -114,6 +114,19 @@ Current runtime truth after Part 7:
 - `CloudSendStatusModel.reset()` is required on close, manual reconnect, and Android auto-reconnect.
 - If no status packet arrives for 5 seconds, `CloudSendStatusModel` resets the panel to waiting state to avoid stale green/red indicators.
 
+### 0.7 2026-05-09 status fallback and penetrate close fix
+
+Current runtime truth:
+
+- `connection.rs` must not skip status sending just because `call_main_service_get_by_name("cloudsend_status")` fails. It must send a complete false-default 8-field payload so the PC panel has real values instead of staying at `null`.
+- Android `cloudsend_status` exception fallback must be a complete JSON payload, not `{}`.
+- Flutter status parsing must tolerate partial payloads from transitional Android service states; missing fields may default to false when there is no prior value.
+- `关穿透` must actively produce a clean frame. Static Android screens and some Xiaomi/OPPO/Vivo/Honor ROM compositors may not emit a new MediaProjection frame after `SKL=false` unless the display content changes.
+- On Android R+ the first close-penetrate path is `requestOneShotScreenshotFrame(...)`, which uses Accessibility screenshot without turning on ignore mode.
+- On Android 9/10, screenshot failure, or delayed screenshot timeout, the fallback is `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, which rebinds the current `VirtualDisplay` surface and calls video refresh.
+- `开无视 -> 开穿透 -> 关穿透` is a required supported combination. Closing penetrate must preserve `shouldRun == true` and `PIXEL_SIZEBack8 == 0` when ignore was already running.
+- The one-shot clean-frame path may temporarily open `PIXEL_SIZEBack8` only when ignore is not running; it must restore the gate immediately after the one-shot frame write.
+
 ---
 
 ## 1. 核心原则（Core Runtime Principles）

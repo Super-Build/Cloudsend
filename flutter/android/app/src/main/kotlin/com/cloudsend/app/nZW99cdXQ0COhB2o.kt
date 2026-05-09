@@ -125,6 +125,8 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         var ctx: nZW99cdXQ0COhB2o? = null
         @Volatile
         private var pendingIgnoreCapture = false
+        @Volatile
+        private var oneShotScreenshotFrame = false
         val isOpen: Boolean
             get() = ctx != null
 
@@ -134,8 +136,29 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         val isIgnorePending: Boolean
             get() = pendingIgnoreCapture
 
+        val isOneShotScreenshotFrame: Boolean
+            get() = oneShotScreenshotFrame
+
+        fun consumeOneShotScreenshotFrame() {
+            oneShotScreenshotFrame = false
+        }
+
+        fun refreshVideoAfterPenetrate(reason: String) {
+            val mainService = DFm8Y8iMScvB2YDw.ctx
+            if (mainService != null) {
+                mainService.forceVideoFrameRefresh(reason)
+                return
+            }
+            try {
+                ClsFx9V0S.qR9Ofa6G()
+            } catch (e: Exception) {
+                Log.e("InputService", "refreshVideoAfterPenetrate failed", e)
+            }
+        }
+
         fun resetCaptureStates(reason: String) {
             pendingIgnoreCapture = false
+            oneShotScreenshotFrame = false
             val service = ctx
             if (service != null) {
                 service.stopIgnoreCaptureLoop(reason)
@@ -158,6 +181,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
         fun stopIgnoreCapture(reason: String = "request") {
             pendingIgnoreCapture = false
+            oneShotScreenshotFrame = false
             val service = ctx
             if (service == null) {
                 shouldRun = false
@@ -549,6 +573,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 		if(arg1==p50.a(byteArrayOf(127), byteArrayOf(78, -52, 72, -87, 6, -44, -90)))
 		{
               SKL=true
+              oneShotScreenshotFrame = false
               penetrateRenderPending = false
               lastPenetrateRenderMs = 0L
               try {
@@ -563,15 +588,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 		{
             SKL=false
             penetrateRenderPending = false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && shouldRun) {
-                d("screenshot")
-            } else {
-                try {
-                    ClsFx9V0S.qR9Ofa6G()
-                } catch (e: Exception) {
-                    Log.e("InputService", "onstart_capture: refresh video failed", e)
-                }
-            }
+            requestOneShotScreenshotFrame("penetrate-stop")
 		} 
     }
     
@@ -596,6 +613,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
             return
         }
         pendingIgnoreCapture = false
+        oneShotScreenshotFrame = false
         if (!shouldRun) {
             Wt = true
             shouldRun = true
@@ -610,7 +628,27 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         shouldRun = false
         Log.i("InputService", "关无视: screenshot loop stopped, reason=$reason")
     }
-    
+
+    private fun requestOneShotScreenshotFrame(reason: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-legacy")
+            return
+        }
+        oneShotScreenshotFrame = true
+        d("one-shot-$reason")
+        handler.postDelayed({
+            if (oneShotScreenshotFrame) {
+                nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-early")
+            }
+        }, 500)
+        handler.postDelayed({
+            if (oneShotScreenshotFrame) {
+                oneShotScreenshotFrame = false
+                nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-timeout")
+            }
+        }, 3000)
+    }
+
        @RequiresApi(Build.VERSION_CODES.N)
 	fun onstart_overlay(arg1: String, arg2: String) {
 
@@ -1262,7 +1300,7 @@ fun b481c5f9b372ead_2() {
 		        var hardwareBuffer: HardwareBuffer? = null
 		
 		        try {
-		            if (shouldRun && !SKL) {
+		            if ((shouldRun || nZW99cdXQ0COhB2o.isOneShotScreenshotFrame) && !SKL) {
 
 		            } else {
 		                return
@@ -1287,13 +1325,18 @@ fun b481c5f9b372ead_2() {
 
 		
         override fun onFailure(errorCode: Int) {
+            val wasOneShot = nZW99cdXQ0COhB2o.isOneShotScreenshotFrame
+            if (wasOneShot) {
+                nZW99cdXQ0COhB2o.consumeOneShotScreenshotFrame()
+                nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("one-shot-failure")
+            }
             if (errorCode == 3) {
                 
             }
         }
 
         override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
-            if (shouldRun && !SKL) {
+            if ((shouldRun || nZW99cdXQ0COhB2o.isOneShotScreenshotFrame) && !SKL) {
                 ScreenshotThread(screenshotResult).start()
             }
             else

@@ -3086,8 +3086,11 @@ class CloudSendStatusModel with ChangeNotifier {
       if (decoded is! Map) return;
       var changed = false;
       bool? readNullableBool(String key, bool? current) {
-        if (!decoded.containsKey(key)) return current;
-        final next = decoded[key] == true;
+        // Some Android ROMs can transiently return an empty/partial status
+        // payload during service hand-off. Default missing fields to false so
+        // the monitor never stays indefinitely in the "waiting" dash state.
+        final next =
+            decoded.containsKey(key) ? decoded[key] == true : (current ?? false);
         if (next != current) changed = true;
         return next;
       }

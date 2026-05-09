@@ -1,5 +1,30 @@
 # Changelog
 
+## [v5.2.1-hotfix-11] Android status fallback and penetrate/ignore combination safety - 2026-05-09
+
+### Status Monitor Compatibility
+- Hardened Android status delivery for OEM ROM variance: `connection.rs` now always sends a complete 8-field `cloudsend_status` packet after authorization and on the 1s timer, even if `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, or returns `{}`.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` no longer falls back to `{}` on exception; it returns a full false-default status payload so the PC panel does not remain stuck at the waiting dash state.
+- `CloudSendStatusModel.updateFromEvent()` treats missing fields in a received status payload as false when no prior value exists, preventing indefinite `-` display on devices with transient partial status payloads.
+
+### Penetrate Close / Frame Refresh
+- Fixed `关穿透` on static screens and slow/OEM Android compositors: closing penetrate now requests a one-shot clean frame to overwrite the last penetrate frame instead of waiting for a local screen movement.
+- Added Android 9/10 fallback: when Accessibility screenshot is unavailable, `forceVideoFrameRefresh()` rebinds the current `VirtualDisplay` surface and triggers a video refresh.
+- Added delayed fallbacks for Android R+ screenshot delays/failures, so `关穿透` can recover even when `takeScreenshot()` is slow or rejected by a ROM.
+
+### Combination Guardrails
+- `开无视 -> 开穿透 -> 关穿透` must preserve ignore mode:
+  - `关穿透` only clears `SKL` and one-shot penetrate cleanup state.
+  - It must not call `stopIgnoreCaptureLoop()`.
+  - It must not set `PIXEL_SIZEBack8` back to 255 while `shouldRun == true`.
+- The one-shot clean-frame gate only opens `PIXEL_SIZEBack8` temporarily when ignore is not already running, then restores it immediately after the frame write.
+- Quick `关穿透 -> 开穿透` toggles clear any stale one-shot marker before starting penetrate rendering.
+
+### Guardrails
+- Do not replace the one-shot clean-frame logic with a plain `video_service::refresh()` only; static Android screens may not produce a new frame.
+- Do not let penetrate close reset `shouldRun`, `pendingIgnoreCapture`, or user-requested ignore state.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-10] CloudSend status monitor synchronization fix — 2026-05-08
 
 ### Status Panel Correctness

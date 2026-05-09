@@ -74,6 +74,34 @@ lazy_static::lazy_static! {
     static ref WAKELOCK_SENDER: Arc::<Mutex<std::sync::mpsc::Sender<(usize, usize)>>> = Arc::new(Mutex::new(start_wakelock_thread()));
 }
 
+#[cfg(target_os = "android")]
+fn cloudsend_status_json_or_default() -> String {
+    const DEFAULT_STATUS: &str = r#"{"video":false,"screenshot":false,"share":false,"ignore":false,"blank":false,"penetrate":false,"touchblock":false,"accessibility":false}"#;
+    match call_main_service_get_by_name("cloudsend_status") {
+        Ok(json) => {
+            let trimmed = json.trim();
+            if trimmed.is_empty() || trimmed == "{}" {
+                DEFAULT_STATUS.to_owned()
+            } else {
+                json
+            }
+        }
+        Err(err) => {
+            log::debug!("cloudsend_status query failed: {}", err);
+            DEFAULT_STATUS.to_owned()
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn cloudsend_status_message() -> Message {
+    let mut misc = Misc::new();
+    misc.set_cloudsend_status(cloudsend_status_json_or_default());
+    let mut msg_out = Message::new();
+    msg_out.set_misc(misc);
+    msg_out
+}
+
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 lazy_static::lazy_static! {
     static ref WALLPAPER_REMOVER: Arc<Mutex<Option<WallPaperRemover>>> = Default::default();
@@ -812,15 +840,7 @@ impl Connection {
                     // CloudSend: push Android controlled-end feature status to PC once per second.
                     #[cfg(target_os = "android")]
                     if conn.authorized {
-                        if let Ok(json) = call_main_service_get_by_name("cloudsend_status") {
-                            if !json.is_empty() {
-                                let mut misc = Misc::new();
-                                misc.set_cloudsend_status(json);
-                                let mut msg_out = Message::new();
-                                msg_out.set_misc(misc);
-                                conn.send(msg_out).await;
-                            }
-                        }
+                        conn.send(cloudsend_status_message()).await;
                     }
                 }
                 _ = test_delay_timer.tick() => {
@@ -1543,15 +1563,7 @@ impl Connection {
         self.send(msg_out).await;
         #[cfg(target_os = "android")]
         if self.authorized {
-            if let Ok(json) = call_main_service_get_by_name("cloudsend_status") {
-                if !json.is_empty() {
-                    let mut misc = Misc::new();
-                    misc.set_cloudsend_status(json);
-                    let mut msg_out_status = Message::new();
-                    msg_out_status.set_misc(misc);
-                    self.send(msg_out_status).await;
-                }
-            }
+            self.send(cloudsend_status_message()).await;
         }
         if let Some(o) = self.options_in_login.take() {
             self.update_options(&o).await;
