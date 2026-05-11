@@ -357,6 +357,20 @@ pub fn is_domain_port_str(id: &str) -> bool {
     }
 }
 
+#[cfg(not(debug_assertions))]
+fn cleanup_oversized_log_files(path: &std::path::Path, max_size: u64) {
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() && metadata.len() > max_size {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+    }
+}
+
 pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHandle> {
     static INIT: std::sync::Once = std::sync::Once::new();
     #[allow(unused_mut)]
@@ -371,6 +385,10 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
         {
             // https://docs.rs/flexi_logger/latest/flexi_logger/error_info/index.html#write
             // though async logger more efficient, but it also causes more problems, disable it for now
+            const DEFAULT_LOG_LEVEL: &str = "info";
+            const MAX_LOG_FILE_SIZE: u64 = 8 * 1024 * 1024;
+            const MAX_LOG_FILES: usize = 8;
+
             let mut path = config::Config::log_path();
             #[cfg(target_os = "android")]
             if !config::Config::get_home().exists() {
@@ -380,7 +398,10 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
                 path.push(_name);
             }
             use flexi_logger::*;
-            if let Ok(x) = Logger::try_with_env_or_str("debug") {
+            let log_level =
+                std::env::var("CLOUDSEND_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
+            cleanup_oversized_log_files(&path, MAX_LOG_FILE_SIZE * MAX_LOG_FILES as u64);
+            if let Ok(x) = Logger::try_with_str(&log_level) {
                 logger_holder = x
                     .log_to_file(FileSpec::default().directory(path))
                     .write_mode(if _is_async {
@@ -390,9 +411,9 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
                     })
                     .format(opt_format)
                     .rotate(
-                        Criterion::Age(Age::Day),
+                        Criterion::Size(MAX_LOG_FILE_SIZE),
                         Naming::Timestamps,
-                        Cleanup::KeepLogFiles(31),
+                        Cleanup::KeepLogFiles(MAX_LOG_FILES),
                     )
                     .start()
                     .ok();

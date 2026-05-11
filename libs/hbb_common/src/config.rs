@@ -115,7 +115,7 @@ const PERMANENT_PASSWORD: &str = "123";
 
 pub const RENDEZVOUS_PORT: i32 = 50006;
 pub const RELAY_PORT: i32 = 50007;
-pub const WS_RENDEZVOUS_PORT: i32 =50008;
+pub const WS_RENDEZVOUS_PORT: i32 = 50008;
 pub const WS_RELAY_PORT: i32 = 50009;
 
 macro_rules! serde_field_string {
