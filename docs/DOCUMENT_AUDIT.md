@@ -1,6 +1,6 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-05-05
+最后一次从关键源码锚点与文档一致性核验：2026-05-11
 
 > 本文件用于回答两个问题：
 >
@@ -29,6 +29,20 @@
 - 配置键：`show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`；虚拟显示 key：`cloudsend_virtual_displays`。
 
 审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md`、`CHANGELOG.md` 已作为当前可信项目记忆同步。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
+
+---
+
+## 0.1 2026-05-11 Android status monitor fallback audit
+
+Current trusted docs have been synchronized with the Part 8 final source truth:
+
+- `connection.rs` skips invalid/JNI-failed `cloudsend_status` samples and must not send hardcoded false-default JSON.
+- `cloudsend_status_message()` returns `Option<Message>`.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` returns an empty string on exception.
+- `CloudSendStatusModel.updateFromEvent()` preserves current/null values for missing keys.
+- `MainService.onDestroy()` clears Rust `MAIN_SERVICE_CTX` through `ClsFx9V0S.VHsFQTvK()`.
+
+Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_ANDROID_RUNTIME.md`, and `TASK_ENTRYPOINTS.md`.
 
 ---
 

@@ -152,9 +152,11 @@ Current source truth:
 Current source truth:
 
 - `src/server/connection.rs` must use `cloudsend_status_message()` for both immediate-after-authorization status push and the 1s timer status push.
-- If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, or returns `{}`, the server must still send a complete 8-field JSON payload with false defaults. The PC monitor must not remain indefinitely in the waiting dash state because of an Android service-query failure.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` must never intentionally return `{}`; exception fallback must also be a full status payload.
-- `CloudSendStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must not keep the UI stuck at `null` forever.
+- If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload, the server must skip that status push. It must never send hardcoded false-default JSON.
+- `cloudsend_status_message()` returns `Option<Message>`; callers must send only `Some(msg)`.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` must return an empty string on exception so Rust can skip the bad sample.
+- `CloudSendStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must preserve the current/null value and must not become false by default.
+- `MainService.onDestroy()` must call `ClsFx9V0S.VHsFQTvK()` to clear Rust's `MAIN_SERVICE_CTX` GlobalRef. This prevents stale service references after OEM ROM service kills/restarts.
 - `关穿透` must produce or request a clean frame immediately. A plain Rust `video_service::refresh()` is insufficient on static Android screens and some OEM compositors.
 - `nZW99cdXQ0COhB2o.requestOneShotScreenshotFrame(...)` is the close-penetrate cleanup path on Android R+; Android 9/10 or screenshot failure paths must fall back to `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`.
 - `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` may rebind the current `VirtualDisplay` surface to force a fresh MediaProjection frame when normal composition is static.

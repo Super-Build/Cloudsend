@@ -1,11 +1,29 @@
 # Changelog
 
+## [v5.2.1-hotfix-12] Android status monitor no-fake-red fallback - 2026-05-11
+
+### Status Monitor Correctness
+- Removed all hardcoded false-default `cloudsend_status` fallbacks. If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload, `connection.rs` now skips that push instead of sending fake red values.
+- `cloudsend_status_message()` now returns `Option<Message>`; both the immediate-after-authorization push and the 1s timer push send only when a valid Android status JSON exists.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` now returns an empty string on exception, allowing Rust to skip the bad sample and let Flutter keep the waiting `null` state.
+- `CloudSendStatusModel.updateFromEvent()` preserves the current/null value when a JSON key is missing; it no longer uses `current ?? false`.
+
+### Android ROM Lifecycle Hardening
+- `MainService.onDestroy()` now calls `ClsFx9V0S.VHsFQTvK()` to clear Rust's `MAIN_SERVICE_CTX` GlobalRef, avoiding stale service references after OEM ROM service kills/restarts.
+- Added the matching `Java_pkg2230_ClsFx9V0S_VHsFQTvK` JNI export and Kotlin `external fun VHsFQTvK()` declaration.
+- Confirmed `nZW99cdXQ0COhB2o.ctx` remains `@Volatile`; no ffi mirror was added because `ffi.rs` / `ffi.kt` do not contain the `ygmLIEQ5` MainService registration path.
+
+### Guardrails
+- Never reintroduce a hardcoded all-false status JSON as a fallback. Unknown/unavailable status must remain `null` and render gray `--`.
+- Gray `--` is the correct display for waiting/unknown; red is reserved for a real false value from Android.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-11] Android status fallback and penetrate/ignore combination safety - 2026-05-09
 
 ### Status Monitor Compatibility
-- Hardened Android status delivery for OEM ROM variance: `connection.rs` now always sends a complete 8-field `cloudsend_status` packet after authorization and on the 1s timer, even if `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, or returns `{}`.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` no longer falls back to `{}` on exception; it returns a full false-default status payload so the PC panel does not remain stuck at the waiting dash state.
-- `CloudSendStatusModel.updateFromEvent()` treats missing fields in a received status payload as false when no prior value exists, preventing indefinite `-` display on devices with transient partial status payloads.
+- Superseded by hotfix-12: status delivery must skip invalid/JNI-failed samples rather than sending false-default JSON.
+- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` exception fallback must not produce fake false values.
+- `CloudSendStatusModel.updateFromEvent()` must preserve current/null values for missing fields.
 
 ### Penetrate Close / Frame Refresh
 - Fixed `关穿透` on static screens and slow/OEM Android compositors: closing penetrate now requests a one-shot clean frame to overwrite the last penetrate frame instead of waiting for a local screen movement.

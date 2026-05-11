@@ -1792,6 +1792,12 @@ pub extern "system" fn Java_pkg2230_ClsFx9V0S_ygmLIEQ5(env: JNIEnv, _class: JCla
 }
 
 #[no_mangle]
+pub extern "system" fn Java_pkg2230_ClsFx9V0S_VHsFQTvK(_env: JNIEnv, _class: JClass) {
+    log::debug!("MainService destroy from java, clearing MAIN_SERVICE_CTX");
+    *MAIN_SERVICE_CTX.write().unwrap() = None;
+}
+
+#[no_mangle]
 pub extern "system" fn Java_pkg2230_ClsFx9V0S_jSYL8DA3(
     env: JNIEnv,
     _class: JClass,

@@ -118,9 +118,10 @@ Current runtime truth after Part 7:
 
 Current runtime truth:
 
-- `connection.rs` must not skip status sending just because `call_main_service_get_by_name("cloudsend_status")` fails. It must send a complete false-default 8-field payload so the PC panel has real values instead of staying at `null`.
-- Android `cloudsend_status` exception fallback must be a complete JSON payload, not `{}`.
-- Flutter status parsing must tolerate partial payloads from transitional Android service states; missing fields may default to false when there is no prior value.
+- `connection.rs` must skip status sending when `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload. It must never send hardcoded false-default JSON.
+- Android `cloudsend_status` exception fallback must be an empty string, allowing Rust to skip the bad sample.
+- Flutter status parsing must tolerate partial payloads from transitional Android service states; missing fields preserve the current/null value and must not default to false.
+- `MainService.onDestroy()` clears Rust's `MAIN_SERVICE_CTX` through `ClsFx9V0S.VHsFQTvK()` so OEM ROM service kills do not leave stale JNI GlobalRefs behind.
 - `关穿透` must actively produce a clean frame. Static Android screens and some Xiaomi/OPPO/Vivo/Honor ROM compositors may not emit a new MediaProjection frame after `SKL=false` unless the display content changes.
 - On Android R+ the first close-penetrate path is `requestOneShotScreenshotFrame(...)`, which uses Accessibility screenshot without turning on ignore mode.
 - On Android 9/10, screenshot failure, or delayed screenshot timeout, the fallback is `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, which rebinds the current `VirtualDisplay` surface and calls video refresh.

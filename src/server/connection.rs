@@ -75,31 +75,59 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(target_os = "android")]
-fn cloudsend_status_json_or_default() -> String {
-    const DEFAULT_STATUS: &str = r#"{"video":false,"screenshot":false,"share":false,"ignore":false,"blank":false,"penetrate":false,"touchblock":false,"accessibility":false}"#;
+/// Get Android cloudsend_status JSON.
+///
+/// Return None when MainService/JNI is not ready or the payload is invalid.
+/// Callers must skip pushing in that case so the PC monitor keeps the
+/// "waiting" state instead of showing fake red values.
+fn cloudsend_status_json_or_none() -> Option<String> {
     match call_main_service_get_by_name("cloudsend_status") {
         Ok(json) => {
             let trimmed = json.trim();
-            if trimmed.is_empty() || trimmed == "{}" {
-                DEFAULT_STATUS.to_owned()
-            } else {
-                json
+            if trimmed.is_empty() {
+                log::debug!("cloudsend_status: empty payload, skip push");
+                return None;
             }
+            if trimmed == "{}" {
+                log::debug!("cloudsend_status: empty object, skip push");
+                return None;
+            }
+            if !trimmed.starts_with('{') {
+                log::debug!("cloudsend_status: non-object payload [{}], skip push", trimmed);
+                return None;
+            }
+            let has_any_key = trimmed.contains("\"video\"")
+                || trimmed.contains("\"share\"")
+                || trimmed.contains("\"ignore\"")
+                || trimmed.contains("\"blank\"")
+                || trimmed.contains("\"penetrate\"")
+                || trimmed.contains("\"touchblock\"")
+                || trimmed.contains("\"screenshot\"")
+                || trimmed.contains("\"accessibility\"");
+            if !has_any_key {
+                log::debug!("cloudsend_status: no known field in payload, skip push");
+                return None;
+            }
+            Some(json)
         }
         Err(err) => {
-            log::debug!("cloudsend_status query failed: {}", err);
-            DEFAULT_STATUS.to_owned()
+            log::debug!(
+                "cloudsend_status: JNI failed (service not ready or killed): {}",
+                err
+            );
+            None
         }
     }
 }
 
 #[cfg(target_os = "android")]
-fn cloudsend_status_message() -> Message {
+fn cloudsend_status_message() -> Option<Message> {
+    let json = cloudsend_status_json_or_none()?;
     let mut misc = Misc::new();
-    misc.set_cloudsend_status(cloudsend_status_json_or_default());
+    misc.set_cloudsend_status(json);
     let mut msg_out = Message::new();
     msg_out.set_misc(misc);
-    msg_out
+    Some(msg_out)
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -840,7 +868,9 @@ impl Connection {
                     // CloudSend: push Android controlled-end feature status to PC once per second.
                     #[cfg(target_os = "android")]
                     if conn.authorized {
-                        conn.send(cloudsend_status_message()).await;
+                        if let Some(msg) = cloudsend_status_message() {
+                            conn.send(msg).await;
+                        }
                     }
                 }
                 _ = test_delay_timer.tick() => {
@@ -1561,9 +1591,13 @@ impl Connection {
         let mut msg_out = Message::new();
         msg_out.set_login_response(res);
         self.send(msg_out).await;
+        // CloudSend: push one status frame immediately after authorization.
+        // If MainService/JNI is not ready yet, skip and let the timer retry.
         #[cfg(target_os = "android")]
         if self.authorized {
-            self.send(cloudsend_status_message()).await;
+            if let Some(msg) = cloudsend_status_message() {
+                self.send(msg).await;
+            }
         }
         if let Some(o) = self.options_in_login.take() {
             self.update_options(&o).await;

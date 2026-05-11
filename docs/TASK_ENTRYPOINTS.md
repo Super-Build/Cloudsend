@@ -242,6 +242,7 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 - `requestOneShotScreenshotFrame`
 - `forceVideoFrameRefresh`
 - `cloudsend_status_message`
+- `cloudsend_status_json_or_none`
 - `force_next`
 - `killMediaProjection()`
 - `handleProjectionStoppedKeepService()`

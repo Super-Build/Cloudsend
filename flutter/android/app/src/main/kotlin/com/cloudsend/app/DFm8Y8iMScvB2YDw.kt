@@ -179,7 +179,8 @@ class DFm8Y8iMScvB2YDw : Service() {
                     }.toString()
                 } catch (e: Exception) {
                     Log.e("MainService", "cloudsend_status build failed", e)
-                    "{\"video\":false,\"screenshot\":false,\"share\":false,\"ignore\":false,\"blank\":false,\"penetrate\":false,\"touchblock\":false,\"accessibility\":false}"
+                    // Return empty so Rust skips this push instead of showing fake red values.
+                    ""
                 }
             }
              p50.a(byteArrayOf(72, -71, -114, 59, -59, -51), byteArrayOf(33, -54, -47, 94, -85, -87)) -> {
@@ -501,6 +502,11 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
         }
         ctx = null
+        try {
+            ClsFx9V0S.VHsFQTvK()
+        } catch (e: Throwable) {
+            Log.e("MainService", "VHsFQTvK clearing call failed", e)
+        }
         super.onDestroy()
     }
 
