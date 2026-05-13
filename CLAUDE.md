@@ -1,4 +1,4 @@
-# CLAUDE.md — 大仙会议 / DaxianMeeting v5.2.0
+# CLAUDE.md — 大仙会议 / DaxianMeeting v5.2.1
 
 最后一次与全仓源码对齐：2026-04-14
 

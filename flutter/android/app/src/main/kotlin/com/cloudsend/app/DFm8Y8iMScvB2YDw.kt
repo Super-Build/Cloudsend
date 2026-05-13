@@ -1404,7 +1404,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationChannel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = DEFAULT_NOTIFY_CHANNEL
-            val channelName = "CloudSend"
+            val channelName = getString(R.string.app_name)
             val channel = NotificationChannel(
                 channelId,
                 channelName, NotificationManager.IMPORTANCE_LOW
@@ -1445,7 +1445,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentTitle("CloudSend")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText("正在保持远程连接服务")
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)

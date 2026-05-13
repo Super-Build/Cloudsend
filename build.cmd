@@ -59,7 +59,7 @@ set "ROOT_FOLDER=%CD%"
 for %%A in ("%ROOT_FOLDER%") do set "FOLDER_NAME=%%~nxA"
 
 
-if not defined VERSION set "VERSION=1.4.0"
+if not defined VERSION set "VERSION=5.2.1"
 if not defined ARCH set "ARCH=x64"
 
 echo [INFO] Folder Name: "%FOLDER_NAME%"

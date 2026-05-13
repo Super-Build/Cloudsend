@@ -88,7 +88,7 @@ for /f "usebackq eol=# tokens=1* delims==" %%i in ("%ROOT_FOLDER%\.info") do (
     )
 )
 
-if not defined VERSION set "VERSION=1.4.0"
+if not defined VERSION set "VERSION=5.2.1"
 if not defined ARCH set "ARCH=x64"
 
 echo.

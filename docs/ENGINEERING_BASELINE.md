@@ -178,10 +178,10 @@ Current source truth:
 当前事实：
 
 - Rust crate：`cloudsend`
-- Rust crate version：`5.2.0`
+- Rust crate version：`5.2.1`
 - Rust library：`cloudsend`
 - Flutter package：`flutter_hbb`
-- Flutter version：`5.2.0+58`
+- Flutter version：`5.2.1+59`
 - 产品名（runtime app name）：`CloudSend`
 - Android package：`com.cloudsend.app`
 - Android visible label：`CloudSend`
