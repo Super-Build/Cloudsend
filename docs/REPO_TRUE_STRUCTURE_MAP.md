@@ -38,7 +38,7 @@
 - `docs/`
 - `CLAUDE.md`
 - `terminal.md`
-- `README.md` 及多语言 README
+- `README.md` / `docs/README-ZH.md` (only English and Chinese README variants are retained)
 
 职责：
 
@@ -332,14 +332,14 @@ Kotlin / Java 文件：
 
 ## 5. docs 目录：`docs/`
 
-这个目录不仅是常规 README 多语言集合，也包含工程记忆层：
+这个目录只保留英文/中文 README 与工程记忆层：
 
 - `ENGINEERING_INDEX.md`
 - `ENGINEERING_BASELINE.md`
 - `ENGINEERING_ANDROID_RUNTIME.md`
 - `TASK_ENTRYPOINTS.md`
 
-以及大量贡献、行为准则、README 翻译文档。
+以及英文/中文贡献、行为准则、README 文档。
 
 说明：
 

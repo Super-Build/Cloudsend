@@ -71,7 +71,7 @@ These files are inherited upstream/vendor/background material and must not overr
 
 - `README.md`: contains a top current-source-truth overlay; upstream RustDesk README body is retained as background.
 - `PC-Build.md`: contains a top current-source-truth overlay; old RustDesk / `rustdesk-1.4.6` environment examples are background.
-- `docs/README-*`, `docs/SECURITY*`, `docs/CONTRIBUTING*`, `docs/CODE_OF_CONDUCT*`, `docs/DEVCONTAINER*`: inherited upstream/project-policy documents.
+- `docs/README-ZH.md`, `docs/SECURITY.md`, `docs/CONTRIBUTING.md`, `docs/CONTRIBUTING-ZH.md`, `docs/CODE_OF_CONDUCT.md`, `docs/CODE_OF_CONDUCT-ZH.md`, and `docs/DEVCONTAINER.md`: retained English/Chinese upstream/project-policy documents.
 - READMEs under `libs/`, `flutter/`, `res/`, and `src/lang/`: vendor/upstream subsystem notes.
 
 ## Residual Rules
