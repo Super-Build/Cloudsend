@@ -1,6 +1,6 @@
 # 任务入口点 / Task Entrypoints
 
-最后一次从全仓源码核验：2026-04-22
+最后一次从全仓源码核验：2026-05-18
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -34,6 +34,7 @@ For Android package, product identity, status protocol, or SO loading tasks, sta
 Current canonical keywords:
 
 - `CloudSend`
+- `云计划`
 - `com.cloudsend.app`
 - `cloudsend_status`
 - `CloudSendStatusModel`
@@ -50,8 +51,28 @@ Current canonical keywords:
 - `DynamicLibrary.open('libcloudsend.so')`
 - `cloudsend_core_main`
 - `cloudsend_core_main_args`
+- `new-build.cmd`
+- `PC-Bulid`
 
-Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` in Android work.
+Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, `librustdesk.dll`, or `rustdesk_core_main` in Android/PC work.
+
+Android visible app name tasks must start from:
+
+- `flutter/android/app/src/main/res/values/strings.xml` (`app_name`)
+- `flutter/android/app/src/main/AndroidManifest.xml` (`android:label="@string/app_name"`)
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt` (`NotificationChannel`, `setContentTitle`)
+
+Version / packaging tasks must start from:
+
+- `Cargo.toml`
+- `libs/portable/Cargo.toml`
+- `flutter/pubspec.yaml`
+- `new-build.cmd` (current Windows build entry; outputs to `PC-Bulid`)
+- `build.cmd` (legacy Windows build entry; retained for old environment compatibility)
+- `appimage/AppImageBuilder-*.yml`
+- `res/rpm*.spec`
+- `res/PKGBUILD`
+- `Cargo.lock` project package entries only; do not rewrite third-party dependency versions.
 
 ## 0. 当前任务纪律与最新热修入口（Current Task Guard）
 

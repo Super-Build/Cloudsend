@@ -457,6 +457,6 @@ goto fail
 
 :fail
 echo.
-echo [FAILED] PC.cmd stopped. Review the last visible step above.
+echo [FAILED] new-build.cmd stopped. Review the last visible step above.
 pause
 exit /b 1

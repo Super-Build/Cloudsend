@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> Current source-truth overlay (verified 2026-05-18): this map is an inherited structure map and may contain older wording in lower historical sections. Current project identity is CloudSend runtime + Android visible label `云计划`; Android package is `com.cloudsend.app`; Android SO is `libcloudsend.so`; Windows DLL is `cloudsend.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
+>
+> For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, and `docs/TASK_ENTRYPOINTS.md`.
+
 # 全仓真实结构图 / Repo True Structure Map
 
 最后一次从全仓源码核验：2026-04-14

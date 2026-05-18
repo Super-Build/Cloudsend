@@ -160,8 +160,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustdesk-portable-packer"
-version = "0.1.0"
+name = "cloudsend-portable-packer"
+version = "5.2.1"
 dependencies = [
  "brotli",
  "dirs",

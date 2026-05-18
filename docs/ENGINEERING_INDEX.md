@@ -1,7 +1,7 @@
 # 工程总索引 / Engineering Index
 
-最后一次基于全仓源码核验：2026-04-14
-最近一次文档一致性复核：2026-04-27
+最后一次基于全仓源码核验：2026-05-18
+最近一次文档一致性复核：2026-05-18
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -9,16 +9,20 @@
 
 ---
 
-## Current CloudSend Source Truth (2026-05-05)
+## Current CloudSend Source Truth (2026-05-18)
 
 - Product/runtime app name: `CloudSend`.
 - Android package/applicationId: `com.cloudsend.app`.
-- Android visible label: `CloudSend`.
+- Android visible label: `云计划`.
 - Android scheme: `cloudsend`.
 - Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
 - Rust crate and library name: `cloudsend`.
+- Rust crate version: `5.2.1`.
+- Flutter app version: `5.2.1+59`.
 - Android SO artifact: `libcloudsend.so`.
 - Android SO loading: `System.loadLibrary("cloudsend")` and `DynamicLibrary.open('libcloudsend.so')`.
+- Windows DLL artifact/loading: `cloudsend.dll`.
+- Current Windows build script: `new-build.cmd`; output directory: `PC-Bulid`.
 - Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
 - Android status protocol: `cloudsend_status`, `CloudSendStatusModel`, `CloudSendStatusMonitor`, `show_cloudsend_status_monitor`.
 - Virtual display platform addition key: `cloudsend_virtual_displays`.
@@ -35,8 +39,9 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 4. `docs/TASK_ENTRYPOINTS.md`
 5. `docs/REPO_TRUE_STRUCTURE_MAP.md`
 6. `docs/DOCUMENT_AUDIT.md`
-7. `CLAUDE.md`
-8. `terminal.md`
+7. `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`
+8. `CLAUDE.md`
+9. `terminal.md`
 
 说明：
 
@@ -166,7 +171,9 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 - Rust library name: `cloudsend`, Android cdylib output `libcloudsend.so`.
 - 产品运行时名称：`CloudSend`
 - Android package：`com.cloudsend.app`
-- Android visible label: `CloudSend`.
+- Android visible label: `云计划`.
+- 当前版本：Rust `5.2.1`，Flutter `5.2.1+59`.
+- PC 新环境构建入口：`new-build.cmd`，输出目录 `PC-Bulid`.
 - Flutter package：`flutter_hbb`
 - Android 自定义链路并非轻量修补，而是包含：
   - Flutter UI 命令入口
@@ -247,7 +254,7 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 - Current Android deep link scheme is `cloudsend://`; do not treat older audit notes as current truth.
 - 但 deep link 本身仍有代码/配置并存风险：
   - Android manifest scheme: `cloudsend`.
-  - Rust URI prefix: derived from `APP_NAME = CloudSend`, keep aligned with `cloudsend://`.
+- Rust URI prefix: derived from `APP_NAME = CloudSend`, keep aligned with `cloudsend://`.
 - 这些差异在 `docs/DOCUMENT_AUDIT.md` 中有更完整说明。
 
 ---

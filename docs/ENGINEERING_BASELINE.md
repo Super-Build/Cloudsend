@@ -1,7 +1,7 @@
 # 工程基线 / Engineering Baseline
 
-最后一次从全仓源码核验：2026-04-22
-最近一次文档一致性复核：2026-04-27
+最后一次从全仓源码核验：2026-05-18
+最近一次文档一致性复核：2026-05-18
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -84,20 +84,24 @@
 
 ---
 
-### 0.6 2026-05-05 CloudSend identity / SO rename baseline
+### 0.6 2026-05-18 CloudSend identity / SO rename baseline
 
-Current source truth after Parts 1-4:
+Current source truth:
 
 - Product/runtime app name: `CloudSend`.
 - Android package / applicationId: `com.cloudsend.app`.
-- Android visible label / notification title: `CloudSend`.
+- Android visible label / notification title: `云计划`.
 - Android deep link scheme: `cloudsend`.
 - Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
 - Rust crate: `cloudsend`.
+- Rust crate version: `5.2.1`.
 - Rust library name: `cloudsend`, producing Android `libcloudsend.so`.
+- Flutter version: `5.2.1+59`.
 - Android JNI output path: `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
 - Kotlin SO loading: `System.loadLibrary("cloudsend")`.
 - Dart Android SO loading: `DynamicLibrary.open('libcloudsend.so')`.
+- Windows DLL loading: `cloudsend.dll` via `flutter/windows/runner/main.cpp`, `flutter/windows/CMakeLists.txt`, and `flutter/lib/models/native_model.dart`.
+- Current PC build script: `new-build.cmd`; output directory is `PC-Bulid`.
 - Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
 - Status protocol field: `Misc.cloudsend_status = 39`.
 - Android status query key: `call_main_service_get_by_name("cloudsend_status")`.
@@ -106,7 +110,7 @@ Current source truth after Parts 1-4:
 - Session option: `show_cloudsend_status_monitor` and toolbar key `show-cloudsend-status-monitor`.
 - Virtual display platform addition key: `cloudsend_virtual_displays`.
 
-Do not use older names such as `com.daxian.dev`, `DaxianMeeting`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` for new Android work. If older historical sections below mention them, this 2026-05-05 baseline overrides them.
+Do not use older names such as `com.daxian.dev`, `DaxianMeeting`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` for new Android work. If older historical sections below mention them, this 2026-05-18 baseline overrides them.
 
 ### 0.7 2026-05-06 CloudSend residual cleanup baseline
 
@@ -184,7 +188,7 @@ Current source truth:
 - Flutter version：`5.2.1+59`
 - 产品名（runtime app name）：`CloudSend`
 - Android package：`com.cloudsend.app`
-- Android visible label：`CloudSend`
+- Android visible label：`云计划`
 - 配置组织名（runtime org）：`com.carriez`
 
 ### 1.2 品牌与命名现实（Branding Reality）

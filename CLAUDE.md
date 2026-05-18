@@ -1,6 +1,6 @@
-# CLAUDE.md — 大仙会议 / DaxianMeeting v5.2.1
+# CLAUDE.md — CloudSend / 云计划 v5.2.1
 
-最后一次与全仓源码对齐：2026-04-14
+最后一次与全仓源码对齐：2026-05-18
 
 > 本文件是 **Claude Code** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
@@ -17,15 +17,17 @@
 
 ## 1. 项目身份（Project Identity）
 
-- 产品名：`DaxianMeeting`
-- Android 显示名：`大仙会议`
+- 产品/runtime 名：`CloudSend`
+- Android 显示名：`云计划`
 - 基础：RustDesk 深度二次开发
-- Rust crate：`rustdesk`
-- Rust library：`librustdesk`
+- Rust crate：`cloudsend`
+- Rust library：`cloudsend`
 - Flutter package：`flutter_hbb`
-- Android package：`com.daxian.dev`
-- Runtime `APP_NAME`：`DaxianMeeting`（`libs/hbb_common/src/config.rs`）
-- Runtime `ORG`：`com.carriez`（仍有历史残留）
+- Android package/applicationId：`com.cloudsend.app`
+- Android deep link scheme：`cloudsend`
+- Runtime `APP_NAME`：`CloudSend`（`libs/hbb_common/src/config.rs` / `hbb_common::config::APP_NAME`）
+- Runtime `ORG`：`com.carriez`（仍有历史来源，非 Android package）
+- 当前版本：Rust `5.2.1`，Flutter `5.2.1+59`
 
 ---
 
@@ -37,7 +39,7 @@
 2. Shared protocol/config：`libs/hbb_common/`
 3. Android JNI / raw frame：`libs/scrap/src/android/`
 4. Flutter UI：`flutter/lib/`
-5. Android Kotlin runtime：`flutter/android/app/src/main/kotlin/com/daxian/dev/`
+5. Android Kotlin runtime：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`
 6. Legacy desktop UI：`src/ui/`
 7. Account / HTTP / sync / upload：`src/hbbs_http/`
 8. Windows privacy mode / virtual display：`src/privacy_mode.rs` + `src/virtual_display_manager.rs`
@@ -47,7 +49,7 @@
 - 只有 Flutter，没有旧 UI
 - 只有远控，没有账号/同步链
 - Android 只有 Kotlin，没有 Rust JNI 主链
-- 品牌已经完全统一，没有命名残留
+- 品牌/运行名已经迁移到 CloudSend，但上游文档、翻译、兼容判断和第三方依赖中仍会有历史 RustDesk 字样
 
 ---
 
@@ -177,7 +179,19 @@ Rust 映射：
 ./build.sh 2
 ```
 
-### Desktop / Flutter
+### Windows / PC（Windows Server 构建机）
+
+```bat
+new-build.cmd
+```
+
+说明：
+
+- `new-build.cmd` 适配 `PC-Build.md` 中的 `C:\DevEnv` + `C:\DevTool` 环境。
+- 生成的自解压产物输出到：`PC-Bulid\<源码目录名>.exe`。
+- 旧 `build.cmd` 仍保留，但不是当前推荐的新环境入口。
+
+### Desktop / Flutter（通用）
 
 ```bash
 python3 build.py --flutter --release
@@ -198,15 +212,17 @@ cargo test
 
 ### Android
 
-- Rust 输出：`liblibrustdesk.so`
-- `build.sh` 复制到：`flutter/android/app/src/main/jniLibs/<abi>/libdaxian.so`
-- Kotlin 加载：`System.loadLibrary("daxian")`
-- Dart Android 打开：`DynamicLibrary.open('libdaxian.so')`
+- Rust 输出：`libcloudsend.so`
+- `build.sh` 复制到：`flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`
+- Kotlin 加载：`System.loadLibrary("cloudsend")`
+- Dart Android 打开：`DynamicLibrary.open('libcloudsend.so')`
+- Android 可见应用名：`云计划`
 
 ### Windows
 
-- Runner 加载：`librustdesk.dll`
-- Dart Windows 打开：`DynamicLibrary.open('librustdesk.dll')`
+- Runner 加载：`cloudsend.dll`
+- Dart Windows 打开：`DynamicLibrary.open('cloudsend.dll')`
+- `flutter/windows/CMakeLists.txt` 从 `target/<profile>/cloudsend.dll` 安装为 `cloudsend.dll`
 
 ### Deep Link
 
@@ -214,8 +230,8 @@ cargo test
 
 当前要区分：
 
-- Android manifest scheme：`daxian`
-- Rust `get_uri_prefix()`：由 `APP_NAME` 推导，当前更接近 `daxianmeeting://`
+- Android manifest scheme：`cloudsend`
+- Rust `get_uri_prefix()`：由 `APP_NAME = CloudSend` 推导，必须与 `cloudsend://` 保持一致
 
 因此，任何 deep-link 任务都必须同时核对 manifest 与 Rust helper。
 

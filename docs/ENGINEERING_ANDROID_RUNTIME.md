@@ -1,6 +1,6 @@
 # Android 运行时工程文档 / Android Runtime Engineering Notes
 
-最后一次从全仓源码核验：2026-04-22
+最后一次从全仓源码核验：2026-05-18
 
 > 本文件记录的是**当前代码真正体现出来的 Android 运行时模型**。
 > 中文用于解释状态和风险；English symbol / path 用于把结论牢牢钉回源码。
@@ -8,13 +8,15 @@
 
 ---
 
-### 2026-05-05 CloudSend Android runtime naming baseline
+### 2026-05-18 CloudSend Android runtime naming baseline
 
-Current Android runtime identity after Parts 1-4:
+Current Android runtime identity:
 
 - Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
 - Android package/applicationId: `com.cloudsend.app`.
-- Android label / foreground notification title: `CloudSend`.
+- Android label / foreground notification title: `云计划`.
+- Android label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name`.
+- Android manifest labels use `@string/app_name` for both `<application>` and `nZW99cdXQ0COhB2o` accessibility service.
 - Android deep link scheme: `cloudsend`.
 - Native library loaded by Kotlin: `System.loadLibrary("cloudsend")`.
 - Native library opened by Dart on Android: `DynamicLibrary.open('libcloudsend.so')`.
@@ -23,6 +25,15 @@ Current Android runtime identity after Parts 1-4:
 - Status protocol field: `Misc.cloudsend_status = 39`.
 - PC event: `update_cloudsend_status`.
 - Flutter status model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
+- Current `cloudsend_status` payload sources:
+  - `video = _isStart && mediaProjection != null`.
+  - `screenshot = shouldRun && nZW99cdXQ0COhB2o.isOpen`.
+  - `share = _isStart`.
+  - `ignore = shouldRun || nZW99cdXQ0COhB2o.isIgnorePending`.
+  - `blank = BIS`.
+  - `penetrate = SKL`.
+  - `touchblock = nZW99cdXQ0COhB2o.isTouchBlockOn`.
+  - `accessibility = nZW99cdXQ0COhB2o.isOpen`.
 
 Older notes using `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, or `libdaxian.so` are historical and must not be copied into new work.
 

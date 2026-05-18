@@ -1,5 +1,22 @@
 # Changelog
 
+## [v5.2.1-docsync-13] Current source-truth documentation sync - 2026-05-18
+
+### Current Naming / Version Truth
+- Android visible app label and foreground notification title are now `云计划`, sourced from `flutter/android/app/src/main/res/values/strings.xml` and referenced by AndroidManifest/MainService notification code.
+- Runtime product name remains `CloudSend`; do not confuse it with the Android launcher label.
+- Current version is `5.2.1` in `Cargo.toml`, `libs/portable/Cargo.toml`, packaging metadata, and PC build defaults; Flutter package version is `5.2.1+59`.
+- Root `Cargo.lock` and `libs/portable/Cargo.lock` project package entries are synchronized to `cloudsend` / `cloudsend-portable-packer` version `5.2.1`; third-party dependency versions are intentionally unchanged.
+- Android SO name is `libcloudsend.so`; Windows DLL name is `cloudsend.dll`.
+- Current Windows build entry is `new-build.cmd`, and completed PC portable artifacts are copied to `PC-Bulid`.
+
+### Documentation Guardrails
+- `README.md` and `PC-Build.md` keep inherited upstream/environment background, but their top notes now state the current project source truth.
+- Added `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` as the clean full-Markdown/source-anchor audit record.
+- Updated `terminal.md` to describe the subsystem as CloudSend terminal service while noting its upstream RustDesk inheritance.
+- Do not treat old `RustDesk`, `rustdesk-1.4.6`, `librustdesk.dll`, `libdaxian.so`, or `PC.cmd` references in historical/background sections as current project facts.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-hotfix-12] Android status monitor no-fake-red fallback - 2026-05-11
 
 ### Status Monitor Correctness
@@ -110,7 +127,7 @@
 
 ### Branding / Android identity
 - Android package changed from `com.daxian.dev` to `com.cloudsend.app`.
-- Android visible app label and notification title changed to `CloudSend`.
+- Android visible app label and notification title changed to `CloudSend` at this stage; current Android visible label is superseded to `云计划` by `v5.2.1-docsync-13`.
 - Android deep link scheme changed to `cloudsend://`.
 - Kotlin package directory changed to `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
 

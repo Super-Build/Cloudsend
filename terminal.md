@@ -1,8 +1,10 @@
-# RustDesk Terminal Service Implementation
+# CloudSend Terminal Service Implementation
 
 ## Overview
 
-The RustDesk terminal service provides remote terminal/shell access with support for multiple concurrent terminal sessions per connection. It features persistence support, allowing terminal sessions to survive connection drops and be resumed later.
+The CloudSend terminal service provides remote terminal/shell access with support for multiple concurrent terminal sessions per connection. It features persistence support, allowing terminal sessions to survive connection drops and be resumed later.
+
+Current source-truth note (verified 2026-05-18): this subsystem is inherited from the upstream RustDesk terminal implementation, but project documentation should refer to the current product/runtime as CloudSend unless explicitly discussing upstream history.
 
 ## Architecture
 

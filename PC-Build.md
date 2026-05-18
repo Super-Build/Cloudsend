@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> Current CloudSend / 云计划 source truth (verified 2026-05-18): this file is a Windows Server environment background note derived from the upstream RustDesk build setup. It is not the current build command reference.
+>
+> Current project build entry: run `new-build.cmd` from the repository root. Current version: `5.2.1`. Current Windows DLL: `cloudsend.dll`. Current portable output directory: `PC-Bulid`. The script uses the `C:\DevEnv` / `C:\DevTool` toolchain layout described here, then drives the local `build.py`/Flutter packaging flow for this fork.
+>
+> Treat old names in this document such as `RustDesk`, `rustdesk-1.4.6`, `rustdesk.exe`, and `C:\Code\RustDesk` as upstream environment examples unless a current script or source file confirms them.
+
 下面是按你当前实际情况重新整理的 **Windows Server 2022 从零搭建 RustDesk 官方 x86-64 自解压 `.exe` 编译环境教程**。
 
 你现在的关键条件我按下面固定：

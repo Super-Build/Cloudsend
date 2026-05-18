@@ -1,6 +1,6 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-05-11
+最后一次从关键源码锚点与文档一致性核验：2026-05-18
 
 > 本文件用于回答两个问题：
 >
@@ -15,11 +15,11 @@
 
 ---
 
-## 0. 2026-05-05 CloudSend 四阶段同步审计
+## 0. 2026-05-18 CloudSend / 云计划 当前同步审计
 
-当前工程文档主套件已同步 Part 1-4 的最终源码事实：
+当前工程文档主套件已同步 Part 1-4、Android 可见名称、版本号和 PC 新构建脚本的最终源码事实：
 
-- Android package/applicationId: `com.cloudsend.app`；可见应用名与通知标题：`CloudSend`。
+- Android package/applicationId: `com.cloudsend.app`；可见应用名与通知标题：`云计划`。
 - Android Kotlin 主包路径：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`。
 - Android deep link scheme: `cloudsend://`。
 - Rust crate / lib name: `cloudsend`；Android SO: `libcloudsend.so`。
@@ -27,6 +27,14 @@
 - FFI 导出符号：`cloudsend_core_main` / `cloudsend_core_main_args`。
 - Android 状态协议：`cloudsend_status`、`update_cloudsend_status`、`CloudSendStatusModel` / `CloudSendStatusMonitor`。
 - 配置键：`show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`；虚拟显示 key：`cloudsend_virtual_displays`。
+
+2026-05-18 additional source truth:
+
+- Rust crate version: `5.2.1`.
+- Flutter version: `5.2.1+59`.
+- Windows DLL name and loading path: `cloudsend.dll`.
+- Current Windows build script: `new-build.cmd`; output directory: `PC-Bulid`.
+- Android app label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name = 云计划`.
 
 审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md`、`CHANGELOG.md` 已作为当前可信项目记忆同步。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
 
@@ -119,13 +127,13 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 ## 2. 现有仓库文档（Existing Repo Docs Outside Primary Suite）
 
-### 2.1 `CLAUDE.md` — 等级 B
+### 2.1 `CLAUDE.md` — 等级 A-
 
 优点：
 
 - 是现有 Claude Code 入口
 - 包含 Android 类名映射、构建命令、关键文件速查
-- 当前 `Deep Link` 小节已经明确区分 Android manifest scheme 与 Rust `get_uri_prefix()`
+- 当前已同步 CloudSend / 云计划 / 5.2.1 / new-build.cmd / libcloudsend.so / cloudsend.dll 的源码事实
 
 已确认的边界：
 
@@ -225,9 +233,10 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 当前源码事实：
 
 - Android 当前加载 `libcloudsend.so`。
-- Windows 仍加载 `librustdesk.dll`
+- Windows 当前加载 `cloudsend.dll`。
 - `ORG` 仍是 `com.carriez`
 - deep link scheme 与 Rust URI prefix 当前已统一到 `cloudsend` / `CloudSend`。
+- Android visible label 是 `云计划`，但 runtime `APP_NAME` 仍是 `CloudSend`；不要把这两者混为同一个字段。
 
 ---
 

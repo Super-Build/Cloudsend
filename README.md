@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> Current project source truth (verified 2026-05-18): this repository builds the CloudSend runtime, with Android visible app name `云计划`, Android package `com.cloudsend.app`, version `5.2.1` (`flutter` package `5.2.1+59`), Android SO `libcloudsend.so`, Windows DLL `cloudsend.dll`, and Windows build entry `new-build.cmd`.
+>
+> The upstream RustDesk README below is retained as inherited background only. For current engineering facts, use `CLAUDE.md`, `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, and `docs/TASK_ENTRYPOINTS.md`.
+
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#raw-steps-to-build">Build</a> •
@@ -179,4 +184,3 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-
