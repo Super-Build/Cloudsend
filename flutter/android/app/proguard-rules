@@ -8,3 +8,6 @@
     public static void checkNotNullParameter(java.lang.Object, java.lang.String);
     public static void checkNotNull(java.lang.Object);
 }
+
+# Keep the isolated CloudSend ADB module stable for future MethodChannel/JNI entry points.
+-keep class com.cloudsend.app.adb.** { *; }

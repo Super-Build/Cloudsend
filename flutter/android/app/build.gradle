@@ -90,6 +90,14 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules'
         }
     }
+
+    packagingOptions {
+        jniLibs {
+            // CloudSend ADB module will later execute bundled libadb.so via ProcessBuilder.
+            // The library must be extracted to applicationInfo.nativeLibraryDir.
+            useLegacyPackaging = true
+        }
+    }
 }
 
 flutter {

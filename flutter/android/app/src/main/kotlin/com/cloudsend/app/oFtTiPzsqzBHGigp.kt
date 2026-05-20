@@ -29,6 +29,7 @@ import android.util.DisplayMetrics
 import androidx.annotation.RequiresApi
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cloudsend.app.adb.CloudSendAdbManager
 import com.hjq.permissions.XXPermissions
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -139,6 +140,67 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
         flutterMethodChannel.setMethodCallHandler { call, result ->
             // make sure result will be invoked, otherwise flutter will await forever
             when (call.method) {
+                "cloudsend_adb_init" -> {
+                    result.success(CloudSendAdbManager.initialize(applicationContext).toMap())
+                }
+                "cloudsend_adb_status" -> {
+                    result.success(CloudSendAdbManager.snapshot().toMap())
+                }
+                "cloudsend_adb_output" -> {
+                    result.success(CloudSendAdbManager.output(applicationContext))
+                }
+                "cloudsend_adb_start" -> {
+                    thread {
+                        try {
+                            val state = CloudSendAdbManager.start(applicationContext).toMap()
+                            runOnUiThread { result.success(state) }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("ADB_START_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                }
+                "cloudsend_adb_local_shell" -> {
+                    thread {
+                        try {
+                            val state = CloudSendAdbManager.startLocalShell(applicationContext).toMap()
+                            runOnUiThread { result.success(state) }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("ADB_LOCAL_SHELL_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                }
+                "cloudsend_adb_pair" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val port = args?.get("port")?.toString() ?: ""
+                    val code = args?.get("code")?.toString() ?: ""
+                    thread {
+                        try {
+                            val state = CloudSendAdbManager.pair(applicationContext, port, code).toMap()
+                            runOnUiThread { result.success(state) }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("ADB_PAIR_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                }
+                "cloudsend_adb_command" -> {
+                    val command = call.arguments?.toString() ?: ""
+                    thread {
+                        try {
+                            val state = CloudSendAdbManager.sendCommand(applicationContext, command).toMap()
+                            runOnUiThread { result.success(state) }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("ADB_COMMAND_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                }
                 p50.a(byteArrayOf(25, -111, -85, 2, -11, -126, 49, -44, 6, -106, -95, 19), byteArrayOf(112, -1, -62, 118, -86, -15, 84, -90)) -> {
                     Intent(activity, DFm8Y8iMScvB2YDw::class.java).also {
                         bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)

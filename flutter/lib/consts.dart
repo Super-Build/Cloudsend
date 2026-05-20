@@ -371,6 +371,13 @@ class AndroidChannel {
   static final kGetStartOnBootOpt = "get_start_on_boot_opt";
   static final kSetStartOnBootOpt = "set_start_on_boot_opt";
   static final kSyncAppDirConfigPath = "sync_app_dir";
+  static final kCloudSendAdbInit = "cloudsend_adb_init";
+  static final kCloudSendAdbStatus = "cloudsend_adb_status";
+  static final kCloudSendAdbOutput = "cloudsend_adb_output";
+  static final kCloudSendAdbStart = "cloudsend_adb_start";
+  static final kCloudSendAdbLocalShell = "cloudsend_adb_local_shell";
+  static final kCloudSendAdbPair = "cloudsend_adb_pair";
+  static final kCloudSendAdbCommand = "cloudsend_adb_command";
 }
 
 /// flutter/packages/flutter/lib/src/services/keyboard_key.dart -> _keyLabels

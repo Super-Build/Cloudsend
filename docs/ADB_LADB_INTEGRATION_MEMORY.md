@@ -48,16 +48,63 @@ Current facts:
 - The bottom navigation bar remains commented out.
 - `ConnectionPage` remains inside `if (false)` and is not active.
 - `SettingsPage` remains commented out and is not active.
-- The ADB page is currently UI-only.
+- The ADB page is now interactive and calls the isolated CloudSend ADB MethodChannel methods only when the user taps ADB controls.
 
 Current ADB page UI:
 
 - First card title: `ADB`.
-- First card has explanatory text above a full-width placeholder button. The displayed Chinese label is represented in source as `\u542f\u52a8\u670d\u52a1` (`Start service`).
+- First card has explanatory text above a full-width button. The displayed Chinese label is represented in source as `\u542f\u52a8\u670d\u52a1` (`Start service`).
+- Tapping the first-card button opens a pairing dialog and then starts/pairs the bundled ADB runner through MethodChannel.
 - Second card title is represented in source as `\u81ea\u52a8\u5316\u65e0\u7ebf\u8c03\u8bd5` (`Automated wireless debugging`).
 - Second card has explanatory text above a full-width placeholder button. The displayed Chinese label is represented in source as `\u6253\u5f00\u8c03\u8bd5` (`Open debugging`).
-- Both ADB page buttons currently use empty callbacks.
-- The ADB page does not call `gFFI`, `bind`, `serverModel`, `toggleService`, or any Android method channel.
+- The automated wireless-debugging button is still a placeholder and has an empty callback.
+- The ADB page does not call `serverModel`, `toggleService`, screen-share service methods, side-button methods, or Rust connection logic.
+
+### 2.1.1 ADB Environment Added on 2026-05-20
+
+Implemented environment-only integration:
+
+- Added `libadb.so` from local LADB into CloudSend Android `jniLibs` for:
+  - `arm64-v8a`
+  - `armeabi-v7a`
+  - `x86_64`
+- Added `flutter/android/app/src/main/jniLibs/LIBADB_LICENSE`.
+- Added Gradle `packagingOptions.jniLibs.useLegacyPackaging = true` so `libadb.so` can be extracted to `applicationInfo.nativeLibraryDir`.
+- Do not add Gradle `ndk.abiFilters` here: Flutter `--split-per-abi` already sets split ABI filters, and both configurations conflict.
+- Added Manifest permission `CHANGE_WIFI_MULTICAST_STATE`.
+- Added Manifest permission `CHANGE_WIFI_STATE` to match the LADB wireless-debugging environment baseline.
+- Added Manifest declaration for `WRITE_SECURE_SETTINGS` with `tools:ignore="ProtectedPermissions"`.
+- Added isolated Kotlin package:
+  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbState.kt`
+  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbRunner.kt`
+  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
+- `CloudSendAdbState` records the extracted `adbPath`, whether the binary exists, whether it is executable, plus the future ProcessBuilder environment map (`HOME` and `TMPDIR`).
+- Added safe Flutter MethodChannel status hooks on the existing Android channel:
+  - `cloudsend_adb_init`: initializes the isolated ADB environment state and returns a map.
+  - `cloudsend_adb_status`: returns the current ADB environment state map.
+- Added Flutter constants in `AndroidChannel`:
+  - `AndroidChannel.kCloudSendAdbInit`
+  - `AndroidChannel.kCloudSendAdbStatus`
+- Added read-only Flutter helper `AndroidAdbManager.init()` / `AndroidAdbManager.status()` in `flutter/lib/common.dart`.
+- Added interactive ADB page wiring:
+  - Tapping the ADB page `Start service` button opens a pairing dialog.
+  - The pairing dialog has pairing port and pairing-code inputs plus `Skip` and `Pair` actions.
+  - The terminal card shows a top progress bar while waiting/starting/pairing and polls native ADB output.
+  - A command input card exists under the terminal and is enabled only after the ADB shell is ready.
+- Added native ADB runner entry points:
+  - `cloudsend_adb_output`
+  - `cloudsend_adb_start`
+  - `cloudsend_adb_pair`
+  - `cloudsend_adb_command`
+- Added ProGuard keep rule for `com.cloudsend.app.adb.**`.
+
+Current behavior after this step:
+
+- No ADB process is started automatically when opening the page.
+- ADB start/pair/command actions only run after the user taps the ADB page controls.
+- LADB-style mDNS connect-port discovery is still deferred; pairing can run, but full automatic shell readiness still requires the discovery/connect phase.
+- Existing screen-share and side-button paths are untouched.
+- Location permissions from LADB are intentionally not added at this environment stage to avoid increasing the APK sensitivity surface before mDNS/local-network logic is implemented.
 
 ### 2.2 Existing Android Runtime Core
 
@@ -157,7 +204,7 @@ CloudSend current Android build facts:
 Integration implication:
 
 - If CloudSend runs packaged `libadb.so` through `ProcessBuilder`, the native library must be extractable at runtime.
-- CloudSend may need Android Gradle `jniLibs.useLegacyPackaging = true` or equivalent packaging behavior.
+- CloudSend has Android Gradle `jniLibs.useLegacyPackaging = true` enabled for extractable `libadb.so`.
 - ABI coverage must match CloudSend build outputs. The Android build script currently supports arm64, armv7, x86_64, and has helper paths for x86.
 
 ### 3.4 `ADB.kt` Behavior
@@ -233,7 +280,7 @@ CloudSend reuse:
 Manifest implication:
 
 - CloudSend already has `ACCESS_WIFI_STATE` and `ACCESS_NETWORK_STATE`.
-- CloudSend should consider adding `CHANGE_WIFI_MULTICAST_STATE` for more stable mDNS behavior on some ROMs.
+- CloudSend now declares `CHANGE_WIFI_STATE` and `CHANGE_WIFI_MULTICAST_STATE` for the ADB wireless-debugging environment baseline.
 - Location permission requirements for NSD/mDNS can vary by Android version and OEM behavior. Keep this behind a user-visible setup flow.
 
 ### 3.6 `MainActivityViewModel.kt` and `MainActivity.kt`
@@ -414,16 +461,21 @@ CloudSend currently has:
 - `MANAGE_EXTERNAL_STORAGE`
 - Accessibility service declaration
 
-Likely ADB module additions:
+ADB module additions now present:
 
 - `CHANGE_WIFI_MULTICAST_STATE`
+- `CHANGE_WIFI_STATE`
+- `WRITE_SECURE_SETTINGS` declaration. Declaring it does not grant it.
+
+ADB module additions still deferred:
+
 - Possibly location permission for reliable NSD/mDNS behavior on some devices.
-- `WRITE_SECURE_SETTINGS` declaration only if the product decision accepts the sensitivity. Declaring it does not grant it.
 
 Native library packaging:
 
-- Add `libadb.so` for required ABIs only after deciding which Android APK variants should support ADB.
-- Ensure packaged `libadb.so` is extractable and executable from `applicationInfo.nativeLibraryDir`.
+- `libadb.so` is already added for `arm64-v8a`, `armeabi-v7a`, and `x86_64`.
+- Packaged `libadb.so` is configured to be extractable via `jniLibs.useLegacyPackaging = true`.
+- `x86/libadb.so` is intentionally not included because the current Android build script does not build `libcloudsend.so` for x86.
 - Avoid naming conflicts with `libcloudsend.so`.
 
 ## 7. Security and Product Risk
@@ -470,7 +522,23 @@ Next:
 
 ### Phase 2: Android ADB Module Skeleton
 
-Add Kotlin package and no-op state manager.
+Status: partially started on 2026-05-20.
+
+Added:
+
+- `CloudSendAdbState`
+- `CloudSendAdbRunner`
+- `CloudSendAdbManager`
+- `libadb.so` packaging environment
+- Manifest/Gradle packaging prerequisites
+
+Still pending:
+
+- MethodChannel bridge.
+- Runtime state publication to Flutter.
+- Runtime state publication to monitor panel.
+- mDNS discovery.
+- pair/connect/exec implementation.
 
 Required:
 
@@ -483,11 +551,11 @@ Required:
 
 Port only the local adb runner essentials:
 
-- ProcessBuilder wrapper.
-- `adb pair`.
-- `adb connect`.
-- `adb shell` or one-shot command execution.
-- Bounded output.
+- ProcessBuilder execution wrapper: implemented for `start-server`, `pair`, `devices`, `shell`, and command forwarding.
+- `adb pair`: implemented with the LADB-style pairing-code delay.
+- `adb connect`: implemented through `CloudSendAdbDnsDiscover`, which scans `_adb-tls-connect._tcp`, waits briefly for newer broadcasts, and runs `adb connect localhost:<port>`.
+- `adb shell` or one-shot command execution: shell opening is implemented once a device is connected; command input is enabled only when `shellReady` is true.
+- Bounded output: implemented with an in-memory 16 KB output buffer.
 - Timeout.
 - Stop/reset.
 

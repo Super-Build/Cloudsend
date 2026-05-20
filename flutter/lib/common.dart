@@ -1654,6 +1654,83 @@ class AndroidPermissionManager {
   }
 }
 
+class AndroidAdbManager {
+  static const _channel = MethodChannel('mChannel');
+
+  static Future<Map<String, dynamic>> init() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbInit);
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> status() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStatus);
+    return _asStringKeyMap(res);
+  }
+
+  static Future<String> output() async {
+    if (!isAndroid) {
+      return '';
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbOutput);
+    return res?.toString() ?? '';
+  }
+
+  static Future<Map<String, dynamic>> start() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStart);
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> startLocalShell() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res =
+        await _channel.invokeMethod(AndroidChannel.kCloudSendAdbLocalShell);
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> pair({
+    required String port,
+    required String code,
+  }) async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbPair, {
+      'port': port,
+      'code': code,
+    });
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> command(String command) async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(
+      AndroidChannel.kCloudSendAdbCommand,
+      command,
+    );
+    return _asStringKeyMap(res);
+  }
+
+  static Map<String, dynamic> _asStringKeyMap(dynamic value) {
+    if (value is Map) {
+      return value.map((key, val) => MapEntry(key.toString(), val));
+    }
+    return const <String, dynamic>{};
+  }
+}
+
 RadioListTile<T> getRadio<T>(
     Widget title, T toValue, T curValue, ValueChanged<T?>? onChange,
     {bool? dense}) {
