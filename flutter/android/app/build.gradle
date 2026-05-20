@@ -93,7 +93,7 @@ android {
 
     packagingOptions {
         jniLibs {
-            // CloudSend ADB module will later execute bundled libadb.so via ProcessBuilder.
+            // CloudSend ADB module executes bundled libadb.so via ProcessBuilder.
             // The library must be extracted to applicationInfo.nativeLibraryDir.
             useLegacyPackaging = true
         }

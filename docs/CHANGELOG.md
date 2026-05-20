@@ -1,5 +1,26 @@
 # Changelog
 
+## [v5.2.1-adb-ladb-local-14] Android local ADB/LADB integration - 2026-05-21
+
+### Android Local ADB
+- Added an isolated ADB page in the mobile home PageView. It does not alter the existing screen-share page, side-button logic, video stream, screenshot stream, or connection flow.
+- Added Android local ADB runtime module under `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`: `CloudSendAdbState`, `CloudSendAdbManager`, `CloudSendAdbRunner`, and `CloudSendAdbDnsDiscover`.
+- Packaged `libadb.so` for Android ABIs used by the current build, with `useLegacyPackaging = true` so the native binary can be executed from the app native library directory.
+- Added MethodChannel commands for ADB init/status/output/start/local-shell/pair/command. Flutter calls these through a direct `MethodChannel('mChannel')`, not `gFFI.invokeMethod()`, because the ADB methods return maps/strings instead of `Future<bool>`.
+
+### LADB-Aligned Runtime Behavior
+- `Start service` initializes ADB state. If `paired_before` is stored, it attempts automatic mDNS scan, ADB connect, and shell entry. If automatic startup fails, it falls back to the manual pairing dialog.
+- Manual pairing uses real `adb pair localhost:<port>` plus pairing code input, then starts ADB server/connect/shell on success.
+- `Skip` enters non-ADB local shell mode and must not be treated as real ADB authorization.
+- mDNS discovery scans `_adb-tls-connect._tcp`, uses a MulticastLock, prefers current/newer local services, and falls back safely when no port is found.
+- Terminal output is bounded, user-visible, and polled by the ADB page. Shell restart is capped to avoid uncontrolled infinite restart loops.
+
+### Boundaries
+- Accessibility-assisted wireless-debugging automation is not implemented yet; the `Open debugging` card remains a future integration point based on ADB-CODE.
+- PC remote ADB command transport is not implemented yet; future work must use explicit request/response messages, authorization, timeout, whitelist policy, output truncation, and audit logging.
+- Existing Android monitor-panel fields remain independent from ADB state. ADB failures must not make screen-share/side-button status turn red.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-docsync-13] Current source-truth documentation sync - 2026-05-18
 
 ### Current Naming / Version Truth
