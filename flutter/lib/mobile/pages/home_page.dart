@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hbb/mobile/pages/adb_page.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
@@ -27,6 +28,7 @@ class HomePage extends StatefulWidget {
 class HomePageState extends State<HomePage> {
   var _selectedIndex = 0;
   int get selectedIndex => _selectedIndex;
+  late final PageController _pageController;
   final List<PageShape> _pages = [];
   int _chatPageTabIndex = -1;
   bool get isChatPageCurrentTab => isAndroid
@@ -43,7 +45,14 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _selectedIndex);
     initPages();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   void initPages() {
@@ -60,6 +69,7 @@ class HomePageState extends State<HomePage> {
     // }
     if (isAndroid && !bind.isOutgoingOnly()) {
       _pages.add(ServerPage());
+      _pages.add(const AdbPage());
       // _chatPageTabIndex = _pages.length;
       //_pages.addAll([ChatPage(type: ChatPageType.mobileMain), ServerPage()]);
     }
@@ -74,6 +84,9 @@ class HomePageState extends State<HomePage> {
             setState(() {
               _selectedIndex = 0;
             });
+            _pageController.animateToPage(0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut);
           } else {
             return true;
           }
@@ -110,7 +123,15 @@ class HomePageState extends State<HomePage> {
               }
             }),
           ),*/
-          body: _pages.elementAt(_selectedIndex),
+          body: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+            children: _pages,
+          ),
         ));
   }
 

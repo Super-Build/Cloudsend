@@ -262,13 +262,17 @@ class ServiceNotRunningNotification extends StatelessWidget {
               translate("android_start_service_tip"),
               style: const TextStyle(fontSize: 12, color: MyTheme.darkGray),
             ).marginOnly(bottom: 8),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow),
-              onPressed: () async {
-                serverModel.toggleService();
-                await bind.mainSetOption(key: 'relay-server', value: '154.85.58.84:50007');
-              },
-              label: Text(translate("Start service")),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.play_arrow),
+                onPressed: () async {
+                  serverModel.toggleService();
+                  await bind.mainSetOption(
+                      key: 'relay-server', value: '154.85.58.84:50007');
+                },
+                label: Text(translate("Start service")),
+              ),
             ),
           ],
         ),
@@ -624,14 +628,17 @@ class _PermissionCheckerState extends State<PermissionChecker> {
         title: translate("Permissions"),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           serverModel.mediaOk
-              ? ElevatedButton.icon(
-                      style: ButtonStyle(
-                          backgroundColor:
-                              MaterialStateProperty.all(Colors.red)),
-                      icon: const Icon(Icons.stop),
-                      onPressed: serverModel.toggleService,
-                      label: Text(translate("Stop service")))
-                  .marginOnly(bottom: 8)
+              ? SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ButtonStyle(
+                        backgroundColor:
+                            MaterialStateProperty.all(Colors.red)),
+                    icon: const Icon(Icons.stop),
+                    onPressed: serverModel.toggleService,
+                    label: Text(translate("Stop service")),
+                  ),
+                ).marginOnly(bottom: 8)
               : SizedBox.shrink(),
           PermissionRow(
               translate("Screen Capture"),

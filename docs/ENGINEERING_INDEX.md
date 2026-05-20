@@ -40,8 +40,9 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 5. `docs/REPO_TRUE_STRUCTURE_MAP.md`
 6. `docs/DOCUMENT_AUDIT.md`
 7. `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`
-8. `CLAUDE.md`
-9. `terminal.md`
+8. `docs/ADB_LADB_INTEGRATION_MEMORY.md` (only for ADB/LADB integration tasks)
+9. `CLAUDE.md`
+10. `terminal.md`
 
 说明：
 
