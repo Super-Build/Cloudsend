@@ -1,5 +1,25 @@
 # Changelog
 
+## [v5.2.1-adb-ui-control-16] ADB page start/stop and pairing dialog semantics - 2026-05-21
+
+### ADB Page
+- Changed the first ADB card button into a dynamic action: `Start service` while ADB shell is not ready, and a red `Stop service` while ADB shell is ready.
+- Added `Cancel` to the pairing dialog. `Cancel` closes the dialog and performs no ADB/local-shell action.
+- Changed `Skip` semantics: it now skips manual port/code input and directly attempts the ADB scan/connect/shell flow for an already paired wireless-debugging device. It no longer starts a non-ADB local shell.
+- If `Skip`/auto-scan successfully reaches ADB shell, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
+- Added `cloudsend_adb_stop` through Flutter constants, Flutter `AndroidAdbManager`, Android MethodChannel routing, `CloudSendAdbManager.stop`, and `CloudSendAdbRunner.stopServer`.
+- `Stop service` closes the current shell, suppresses shell auto-restart, runs `adb kill-server`, clears the active connected/shell-ready state, and preserves stored pairing memory.
+- No build, clean, or git commit was executed by Codex.
+
+## [v5.2.1-adb-code-research-15] ADB-CODE automation research memory - 2026-05-21
+
+### ADB-CODE Review
+- Expanded `docs/ADB_LADB_INTEGRATION_MEMORY.md` with a deeper source-level review of the local `ADB-CODE/` project.
+- Documented the useful reference areas: accessibility state machine, OEM Settings keyword strategy, node-tree extraction, click fallbacks, pairing-code/port parsing, progress logging, timeout handling, and manual fallback.
+- Documented the high-risk areas that must not be copied into CloudSend by default: `/data/local/tmp` daemon deployment, boot helper, HTTP `/exec`, watchdog permission recovery, notification listener, overlay fallback, silent accessibility re-enable, broad port scanning, and Java libadb fallback.
+- Defined the recommended future CloudSend automation boundary: reuse the existing CloudSend accessibility service, add a short-lived ADB automation controller, report progress into the ADB terminal card, and keep screen-share/side-button/monitor-panel logic isolated.
+- No feature code, build script, clean command, build command, or git commit was executed by Codex.
+
 ## [v5.2.1-adb-ladb-local-14] Android local ADB/LADB integration - 2026-05-21
 
 ### Android Local ADB
@@ -11,7 +31,7 @@
 ### LADB-Aligned Runtime Behavior
 - `Start service` initializes ADB state. If `paired_before` is stored, it attempts automatic mDNS scan, ADB connect, and shell entry. If automatic startup fails, it falls back to the manual pairing dialog.
 - Manual pairing uses real `adb pair localhost:<port>` plus pairing code input, then starts ADB server/connect/shell on success.
-- `Skip` enters non-ADB local shell mode and must not be treated as real ADB authorization.
+- Superseded by `v5.2.1-adb-ui-control-16`: `Skip` now skips manual input and attempts the ADB scan/connect/shell flow; it no longer enters non-ADB local shell mode.
 - mDNS discovery scans `_adb-tls-connect._tcp`, uses a MulticastLock, prefers current/newer local services, and falls back safely when no port is found.
 - Terminal output is bounded, user-visible, and polled by the ADB page. Shell restart is capped to avoid uncontrolled infinite restart loops.
 

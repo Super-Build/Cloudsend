@@ -375,6 +375,7 @@ class AndroidChannel {
   static final kCloudSendAdbStatus = "cloudsend_adb_status";
   static final kCloudSendAdbOutput = "cloudsend_adb_output";
   static final kCloudSendAdbStart = "cloudsend_adb_start";
+  static final kCloudSendAdbStop = "cloudsend_adb_stop";
   static final kCloudSendAdbLocalShell = "cloudsend_adb_local_shell";
   static final kCloudSendAdbPair = "cloudsend_adb_pair";
   static final kCloudSendAdbCommand = "cloudsend_adb_command";

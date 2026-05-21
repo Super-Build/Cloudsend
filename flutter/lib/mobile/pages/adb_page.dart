@@ -73,9 +73,22 @@ class _AdbPageState extends State<AdbPage> {
     final request = await _showPairDialog();
     if (!mounted) return;
 
-    if (request == null) {
-      _appendLocalLine("Pairing skipped.");
-      await _startLocalShell();
+    if (request == null || request.action == _AdbPairAction.cancel) {
+      _appendLocalLine("Pairing cancelled.");
+      setState(() {
+        _busy = false;
+        _serviceRequested = false;
+      });
+      return;
+    }
+
+    if (request.action == _AdbPairAction.autoScan) {
+      setState(() => _busy = true);
+      _appendLocalLine("Skipping manual input. Scanning for an already paired ADB device...");
+      final started = await _startServerAfterPairing();
+      if (!started) {
+        _appendLocalLine("Automatic scan did not start ADB. Please pair manually or enable wireless debugging.");
+      }
       return;
     }
 
@@ -103,13 +116,20 @@ class _AdbPageState extends State<AdbPage> {
     }
   }
 
-  Future<void> _startLocalShell() async {
+  Future<void> _stopAdbFlow() async {
+    setState(() => _busy = true);
+    _appendLocalLine("Stopping ADB service...");
     try {
-      final state = await AndroidAdbManager.startLocalShell();
+      final state = await AndroidAdbManager.stop();
       _applyState(state);
+      if (mounted) {
+        setState(() {
+          _serviceRequested = false;
+          _shellReady = false;
+        });
+      }
     } catch (e) {
-      _appendLocalLine("Non-ADB shell start failed: $e");
-      if (mounted) setState(() => _serviceRequested = false);
+      _appendLocalLine("ADB stop failed: $e");
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -150,10 +170,10 @@ class _AdbPageState extends State<AdbPage> {
     }
   }
 
-  Future<_AdbPairRequest?> _showPairDialog() {
+  Future<_AdbPairDialogResult?> _showPairDialog() {
     final portController = TextEditingController();
     final codeController = TextEditingController();
-    return showDialog<_AdbPairRequest>(
+    return showDialog<_AdbPairDialogResult>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
@@ -187,18 +207,33 @@ class _AdbPageState extends State<AdbPage> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text("\u8df3\u8fc7"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(_AdbPairRequest(
-                port: portController.text,
-                code: codeController.text,
-              ));
-            },
-            child: const Text("\u914d\u5bf9"),
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context)
+                      .pop(const _AdbPairDialogResult.cancel()),
+                  child: const Text("\u53d6\u6d88"),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context)
+                      .pop(const _AdbPairDialogResult.autoScan()),
+                  child: const Text("\u81ea\u52a8"),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(_AdbPairDialogResult.manualPair(
+                      port: portController.text,
+                      code: codeController.text,
+                    ));
+                  },
+                  child: const Text("\u914d\u5bf9"),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -226,6 +261,9 @@ class _AdbPageState extends State<AdbPage> {
       final nextShellReady = state['shellReady'] == true;
       if (_shellReady != nextShellReady) {
         _shellReady = nextShellReady;
+        if (!nextShellReady && !_busy) {
+          _serviceRequested = false;
+        }
         changed = true;
       }
       if (output.isNotEmpty && output != _terminalText) {
@@ -245,6 +283,9 @@ class _AdbPageState extends State<AdbPage> {
     final output = state['output']?.toString();
     setState(() {
       _shellReady = state['shellReady'] == true;
+      if (_shellReady) {
+        _serviceRequested = true;
+      }
       if (output != null && output.isNotEmpty) {
         _terminalText = output;
       }
@@ -271,6 +312,7 @@ class _AdbPageState extends State<AdbPage> {
 
   @override
   Widget build(BuildContext context) {
+    final adbRunning = _shellReady;
     return SizedBox.expand(
       child: ColoredBox(
         color: Theme.of(context).scaffoldBackgroundColor,
@@ -291,11 +333,20 @@ class _AdbPageState extends State<AdbPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.play_arrow),
-                        onPressed: _busy ? null : _startAdbFlow,
+                        icon: Icon(adbRunning ? Icons.stop : Icons.play_arrow),
+                        style: adbRunning
+                            ? ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              )
+                            : null,
+                        onPressed:
+                            _busy ? null : (adbRunning ? _stopAdbFlow : _startAdbFlow),
                         label: Text(_busy
-                            ? "\u7b49\u5f85\u914d\u5bf9"
-                            : "\u542f\u52a8\u670d\u52a1"),
+                            ? "\u5904\u7406\u4e2d"
+                            : adbRunning
+                                ? "\u505c\u6b62\u670d\u52a1"
+                                : "\u542f\u52a8\u670d\u52a1"),
                       ),
                     ),
                   ],
@@ -341,12 +392,25 @@ class _AdbPageState extends State<AdbPage> {
   }
 }
 
-class _AdbPairRequest {
-  const _AdbPairRequest({
+enum _AdbPairAction { cancel, autoScan, manualPair }
+
+class _AdbPairDialogResult {
+  const _AdbPairDialogResult.cancel()
+      : action = _AdbPairAction.cancel,
+        port = "",
+        code = "";
+
+  const _AdbPairDialogResult.autoScan()
+      : action = _AdbPairAction.autoScan,
+        port = "",
+        code = "";
+
+  const _AdbPairDialogResult.manualPair({
     required this.port,
     required this.code,
-  });
+  }) : action = _AdbPairAction.manualPair;
 
+  final _AdbPairAction action;
   final String port;
   final String code;
 }

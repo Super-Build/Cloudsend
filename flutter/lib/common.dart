@@ -1689,6 +1689,14 @@ class AndroidAdbManager {
     return _asStringKeyMap(res);
   }
 
+  static Future<Map<String, dynamic>> stop() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStop);
+    return _asStringKeyMap(res);
+  }
+
   static Future<Map<String, dynamic>> startLocalShell() async {
     if (!isAndroid) {
       return const <String, dynamic>{};

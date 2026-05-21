@@ -65,6 +65,27 @@ class CloudSendAdbRunner(context: Context) {
         startServerInternal()
     }
 
+    fun stopServer() {
+        restartOnShellExit = false
+        closeShellProcess()
+        append("Stopping CloudSend ADB service...")
+        try {
+            val output = runAdb(listOf("kill-server"), 5)
+            if (output.isNotBlank()) {
+                append(output.trimEnd())
+            }
+        } catch (e: Exception) {
+            append("ADB stop warning: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            selectedSerial = null
+            localShell = false
+            connected = false
+            shellReady = false
+            pairing = false
+            append("CloudSend ADB service stopped.")
+        }
+    }
+
     private fun startServerInternal() {
         closeShellProcess()
         localShell = false

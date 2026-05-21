@@ -161,6 +161,18 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                         }
                     }
                 }
+                "cloudsend_adb_stop" -> {
+                    thread {
+                        try {
+                            val state = CloudSendAdbManager.stop(applicationContext).toMap()
+                            runOnUiThread { result.success(state) }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                result.error("ADB_STOP_FAILED", e.message, null)
+                            }
+                        }
+                    }
+                }
                 "cloudsend_adb_local_shell" -> {
                     thread {
                         try {

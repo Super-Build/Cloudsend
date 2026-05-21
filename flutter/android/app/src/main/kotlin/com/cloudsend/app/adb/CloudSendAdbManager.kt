@@ -34,6 +34,16 @@ object CloudSendAdbManager {
     fun start(context: Context): CloudSendAdbState {
         val currentRunner = currentRunner(context)
         currentRunner.startServer()
+        val next = updateFromRunner(currentRunner)
+        if (next.shellReady || next.connected) {
+            setPairedBefore(context, true)
+        }
+        return next
+    }
+
+    fun stop(context: Context): CloudSendAdbState {
+        val currentRunner = currentRunner(context)
+        currentRunner.stopServer()
         return updateFromRunner(currentRunner)
     }
 

@@ -93,7 +93,8 @@ Implemented ADB integration:
   - `cloudsend_adb_status`: returns the current ADB environment state map.
   - `cloudsend_adb_output`: returns the bounded terminal output buffer.
   - `cloudsend_adb_start`: starts the LADB-style ADB scan/connect/shell flow.
-  - `cloudsend_adb_local_shell`: starts the non-ADB local shell flow used when the user chooses `Skip`.
+  - `cloudsend_adb_stop`: stops the current ADB shell/server state without clearing pairing memory.
+  - `cloudsend_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Skip`.
   - `cloudsend_adb_pair`: runs `adb pair localhost:<port>` with the supplied pairing code.
   - `cloudsend_adb_command`: writes user input into the current shell process.
 - Added Flutter constants in `AndroidChannel`:
@@ -101,6 +102,7 @@ Implemented ADB integration:
   - `AndroidChannel.kCloudSendAdbStatus`
   - `AndroidChannel.kCloudSendAdbOutput`
   - `AndroidChannel.kCloudSendAdbStart`
+  - `AndroidChannel.kCloudSendAdbStop`
   - `AndroidChannel.kCloudSendAdbLocalShell`
   - `AndroidChannel.kCloudSendAdbPair`
   - `AndroidChannel.kCloudSendAdbCommand`
@@ -108,7 +110,10 @@ Implemented ADB integration:
 - Important implementation detail: `AndroidAdbManager` uses `MethodChannel('mChannel')` directly. Do not route ADB methods through `gFFI.invokeMethod()`, because `FFI.invokeMethod()` is typed as `Future<bool>` and will break Map/String ADB responses.
 - Added interactive ADB page wiring:
   - Tapping the ADB page `Start service` button opens a pairing dialog.
-  - The pairing dialog has pairing port and pairing-code inputs plus `Skip` and `Pair` actions.
+  - The pairing dialog has pairing port and pairing-code inputs plus `Cancel`, `Skip`, and `Pair` actions.
+  - `Cancel` closes the dialog and performs no ADB action.
+  - `Skip` skips manual port/code entry and directly scans/starts the already paired wireless-debugging ADB path. It no longer enters a non-ADB local shell.
+  - `Pair` uses the manually entered port and pairing code, then starts the ADB scan/connect/shell flow on success.
   - The terminal card shows a clipped top progress bar while waiting/starting/pairing and polls native ADB output every 100 ms.
   - A command input card exists under the terminal and is enabled only after the ADB shell is ready.
 - Added ProGuard keep rule for `com.cloudsend.app.adb.**`.
@@ -119,8 +124,11 @@ Current runtime behavior:
 - ADB start/pair/command actions only run after the user taps the ADB page controls.
 - First successful manual pairing saves `paired_before` in `SharedPreferences`.
 - If `paired_before` is true, tapping `Start service` skips the pairing dialog and automatically starts the scan/connect/shell flow. If auto-start fails, the UI falls back to the pairing dialog.
-- `Skip` starts a non-ADB local shell (`sh -l`) and must not claim ADB is connected.
+- If `paired_before` is false, `Skip` in the pairing dialog directly tries the same scan/connect/shell flow without manual code input. When that succeeds, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
+- `Skip` no longer starts a non-ADB local shell; it is now an ADB auto-scan/start path.
 - `Pair` runs `adb pair localhost:<port>` with a LADB-style pairing-code delay, then starts the ADB server/scan/connect/shell flow when pairing succeeds.
+- When ADB shell is ready, the ADB card button becomes a red `Stop service` button.
+- `Stop service` closes the current shell, disables shell auto-restart, runs `adb kill-server`, and leaves the stored pairing memory intact for later restart.
 - The runner uses LADB-style mDNS connect-port discovery via `CloudSendAdbDnsDiscover`, scanning `_adb-tls-connect._tcp`.
 - When a connect port is found, it runs `adb connect localhost:<port>`.
 - When no connect port is found, it uses LADB's `adb wait-for-device` fallback.
@@ -341,27 +349,317 @@ Local path:
 
 - `ADB-CODE/`
 
-Existing analysis file:
+Existing analysis files:
 
 - `ADB-CODE/PROJECT_ANALYSIS.md`
+- `ADB-CODE/Investigation_Report.md`
 
-ADB-CODE is a broader experimental project. It uses accessibility automation to open Developer Options, Wireless Debugging, pairing-code screens, and then uses local ADB mechanisms to grant sensitive permissions or maintain state.
+ADB-CODE is not only a UI demo. It is an experimental Android automation project that combines:
 
-Useful parts:
+- Accessibility-driven navigation through Settings / Developer Options / Wireless Debugging.
+- Pairing-code and pairing-port extraction from Android settings windows or notifications.
+- Local bundled ADB execution through Java/native wrappers.
+- Optional `WRITE_SECURE_SETTINGS` self-grant and accessibility auto-enable.
+- Optional long-running daemon/watchdog deployment into `/data/local/tmp`.
 
-- Accessibility state machine ideas.
-- OEM settings-page keyword lists.
-- Pairing code and port extraction heuristics.
-- Manual fallback flow.
-- Logging style and timeout ideas.
+Only the first three items are useful as reference for CloudSend. The daemon/watchdog/self-recovery pieces are high-risk and must not be copied into CloudSend by default.
 
-High-risk parts that should not be merged into CloudSend mainline:
+### 4.1 ADB-CODE Project Structure
 
-- Long-running daemon in `/data/local/tmp`.
-- HTTP `/exec` API.
-- Boot helper.
-- Watchdog that repeatedly grants permissions or re-enables wireless debugging.
-- Silent self-recovery of sensitive permissions.
+Reviewed paths:
+
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/AndroidManifest.xml`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/res/xml/accessibility_service_config.xml`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/MainActivity.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/PairActivity.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/MyAccessibilityService.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/LocalAdbManager.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/NativeAdbWrapper.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/AccessibilityAutoEnabler.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/FloatingPairService.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/PairingNotificationService.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/FloatingGuideService.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/DaemonDeployer.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/java/com/demo/accessibility/FileLogger.java`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/assets/adb_bin`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/assets/adb_daemon`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/assets/boot_helper.apk`
+- `ADB-CODE/AutoAccessibilityDemo/app/src/main/jniLibs/arm64-v8a/libadb.so`
+- `ADB-CODE/adb_daemon/*.go`
+
+The `AutoAccessibilityDemo` module is the relevant Android reference. The `adb_daemon` module is a separate Go service that exposes a local HTTP API and watchdog; it is not appropriate for direct CloudSend integration.
+
+### 4.2 Manifest and Accessibility Configuration
+
+ADB-CODE manifest declares sensitive capabilities:
+
+- `WRITE_SECURE_SETTINGS`
+- `SYSTEM_ALERT_WINDOW`
+- `FOREGROUND_SERVICE`
+- `FOREGROUND_SERVICE_SPECIAL_USE`
+- `POST_NOTIFICATIONS`
+- `MANAGE_EXTERNAL_STORAGE`
+- `INTERNET`
+- `ACCESS_WIFI_STATE`
+- `CHANGE_WIFI_MULTICAST_STATE`
+- `NotificationListenerService`
+- Accessibility service with `BIND_ACCESSIBILITY_SERVICE`
+
+Accessibility config:
+
+- `accessibilityEventTypes="typeAllMask"`
+- `accessibilityFeedbackType="feedbackGeneric"`
+- `canRetrieveWindowContent="true"`
+- `notificationTimeout="100"`
+- `flagIncludeNotImportantViews`
+- `flagReportViewIds`
+- `flagRetrieveInteractiveWindows`
+
+CloudSend implication:
+
+- CloudSend already has its own accessibility service. Do not add a second service.
+- If wireless-debugging automation is added, reuse CloudSend's existing service and temporarily enable a narrow ADB automation controller.
+- Do not add notification-listener or overlay permissions unless a later implementation explicitly needs a user-visible fallback.
+
+### 4.3 MainActivity / PairActivity Control Flow
+
+`MainActivity.java` is an orchestrator:
+
+- Checks `WRITE_SECURE_SETTINGS`.
+- Checks whether accessibility is enabled and whether `MyAccessibilityService` is running.
+- If `WRITE_SECURE_SETTINGS` exists but accessibility is disabled, it tries `AccessibilityAutoEnabler.tryAutoEnable`.
+- If accessibility is enabled but `WRITE_SECURE_SETTINGS` is missing, it starts automatic ADB pairing through `MyAccessibilityService.startFullAutoPairing`.
+- If neither path is ready, it guides the user to accessibility settings.
+
+`PairActivity.java` is a wizard/fallback flow:
+
+- For Android 13+ sideload restrictions, it can route the user through restricted-settings help.
+- It can open device info for Developer Options enablement.
+- It can start one-click pairing through accessibility.
+- It can fall back to manual Wireless Debugging settings flow.
+- It tries several Wireless Debugging intents/components before falling back to Developer Options:
+  - `android.settings.WIRELESS_DEBUGGING_SETTINGS`
+  - `com.android.settings.WIRELESS_DEBUGGING_SETTINGS`
+  - `com.android.settings.development.WIRELESS_DEBUGGING`
+  - explicit `com.android.settings` wireless-debugging Activity names
+  - `Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS`
+
+CloudSend implication:
+
+- CloudSend should not copy these Activities.
+- The future ADB page `Open debugging` button should call a CloudSend-specific automation controller and report progress to the ADB terminal card.
+- Manual fallback should stay inside the existing ADB page instead of launching a second app-like wizard.
+
+### 4.4 MyAccessibilityService Automation State Machine
+
+`MyAccessibilityService.java` is the most valuable ADB-CODE reference.
+
+Core states:
+
+```text
+IDLE
+OPENING_ABOUT_PHONE
+TAPPING_BUILD_NUMBER
+OPENING_DEV_OPTIONS
+ENABLING_WIRELESS_DEBUG
+CONFIRMING_DIALOG
+CLICKING_PAIR_BUTTON
+READING_PAIR_CODE
+PAIRING
+DONE
+FAILED
+```
+
+Important behavior:
+
+- Uses `onAccessibilityEvent` only when automation or pair monitoring is active.
+- Filters packages, but has a lenient mode for OEM settings/system UI packages.
+- Debounces event handling.
+- Has step timeout and max retry protection.
+- Uses text/contentDescription collection from the whole node tree.
+- Uses `performAction(ACTION_CLICK)`, parent/row click fallback, and gesture-click fallback through `GestureDescription`.
+- Searches for Developer Options, build number rows, wireless debugging rows, switches, confirmation dialogs, pair buttons, pairing-code dialogs, six-digit pairing codes, and 4-5 digit ports.
+- Handles scroll when a target row is not visible.
+- Starts background pairing after extracting pairing code/port.
+
+Useful CloudSend adaptation:
+
+- Add a future `CloudSendAdbAutomationController`, activated only by the ADB page `Open debugging` button.
+- Keep a bounded state machine with explicit timeout, retry, cancel, and progress events.
+- Reuse the idea of node-tree text scanning and multi-strategy clicking.
+- Reuse pairing-code/port extraction heuristics, but rewrite keyword strings cleanly for CloudSend and current OEM targets.
+- Forward every state transition to the ADB page terminal, so the user can see whether it is opening settings, enabling Wireless Debugging, waiting for a dialog, extracting code, pairing, or failing.
+
+CloudSend guardrails:
+
+- Do not process every accessibility event forever. Automation must be short-lived.
+- Do not interfere with existing ignore-capture, penetrate, blank-screen, touch-block, or input-control logic in `nZW99cdXQ0COhB2o.kt`.
+- Do not silently click sensitive settings outside an explicit user-triggered setup session.
+- Android 9/10 should show unsupported/manual guidance for modern wireless-debugging pairing, not pretend the Android 11+ flow exists.
+
+### 4.5 Pairing Extraction and Fallback Channels
+
+ADB-CODE extracts pairing info from:
+
+- Accessibility node text.
+- Accessibility node content descriptions.
+- Full-dialog text scanning.
+- Six-digit code regex.
+- IP:port regex.
+- Nearby keyword proximity.
+- Optional notification listener.
+- Optional floating pairing service.
+
+`PairingNotificationService.java` watches settings/system notifications for pairing code and port. It broadens matching to many OEM package prefixes, including MIUI/ColorOS/OPlus/vivo/Samsung/Huawei/Honor/OnePlus/realme/BBK.
+
+`FloatingPairService.java` adds overlay and notification-input fallbacks, mDNS scanning, port-candidate collection, and manual code entry.
+
+CloudSend implication:
+
+- Primary path should be accessibility node extraction.
+- Manual pairing dialog already exists in CloudSend and remains the safest fallback.
+- Notification listener and overlay fallback should not be added unless testing proves accessibility extraction is insufficient; both add product/security friction.
+
+### 4.6 LocalAdbManager and NativeAdbWrapper
+
+`LocalAdbManager.java` contains two ADB strategies:
+
+- Native path through `NativeAdbWrapper` and bundled `libadb.so`.
+- Java library fallback through `AdbConnectionManagerImpl`.
+
+Native path:
+
+- Uses `applicationInfo.nativeLibraryDir + "/libadb.so"`.
+- Sets `HOME`, `TMPDIR`, and `ANDROID_SDK_HOME` style environment.
+- Runs `adb kill-server`, `adb start-server`, `adb pair`, `adb connect`, `adb devices`, `adb shell`, and `adb push`.
+- Attempts multiple grant strategies for `WRITE_SECURE_SETTINGS`.
+
+Java fallback:
+
+- Uses a PKCS12 software RSA key.
+- Pairs with Wi-Fi IP first, then localhost.
+- Discovers/scans connect ports.
+- Grants `WRITE_SECURE_SETTINGS`.
+
+CloudSend current state:
+
+- CloudSend already has the preferred native `libadb.so` ProcessBuilder path from LADB.
+- Do not add ADB-CODE's Java libadb fallback unless real testing proves it is necessary.
+- Do not add ADB-CODE's broad 100-thread port scan by default. Prefer mDNS and bounded fallback only.
+
+### 4.7 AccessibilityAutoEnabler
+
+`AccessibilityAutoEnabler.java` can enable its own accessibility service when `WRITE_SECURE_SETTINGS` is available:
+
+- Writes `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES`.
+- Writes `Settings.Secure.ACCESSIBILITY_ENABLED = 1`.
+- Fallback shell path runs `settings put secure ...`.
+- If already paired, it can use local ADB to grant permission and then enable accessibility.
+- If not possible, it starts a guided overlay flow.
+
+CloudSend implication:
+
+- This is useful only after the user has explicitly enabled CloudSend ADB and authorized the sensitive flow.
+- Never silently re-enable accessibility in background as a permanent watchdog behavior.
+- If CloudSend later supports one-tap enable of its own accessibility service, it must be explicit, visible, and logged in the ADB terminal/status UI.
+
+### 4.8 DaemonDeployer and adb_daemon
+
+`DaemonDeployer.java` copies assets into `/data/local/tmp`:
+
+- `adb`
+- ADB key files
+- `adb_daemon`
+- `boot_helper.apk`
+
+It then installs boot helper, starts daemon, and verifies process status.
+
+`adb_daemon` Go service:
+
+- Runs from `/data/local/tmp`.
+- Starts local ADB.
+- Scans/reconnects ports.
+- Runs a permission watchdog every 60 seconds.
+- Re-enables accessibility service.
+- Re-enables wireless debugging.
+- Exposes local HTTP endpoints:
+  - `POST /exec`
+  - `GET /status`
+  - `POST /grant`
+  - `POST /install`
+  - `GET /health`
+
+CloudSend rule:
+
+- Do not port `adb_daemon`, `boot_helper.apk`, or HTTP `/exec` into CloudSend.
+- Do not deploy binaries into `/data/local/tmp`.
+- Do not add a permanent watchdog that silently restores permissions or wireless debugging.
+- Future PC remote ADB commands must use CloudSend's own authenticated Rust protocol path, not an Android-side HTTP server.
+
+### 4.9 FileLogger
+
+`FileLogger.java` writes diagnostic logs to:
+
+- `getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)`
+- `getExternalFilesDir(null)`
+- fallback `getFilesDir()/logs`
+
+It always mirrors logs to logcat.
+
+CloudSend implication:
+
+- Useful idea: bounded user-visible diagnostic logs for ADB setup.
+- Do not copy unbounded file logging, because this project has already seen large log-file growth on PC. Android ADB logs should stay bounded and ideally visible in the ADB terminal card.
+
+### 4.10 ADB-CODE Takeaways for CloudSend
+
+Reuse as reference:
+
+- Accessibility state-machine shape.
+- OEM keyword strategy.
+- Node-tree text extraction.
+- Multi-strategy click fallback.
+- Pairing-code/port extraction.
+- Progress logging and timeout thinking.
+- Manual fallback when automation cannot locate settings UI.
+
+Do not reuse by default:
+
+- `adb_daemon`
+- `boot_helper.apk`
+- HTTP `/exec`
+- notification listener
+- overlay services
+- broad storage permissions
+- silent watchdog
+- silent accessibility re-enable
+- broad port scanning
+- Java libadb fallback
+
+Recommended future CloudSend automation states:
+
+```text
+IDLE
+OPEN_DEVELOPER_OPTIONS
+OPEN_WIRELESS_DEBUGGING
+ENABLE_WIRELESS_DEBUGGING_SWITCH
+CONFIRM_ENABLE_DIALOG
+CLICK_PAIR_WITH_CODE
+READ_PAIR_INFO
+PAIR_WITH_CLOUDSEND_ADB
+START_CLOUDSEND_ADB
+DONE
+FAILED
+CANCELLED
+```
+
+Future implementation boundary:
+
+- The ADB page `Open debugging` button starts the automation.
+- Existing CloudSend accessibility service remains the only service.
+- Automation reports status into the ADB terminal card.
+- Automation can call current `CloudSendAdbManager.pair/start` once it extracts code/port.
+- Existing screen-share, connection, monitor-panel, and side-button logic must remain independent.
 
 ## 5. Recommended CloudSend ADB Architecture
 
@@ -405,10 +703,13 @@ Implemented UI behavior:
 1. `Start service` initializes ADB state.
 2. If `paired_before` is true, it starts ADB scan/connect automatically.
 3. Otherwise it opens a manual pairing dialog with port/code inputs.
-4. `Pair` runs real `adb pair` and then starts scan/connect/shell on success.
-5. `Skip` enters non-ADB local shell mode.
-6. The terminal card shows progress while pairing/starting and streams native output.
-7. The command input card is enabled only when `shellReady == true`.
+4. `Cancel` closes the pairing dialog without performing any ADB action.
+5. `Skip` skips manual input and directly attempts scan/connect/shell for an already paired wireless-debugging device.
+6. `Pair` runs real `adb pair` and then starts scan/connect/shell on success.
+7. When `shellReady == true`, the first-card button changes to a red `Stop service` action.
+8. `Stop service` closes the shell/server state but preserves pairing memory.
+9. The terminal card shows progress while pairing/starting/stopping and streams native output.
+10. The command input card is enabled only when `shellReady == true`.
 
 Still pending:
 
@@ -603,7 +904,8 @@ Ported local adb runner essentials:
 - `adb wait-for-device`: used as fallback when no mDNS connect port is discovered.
 - `adb devices`: parsed to choose a connected local device.
 - `adb shell` or one-shot command execution: shell opening is implemented once a device is connected; command input is enabled only when `shellReady` is true.
-- Non-ADB local shell: implemented for the `Skip` path.
+- Non-ADB local shell: still exists as a native hook, but the ADB page no longer uses it for `Skip`.
+- Stop path: implemented through `cloudsend_adb_stop`, shell process shutdown, restart suppression, and `adb kill-server`.
 - Bounded output: implemented with an in-memory 16 KB output buffer.
 - Timeout: implemented for pairing and command execution paths.
 - Restart guard: shell restart is capped to avoid uncontrolled infinite reconnect loops.
@@ -645,7 +947,8 @@ Implemented UI:
 - Connect status.
 - Last error.
 - `Pair` runs real `adb pair`; success stores `paired_before` and starts the scan/connect/shell flow.
-- `Skip` enters non-ADB local shell mode, not fake ADB mode.
+- `Skip` skips manual input and directly attempts the ADB scan/connect/shell flow; if that succeeds, `paired_before` is stored so the next start does not show the pairing dialog.
+- `Cancel` exits the dialog without starting any local shell or ADB action.
 - If `paired_before` auto-start fails, the UI falls back to the pairing dialog.
 
 ### Phase 6: Accessibility-Assisted Wireless Debugging
