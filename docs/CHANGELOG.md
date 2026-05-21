@@ -18,6 +18,8 @@
 ### Boundaries
 - Accessibility-assisted wireless-debugging automation is not implemented yet; the `Open debugging` card remains a future integration point based on ADB-CODE.
 - PC remote ADB command transport is not implemented yet; future work must use explicit request/response messages, authorization, timeout, whitelist policy, output truncation, and audit logging.
+- Current `cloudsend_adb_command` is an interactive terminal write into the long-lived local shell. It is not a complete remote RPC result path because it does not provide per-command completion, exit code, stdout/stderr separation, or response boundaries.
+- Future PC remote command/script execution should add a dedicated bounded request/response executor instead of treating the terminal stream as a reliable command result.
 - Existing Android monitor-panel fields remain independent from ADB state. ADB failures must not make screen-share/side-button status turn red.
 - No build, clean, or git commit was executed by Codex.
 

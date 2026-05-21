@@ -454,6 +454,18 @@ Rules:
 
 PC remote ADB command support should be a later phase.
 
+Current local ADB readiness:
+
+- Android can already initialize the bundled ADB binary, pair with wireless debugging, discover/connect the local ADB endpoint, enter `adb shell`, send shell text, and expose bounded terminal output.
+- `shellReady == true` means the local long-lived shell is available for interactive/manual commands.
+- This is enough for the current on-device ADB page, but it is not a complete PC remote execution protocol yet.
+
+Important future gap:
+
+- Current `cloudsend_adb_command` writes into the long-lived shell and returns the latest state immediately. It does not provide per-command completion, exit code, stdout/stderr separation, or a response boundary.
+- Future PC remote command/script execution must add a dedicated request/response executor instead of treating the UI terminal stream as a reliable RPC result.
+- For scripts, prefer a bounded one-shot execution path with command ID markers, timeout, output size limit, and exit-code capture. Do not expose unlimited raw shell streaming by default.
+
 Required rules:
 
 - New proto messages, not reused side-button masks.
