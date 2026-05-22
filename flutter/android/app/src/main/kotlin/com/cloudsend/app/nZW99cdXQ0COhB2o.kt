@@ -1581,10 +1581,12 @@ fun b481c5f9b372ead_2() {
     }
 
     private fun queueWirelessDebugProcess(delayMs: Long = 0L) {
+        if (!wirelessDebugAutomationRunning) return
         if (wirelessDebugAutomationEventQueued) return
         wirelessDebugAutomationEventQueued = true
         handler.postDelayed({
             wirelessDebugAutomationEventQueued = false
+            if (!wirelessDebugAutomationRunning) return@postDelayed
             val now = SystemClock.uptimeMillis()
             val minInterval = 300L
             if (now - lastWirelessDebugProcessMs < minInterval) {

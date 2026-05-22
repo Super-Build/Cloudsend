@@ -51,7 +51,7 @@ object CloudSendAdbManager {
     fun pair(context: Context, port: String, code: String): CloudSendAdbState {
         val currentRunner = currentRunner(context)
         currentRunner.pair(port, code)
-        val next = updateFromRunner(currentRunner)
+        val next = updateFromRunner(currentRunner, preservePaired = false)
         if (next.paired) {
             setPairedBefore(context, true)
         }
@@ -111,11 +111,14 @@ object CloudSendAdbManager {
         }
     }
 
-    private fun updateFromRunner(currentRunner: CloudSendAdbRunner): CloudSendAdbState {
+    private fun updateFromRunner(
+        currentRunner: CloudSendAdbRunner,
+        preservePaired: Boolean = true,
+    ): CloudSendAdbState {
         val runnerState = currentRunner.state()
         state = runnerState.copy(
             supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R,
-            paired = runnerState.paired || state.paired,
+            paired = runnerState.paired || (preservePaired && state.paired),
         )
         return state
     }

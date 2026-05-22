@@ -19,6 +19,7 @@ class CloudSendAdbRunner(context: Context) {
     private val output = StringBuilder()
     private var shellProcess: Process? = null
     private var selectedSerial: String? = null
+    private var preferredSerial: String? = null
     private var localShell = false
     private var shellGeneration = 0
     private var shellRestartAttempts = 0
@@ -78,6 +79,7 @@ class CloudSendAdbRunner(context: Context) {
             append("ADB stop warning: ${e.message ?: e.javaClass.simpleName}")
         } finally {
             selectedSerial = null
+            preferredSerial = null
             localShell = false
             connected = false
             shellReady = false
@@ -91,6 +93,7 @@ class CloudSendAdbRunner(context: Context) {
         localShell = false
         restartOnShellExit = true
         selectedSerial = null
+        preferredSerial = null
         connected = false
         shellReady = false
         lastError = ""
@@ -121,10 +124,7 @@ class CloudSendAdbRunner(context: Context) {
             }
 
             if (adbPort != null) {
-                val connectOutput = runAdb(listOf("connect", "localhost:$adbPort"), 60)
-                if (connectOutput.isNotBlank()) {
-                    append(connectOutput.trimEnd())
-                }
+                connectToDiscoveredPort(adbPort)
             } else {
                 append("No connect port discovered, waiting for an already paired ADB device...")
                 val waitOutput = runAdb(listOf("wait-for-device"), 60)
@@ -164,6 +164,7 @@ class CloudSendAdbRunner(context: Context) {
         localShell = true
         restartOnShellExit = true
         selectedSerial = null
+        preferredSerial = null
         connected = false
         append("Pairing skipped. Entering non-ADB shell.")
         openShell()
@@ -179,32 +180,52 @@ class CloudSendAdbRunner(context: Context) {
         pairing = true
         paired = false
         lastError = ""
-        append("Trying to pair localhost:$cleanPort ...")
         try {
-            val process = adbProcess(listOf("pair", "localhost:$cleanPort"))
-            // Match LADB's delay so the bundled adb process has time to ask for the pairing code.
-            Thread.sleep(5000)
-            PrintStream(process.outputStream).use {
-                it.println(cleanCode)
-                it.flush()
+            runAdb(listOf("kill-server"), 3)
+            val endpoints = adbEndpoints(cleanPort)
+            var success = false
+            var lastText = ""
+            endpoints.forEach { endpoint ->
+                if (success) return@forEach
+                append("Trying to pair $endpoint ...")
+                val process = adbProcess(listOf("pair", endpoint))
+                // Match LADB's delay so the bundled adb process has time to ask for the pairing code.
+                Thread.sleep(5_000)
+                PrintStream(process.outputStream).use {
+                    it.println(cleanCode)
+                    it.flush()
+                }
+                val finished = process.waitFor(15, TimeUnit.SECONDS)
+                if (!finished) {
+                    process.destroyForcibly()
+                    process.waitFor(3, TimeUnit.SECONDS)
+                }
+                val text = readProcessOutput(process)
+                lastText = text
+                if (text.isNotBlank()) {
+                    append(text.trimEnd())
+                }
+                if (!finished) {
+                    append("Pairing timed out for $endpoint")
+                } else if (isPairSuccessful(text, process.exitValue())) {
+                    success = true
+                } else {
+                    append("Pairing failed for $endpoint")
+                    runAdb(listOf("kill-server"), 3)
+                }
             }
-            val finished = process.waitFor(15, TimeUnit.SECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                process.waitFor(3, TimeUnit.SECONDS)
-            }
-            val text = readProcessOutput(process)
-            if (text.isNotBlank()) {
-                append(text.trimEnd())
-            }
-            if (!finished) {
-                fail("Pairing timed out")
-            } else if (process.exitValue() == 0) {
+            if (success) {
                 paired = true
                 lastError = ""
                 append("Pairing succeeded. Waiting for wireless-debugging connect port discovery.")
             } else {
-                fail("Pairing failed with exit code ${process.exitValue()}")
+                fail(
+                    if (lastText.isBlank()) {
+                        "Pairing failed"
+                    } else {
+                        "Pairing failed: ${lastText.lineSequence().lastOrNull()?.trim().orEmpty()}"
+                    }
+                )
             }
             runAdb(listOf("kill-server"), 3)
         } catch (e: Exception) {
@@ -316,6 +337,62 @@ class CloudSendAdbRunner(context: Context) {
         return text
     }
 
+    private fun connectToDiscoveredPort(port: Int): Boolean {
+        adbEndpoints(port.toString()).forEach { endpoint ->
+            append("Trying to connect $endpoint ...")
+            val connectOutput = runAdb(listOf("connect", endpoint), 30)
+            if (connectOutput.isNotBlank()) {
+                append(connectOutput.trimEnd())
+            }
+            val devices = waitForConnectedDevices(port)
+            if (devices.any { it == endpoint || it.endsWith(":$port") }) {
+                preferredSerial = devices.first { it == endpoint || it.endsWith(":$port") }
+                append("ADB device connected through $endpoint")
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun waitForConnectedDevices(port: Int): List<String> {
+        repeat(6) { attempt ->
+            val devicesOutput = runAdb(listOf("devices"), 5)
+            val devices = parseConnectedDevices(devicesOutput)
+            if (devices.any { it.endsWith(":$port") }) return devices
+            if (attempt < 5) Thread.sleep(1_000)
+        }
+        return emptyList()
+    }
+
+    private fun adbEndpoints(port: String): List<String> {
+        val endpoints = LinkedHashSet<String>()
+        endpoints.add("localhost:$port")
+        endpoints.add("127.0.0.1:$port")
+        CloudSendAdbDnsDiscover.localIpv4Address(appContext)?.let { ip ->
+            endpoints.add("$ip:$port")
+        }
+        return endpoints.toList()
+    }
+
+    private fun isPairSuccessful(output: String, exitCode: Int): Boolean {
+        val lower = output.lowercase()
+        if (
+            lower.contains("failed") ||
+            lower.contains("unable") ||
+            lower.contains("cannot") ||
+            lower.contains("error") ||
+            lower.contains("invalid") ||
+            lower.contains("wrong")
+        ) {
+            return false
+        }
+        return exitCode == 0 && (
+            lower.contains("successfully paired") ||
+                lower.contains("pairing succeeded") ||
+                lower.contains("paired")
+            )
+    }
+
     private fun adbProcess(args: List<String>): Process {
         return ProcessBuilder(listOf(adbPath) + args)
             .directory(appContext.filesDir)
@@ -409,7 +486,9 @@ class CloudSendAdbRunner(context: Context) {
     private fun selectDeviceSerial(devices: List<String>): String? {
         if (devices.isEmpty()) return null
         if (devices.size == 1) return devices.first()
-        return devices.firstOrNull { it.startsWith("localhost:") || it.startsWith("127.0.0.1:") }
+        val preferred = preferredSerial
+        return devices.firstOrNull { it == preferred }
+            ?: devices.firstOrNull { it.startsWith("localhost:") || it.startsWith("127.0.0.1:") }
             ?: devices.firstOrNull { !it.startsWith("emulator-") }
             ?: devices.first()
     }

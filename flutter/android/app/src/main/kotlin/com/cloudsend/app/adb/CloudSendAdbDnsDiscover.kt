@@ -19,6 +19,10 @@ import java.util.concurrent.atomic.AtomicInteger
 class CloudSendAdbDnsDiscover(context: Context) {
     companion object {
         private const val SERVICE_TYPE = "_adb-tls-connect._tcp"
+
+        fun localIpv4Address(context: Context): String? {
+            return CloudSendAdbDnsDiscover(context).getLocalIpAddress()
+        }
     }
 
     private val appContext = context.applicationContext
@@ -49,12 +53,19 @@ class CloudSendAdbDnsDiscover(context: Context) {
             }
         }
 
-        fun resolve(service: NsdServiceInfo) {
+        fun resolve(service: NsdServiceInfo, attempt: Int = 0) {
             pendingResolves.incrementAndGet()
             val resolveListener = object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                     log("ADB mDNS resolve failed: $errorCode")
                     pendingResolves.decrementAndGet()
+                    if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE && attempt < 4) {
+                        Thread {
+                            Thread.sleep(250L * (attempt + 1))
+                            resolve(serviceInfo, attempt + 1)
+                        }.start()
+                        return
+                    }
                     finishIfQuiet()
                 }
 

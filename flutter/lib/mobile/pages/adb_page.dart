@@ -109,7 +109,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
     }
 
     setState(() => _busy = true);
-    _appendLocalLine("Trying to pair localhost:${request.port} ...");
+    _appendLocalLine("Trying to pair wireless debugging port ${request.port} ...");
     try {
       final state = await AndroidAdbManager.pair(
         port: request.port,
@@ -118,7 +118,12 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
       _applyState(state);
       if (state['paired'] != true) {
         _appendLocalLine("Pairing did not complete. Please check the port and pairing code.");
-        if (mounted) setState(() => _serviceRequested = false);
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _serviceRequested = false;
+          });
+        }
         return;
       }
       _appendLocalLine("Pairing succeeded. Starting ADB server...");
