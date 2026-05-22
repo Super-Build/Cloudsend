@@ -1731,6 +1731,37 @@ class AndroidAdbManager {
     return _asStringKeyMap(res);
   }
 
+  static Future<Map<String, dynamic>> wirelessDebugStatus() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel
+        .invokeMethod(AndroidChannel.kCloudSendAdbWirelessDebugStatus);
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> setWirelessDebugging({
+    required bool enable,
+  }) async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel.invokeMethod(
+      AndroidChannel.kCloudSendAdbWirelessDebugSet,
+      {'enable': enable},
+    );
+    return _asStringKeyMap(res);
+  }
+
+  static Future<Map<String, dynamic>> cancelWirelessDebugging() async {
+    if (!isAndroid) {
+      return const <String, dynamic>{};
+    }
+    final res = await _channel
+        .invokeMethod(AndroidChannel.kCloudSendAdbWirelessDebugCancel);
+    return _asStringKeyMap(res);
+  }
+
   static Map<String, dynamic> _asStringKeyMap(dynamic value) {
     if (value is Map) {
       return value.map((key, val) => MapEntry(key.toString(), val));

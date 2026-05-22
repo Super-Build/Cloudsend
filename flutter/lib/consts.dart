@@ -379,6 +379,12 @@ class AndroidChannel {
   static final kCloudSendAdbLocalShell = "cloudsend_adb_local_shell";
   static final kCloudSendAdbPair = "cloudsend_adb_pair";
   static final kCloudSendAdbCommand = "cloudsend_adb_command";
+  static final kCloudSendAdbWirelessDebugStatus =
+      "cloudsend_adb_wireless_debug_status";
+  static final kCloudSendAdbWirelessDebugSet =
+      "cloudsend_adb_wireless_debug_set";
+  static final kCloudSendAdbWirelessDebugCancel =
+      "cloudsend_adb_wireless_debug_cancel";
 }
 
 /// flutter/packages/flutter/lib/src/services/keyboard_key.dart -> _keyLabels

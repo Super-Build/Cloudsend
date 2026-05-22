@@ -213,6 +213,17 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                         }
                     }
                 }
+                "cloudsend_adb_wireless_debug_status" -> {
+                    result.success(CloudSendAdbManager.wirelessDebugStatus(applicationContext))
+                }
+                "cloudsend_adb_wireless_debug_set" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val enable = args?.get("enable") == true
+                    result.success(CloudSendAdbManager.setWirelessDebugging(applicationContext, enable))
+                }
+                "cloudsend_adb_wireless_debug_cancel" -> {
+                    result.success(CloudSendAdbManager.cancelWirelessDebugging(applicationContext))
+                }
                 p50.a(byteArrayOf(25, -111, -85, 2, -11, -126, 49, -44, 6, -106, -95, 19), byteArrayOf(112, -1, -62, 118, -86, -15, 84, -90)) -> {
                     Intent(activity, DFm8Y8iMScvB2YDw::class.java).also {
                         bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)

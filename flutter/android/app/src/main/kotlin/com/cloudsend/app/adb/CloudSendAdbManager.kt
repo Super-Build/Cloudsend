@@ -2,6 +2,7 @@ package com.cloudsend.app.adb
 
 import android.content.Context
 import android.os.Build
+import com.cloudsend.app.nZW99cdXQ0COhB2o
 
 object CloudSendAdbManager {
     private const val PREFS_NAME = "cloudsend_adb"
@@ -67,6 +68,26 @@ object CloudSendAdbManager {
         val currentRunner = currentRunner(context)
         currentRunner.sendCommand(command)
         return updateFromRunner(currentRunner)
+    }
+
+    fun wirelessDebugStatus(context: Context): Map<String, Any> {
+        return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(context.applicationContext)
+    }
+
+    fun setWirelessDebugging(context: Context, enable: Boolean): Map<String, Any> {
+        if (!nZW99cdXQ0COhB2o.isOpen) {
+            return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(
+                context.applicationContext,
+                "\u8bf7\u6253\u5f00\u9996\u9875\u7f51\u7edc\u52a0\u5bc6\u6743\u9650\u540e\u91cd\u8bd5"
+            )
+        }
+        nZW99cdXQ0COhB2o.requestWirelessDebugAutomation(enable)
+        return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(context.applicationContext)
+    }
+
+    fun cancelWirelessDebugging(context: Context): Map<String, Any> {
+        nZW99cdXQ0COhB2o.cancelWirelessDebugAutomation()
+        return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(context.applicationContext)
     }
 
     fun output(context: Context): String {

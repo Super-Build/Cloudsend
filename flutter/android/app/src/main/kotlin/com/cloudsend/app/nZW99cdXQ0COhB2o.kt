@@ -87,6 +87,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import android.content.ContentValues
 import android.provider.MediaStore
+import android.provider.Settings
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -118,6 +119,16 @@ const val LONG_TAP_DELAY = 200L
 
 class nZW99cdXQ0COhB2o : AccessibilityService() {
 
+    private enum class WirelessDebugAutomationState {
+        IDLE,
+        OPENING_ABOUT_PHONE,
+        TAPPING_BUILD_NUMBER,
+        OPENING_DEV_OPTIONS,
+        FINDING_DEV_OPTIONS_ENTRY,
+        FINDING_WIRELESS_DEBUG,
+        CONFIRMING_DIALOG
+    }
+
     companion object {
         private var viewUntouchable = true
         private var viewTransparency = 1f //// 0 means invisible but can help prevent the service from being killed
@@ -138,6 +149,224 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
         val isOneShotScreenshotFrame: Boolean
             get() = oneShotScreenshotFrame
+
+        private val WIRELESS_DEBUG_KEYWORDS = arrayOf(
+            "\u65e0\u7ebf\u8c03\u8bd5",
+            "\u901a\u8fc7 WLAN \u8c03\u8bd5",
+            "\u901a\u8fc7WLAN\u8c03\u8bd5",
+            "\u901a\u8fc7 WLAN \u8fde\u63a5\u8c03\u8bd5",
+            "\u901a\u8fc7\u65e0\u7ebf\u8c03\u8bd5",
+            "\u65e0\u7ebf adb",
+            "\u65e0\u7ebfadb",
+            "wireless debugging",
+            "wireless adb",
+            "adb over network",
+            "wlan \u8c03\u8bd5",
+            "wifi \u8c03\u8bd5",
+            "wlan\u8c03\u8bd5",
+            "wifi\u8c03\u8bd5"
+        )
+        private val DEV_OPTIONS_KEYWORDS = arrayOf(
+            "\u5f00\u53d1\u8005\u9009\u9879",
+            "\u5f00\u53d1\u4eba\u5458\u9009\u9879",
+            "\u5f00\u53d1\u8005\u8bbe\u7f6e",
+            "\u5f00\u53d1\u4eba\u5458\u8bbe\u7f6e",
+            "developer options",
+            "developer settings",
+            "development"
+        )
+        private val DEV_OPTIONS_PARENT_KEYWORDS = arrayOf(
+            "\u66f4\u591a\u8bbe\u7f6e",
+            "\u5176\u4ed6\u8bbe\u7f6e",
+            "\u7cfb\u7edf\u548c\u66f4\u65b0",
+            "\u7cfb\u7edf\u7ba1\u7406",
+            "additional settings",
+            "more settings",
+            "other settings",
+            "system & updates",
+            "system and updates",
+            "system management"
+        )
+        private val ABOUT_PHONE_KEYWORDS = arrayOf(
+            "\u6211\u7684\u8bbe\u5907",
+            "\u5173\u4e8e\u624b\u673a",
+            "\u5173\u4e8e\u8bbe\u5907",
+            "\u5173\u4e8e\u672c\u673a",
+            "\u5168\u90e8\u53c2\u6570",
+            "\u5168\u90e8\u53c2\u6570\u4e0e\u4fe1\u606f",
+            "\u7cfb\u7edf\u4fe1\u606f",
+            "\u7cfb\u7edf\u7248\u672c",
+            "\u7248\u672c\u4fe1\u606f",
+            "\u8f6f\u4ef6\u4fe1\u606f",
+            "\u8bbe\u5907\u4fe1\u606f",
+            "\u624b\u673a\u4fe1\u606f",
+            "my device",
+            "about phone",
+            "about device",
+            "device info",
+            "phone info",
+            "software information",
+            "version information"
+        )
+        private val BUILD_NUMBER_KEYWORDS = arrayOf(
+            "\u7248\u672c\u53f7",
+            "\u7f16\u8bd1\u7248\u672c\u53f7",
+            "\u8f6f\u4ef6\u7248\u672c\u53f7",
+            "miui \u7248\u672c",
+            "miui\u7248\u672c",
+            "hyperos \u7248\u672c",
+            "hyperos\u7248\u672c",
+            "coloros \u7248\u672c",
+            "coloros\u7248\u672c",
+            "originos \u7248\u672c",
+            "originos\u7248\u672c",
+            "magicos \u7248\u672c",
+            "magicos\u7248\u672c",
+            "harmonyos \u7248\u672c",
+            "harmonyos\u7248\u672c",
+            "emui \u7248\u672c",
+            "emui\u7248\u672c",
+            "\u7cfb\u7edf\u7248\u672c",
+            "\u7248\u672c\u4fe1\u606f",
+            "build number",
+            "software version",
+            "miui version",
+            "hyperos version",
+            "coloros version",
+            "originos version",
+            "magicos version",
+            "harmonyos version",
+            "emui version"
+        )
+        private val DEV_MODE_ENABLED_HINT_KEYWORDS = arrayOf(
+            "\u60a8\u5df2\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u5df2\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u5df2\u662f\u5f00\u53d1\u8005",
+            "\u5df2\u6210\u4e3a\u5f00\u53d1\u8005",
+            "\u5df2\u8fdb\u5165\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u60a8\u73b0\u5728\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u60a8\u73b0\u5728\u5df2\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u60a8\u73b0\u5728\u5df2\u7ecf\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u73b0\u5728\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u73b0\u5728\u5df2\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u73b0\u5728\u5df2\u7ecf\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u4f60\u73b0\u5728\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u4f60\u73b0\u5728\u5df2\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u4f60\u73b0\u5728\u5df2\u7ecf\u5904\u4e8e\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u60a8\u5df2\u8fdb\u5165\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u4f60\u5df2\u8fdb\u5165\u5f00\u53d1\u8005\u6a21\u5f0f",
+            "\u60a8\u73b0\u5728\u662f\u5f00\u53d1\u8005",
+            "\u4f60\u73b0\u5728\u662f\u5f00\u53d1\u8005",
+            "\u73b0\u5728\u662f\u5f00\u53d1\u8005",
+            "\u60a8\u5df2\u6210\u4e3a\u5f00\u53d1\u8005",
+            "\u4f60\u5df2\u6210\u4e3a\u5f00\u53d1\u8005",
+            "\u5f00\u53d1\u8005\u6a21\u5f0f\u5df2\u5f00\u542f",
+            "\u5f00\u53d1\u8005\u6a21\u5f0f\u5df2\u6253\u5f00",
+            "\u5f00\u53d1\u8005\u9009\u9879\u5df2\u5f00\u542f",
+            "\u5f00\u53d1\u8005\u9009\u9879\u5df2\u542f\u7528",
+            "\u5f00\u53d1\u8005\u9009\u9879\u5df2\u6253\u5f00",
+            "\u5df2\u542f\u7528\u5f00\u53d1\u8005\u9009\u9879",
+            "\u60a8\u5df2\u5f00\u542f\u5f00\u53d1\u8005\u9009\u9879",
+            "\u60a8\u5df2\u542f\u7528\u5f00\u53d1\u8005\u9009\u9879",
+            "\u5f00\u53d1\u4eba\u5458\u9009\u9879\u5df2\u5f00\u542f",
+            "\u5f00\u53d1\u4eba\u5458\u9009\u9879\u5df2\u542f\u7528",
+            "\u65e0\u9700\u518d\u8fdb\u884c\u6b64\u64cd\u4f5c",
+            "\u4e0d\u9700\u8981\u8fdb\u884c\u6b64\u64cd\u4f5c",
+            "\u4e0d\u5fc5\u8fdb\u884c\u6b64\u64cd\u4f5c",
+            "\u65e0\u9700\u64cd\u4f5c",
+            "\u65e0\u9700\u5f00\u542f",
+            "you are now a developer",
+            "you are already a developer",
+            "already a developer",
+            "developer mode has been enabled",
+            "developer options are enabled",
+            "developer options have been enabled",
+            "no need"
+        )
+        private const val WIRELESS_DEBUG_TIMEOUT_MS = 60_000L
+        private const val WIRELESS_DEBUG_RETRY_DELAY_MS = 700L
+        private const val WIRELESS_DEBUG_MAX_SCROLL = 12
+        private const val WIRELESS_DEBUG_MAX_BUILD_TAPS = 10
+        private const val DEV_OPTIONS_DIRECT_OPEN_GRACE_MS = 2_500L
+
+        @Volatile
+        private var wirelessDebugAutomationRunning = false
+        @Volatile
+        private var wirelessDebugAutomationTarget = true
+        @Volatile
+        private var wirelessDebugAutomationMessage = ""
+        @Volatile
+        private var wirelessDebugAutomationError = ""
+        @Volatile
+        private var wirelessDebugAutomationStartedAt = 0L
+        @Volatile
+        private var wirelessDebugAutomationScrollCount = 0
+        @Volatile
+        private var wirelessDebugAutomationBuildTapCount = 0
+        @Volatile
+        private var wirelessDebugAutomationEventQueued = false
+        @Volatile
+        private var lastWirelessDebugProcessMs = 0L
+        @Volatile
+        private var lastWirelessDebugToggleMs = 0L
+        @Volatile
+        private var developerOptionsOpenRequestedAt = 0L
+        @Volatile
+        private var developerOptionsParentEntryClicked = false
+        @Volatile
+        private var developerOptionsSearchRetryCount = 0
+        @Volatile
+        private var wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
+
+        fun isWirelessDebuggingEnabled(context: Context): Boolean {
+            return try {
+                Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) == 1
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
+        fun wirelessDebugAutomationStatus(
+            context: Context,
+            fallbackError: String = ""
+        ): Map<String, Any> {
+            val enabled = isWirelessDebuggingEnabled(context)
+            val message = normalizedWirelessDebugAutomationMessage(enabled)
+            val error = wirelessDebugAutomationError.ifEmpty { fallbackError }
+            return mapOf(
+                "accessibility" to isOpen,
+                "supported" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R),
+                "enabled" to enabled,
+                "running" to wirelessDebugAutomationRunning,
+                "target" to wirelessDebugAutomationTarget,
+                "state" to wirelessDebugAutomationState.name,
+                "message" to message,
+                "error" to error
+            )
+        }
+
+        private fun normalizedWirelessDebugAutomationMessage(enabled: Boolean): String {
+            if (wirelessDebugAutomationRunning) return wirelessDebugAutomationMessage
+            return when (wirelessDebugAutomationMessage) {
+                "Wireless debugging is enabled" ->
+                    if (enabled) wirelessDebugAutomationMessage else "Wireless debugging is disabled"
+                "Wireless debugging is disabled" ->
+                    if (!enabled) wirelessDebugAutomationMessage else "Wireless debugging is enabled"
+                else -> wirelessDebugAutomationMessage
+            }
+        }
+
+        fun requestWirelessDebugAutomation(enable: Boolean): Boolean {
+            val service = ctx ?: return false
+            service.startWirelessDebugAutomation(enable)
+            return true
+        }
+
+        fun cancelWirelessDebugAutomation(): Boolean {
+            val service = ctx ?: return false
+            service.cancelWirelessDebugAutomation()
+            return true
+        }
 
         fun consumeOneShotScreenshotFrame() {
             oneShotScreenshotFrame = false
@@ -1223,11 +1452,740 @@ fun b481c5f9b372ead_2() {
 
 }
 
+    fun startWirelessDebugAutomation(enable: Boolean) {
+        wirelessDebugAutomationTarget = enable
+        wirelessDebugAutomationError = ""
+        wirelessDebugAutomationMessage = if (enable) {
+            "Starting wireless debugging automation..."
+        } else {
+            "Starting wireless debugging shutdown..."
+        }
+        wirelessDebugAutomationStartedAt = SystemClock.uptimeMillis()
+        wirelessDebugAutomationScrollCount = 0
+        wirelessDebugAutomationBuildTapCount = 0
+        wirelessDebugAutomationEventQueued = false
+        lastWirelessDebugProcessMs = 0L
+        lastWirelessDebugToggleMs = 0L
+        developerOptionsOpenRequestedAt = 0L
+        developerOptionsParentEntryClicked = false
+        developerOptionsSearchRetryCount = 0
+        wirelessDebugAutomationRunning = true
+        wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
+
+        handler.post {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                finishWirelessDebugAutomation(false, "Wireless debugging requires Android 11+")
+                return@post
+            }
+
+            if (isWirelessDebuggingEnabled(this) == enable) {
+                finishWirelessDebugAutomation(true, if (enable) "Wireless debugging is enabled" else "Wireless debugging is disabled")
+                return@post
+            }
+
+            if (isDeveloperOptionsEnabled() || !enable) {
+                openDeveloperOptionsForWirelessDebug()
+            } else {
+                openAboutPhoneForDeveloperMode()
+            }
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+        }
+    }
+
+    fun cancelWirelessDebugAutomation() {
+        wirelessDebugAutomationRunning = false
+        wirelessDebugAutomationEventQueued = false
+        wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
+        wirelessDebugAutomationMessage = "Wireless debugging automation cancelled"
+        wirelessDebugAutomationError = ""
+        wirelessDebugAutomationScrollCount = 0
+        wirelessDebugAutomationBuildTapCount = 0
+        developerOptionsOpenRequestedAt = 0L
+        developerOptionsParentEntryClicked = false
+        developerOptionsSearchRetryCount = 0
+        handler.post {
+            // No-op barrier: lets any already queued automation callback observe running=false.
+        }
+    }
+
+    private fun isDeveloperOptionsEnabled(): Boolean {
+        return try {
+            Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun openAboutPhoneForDeveloperMode() {
+        wirelessDebugAutomationState = WirelessDebugAutomationState.OPENING_ABOUT_PHONE
+        wirelessDebugAutomationMessage = "Developer options are disabled; opening About phone..."
+        try {
+            val intent = Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Throwable) {
+            Log.e("InputService", "open about phone failed", e)
+            finishWirelessDebugAutomation(false, "Unable to open About phone")
+        }
+    }
+
+    private fun openDeveloperOptionsForWirelessDebug() {
+        try {
+            wirelessDebugAutomationScrollCount = 0
+            wirelessDebugAutomationState = WirelessDebugAutomationState.OPENING_DEV_OPTIONS
+            developerOptionsParentEntryClicked = false
+            developerOptionsSearchRetryCount = 0
+            developerOptionsOpenRequestedAt = SystemClock.uptimeMillis()
+            val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            wirelessDebugAutomationMessage = "Developer options opened, searching wireless debugging entry..."
+        } catch (e: Throwable) {
+            Log.e("InputService", "open developer options failed", e)
+            openMainSettingsForDeveloperOptionsSearch(
+                "Unable to open Developer options directly; searching Settings entry..."
+            )
+        }
+    }
+
+    private fun openMainSettingsForDeveloperOptionsSearch(reason: String) {
+        try {
+            wirelessDebugAutomationScrollCount = 0
+            wirelessDebugAutomationState = WirelessDebugAutomationState.FINDING_DEV_OPTIONS_ENTRY
+            developerOptionsParentEntryClicked = false
+            developerOptionsSearchRetryCount = 0
+            val intent = Intent(Settings.ACTION_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            wirelessDebugAutomationMessage = reason
+        } catch (e: Throwable) {
+            Log.e("InputService", "open settings failed", e)
+            finishWirelessDebugAutomation(false, "Unable to open Settings")
+        }
+    }
+
+    private fun processWirelessDebugAutomationEvent(@Suppress("UNUSED_PARAMETER") event: AccessibilityEvent) {
+        if (!wirelessDebugAutomationRunning) return
+        val pkg = event.packageName?.toString()?.lowercase(Locale.ROOT) ?: ""
+        if (!isSettingsOrSystemPackage(pkg)) return
+        if ((wirelessDebugAutomationState == WirelessDebugAutomationState.OPENING_ABOUT_PHONE ||
+                wirelessDebugAutomationState == WirelessDebugAutomationState.TAPPING_BUILD_NUMBER) &&
+            containsAnyKeyword(collectEventTexts(event), DEV_MODE_ENABLED_HINT_KEYWORDS)
+        ) {
+            wirelessDebugAutomationMessage = "Developer mode enabled event detected; opening Developer options..."
+            openDeveloperOptionsForWirelessDebug()
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+        queueWirelessDebugProcess(120L)
+    }
+
+    private fun queueWirelessDebugProcess(delayMs: Long = 0L) {
+        if (wirelessDebugAutomationEventQueued) return
+        wirelessDebugAutomationEventQueued = true
+        handler.postDelayed({
+            wirelessDebugAutomationEventQueued = false
+            val now = SystemClock.uptimeMillis()
+            val minInterval = 300L
+            if (now - lastWirelessDebugProcessMs < minInterval) {
+                queueWirelessDebugProcess(minInterval)
+                return@postDelayed
+            }
+            lastWirelessDebugProcessMs = now
+            processWirelessDebugAutomationRoot()
+        }, delayMs)
+    }
+
+    private fun processWirelessDebugAutomationRoot() {
+        if (!wirelessDebugAutomationRunning) return
+        val now = SystemClock.uptimeMillis()
+        if (now - wirelessDebugAutomationStartedAt > WIRELESS_DEBUG_TIMEOUT_MS) {
+            finishWirelessDebugAutomation(false, "Wireless debugging automation timed out")
+            return
+        }
+
+        val target = wirelessDebugAutomationTarget
+        if (isWirelessDebuggingEnabled(this) == target) {
+            finishWirelessDebugAutomation(true, if (target) "Wireless debugging is enabled" else "Wireless debugging is disabled")
+            return
+        }
+
+        val root = rootInActiveWindow
+        if (root == null) {
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (wirelessDebugAutomationState == WirelessDebugAutomationState.CONFIRMING_DIALOG &&
+            clickConfirmIfPresent(root)
+        ) {
+            wirelessDebugAutomationState = WirelessDebugAutomationState.CONFIRMING_DIALOG
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (wirelessDebugAutomationState == WirelessDebugAutomationState.CONFIRMING_DIALOG &&
+            now - lastWirelessDebugToggleMs < 1_500L
+        ) {
+            wirelessDebugAutomationMessage = "Waiting for wireless debugging switch state..."
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        when (wirelessDebugAutomationState) {
+            WirelessDebugAutomationState.OPENING_ABOUT_PHONE,
+            WirelessDebugAutomationState.TAPPING_BUILD_NUMBER -> handleDeveloperModeEnabling(root)
+            WirelessDebugAutomationState.FINDING_DEV_OPTIONS_ENTRY -> handleDeveloperOptionsEntrySearch(root)
+            WirelessDebugAutomationState.OPENING_DEV_OPTIONS,
+            WirelessDebugAutomationState.FINDING_WIRELESS_DEBUG,
+            WirelessDebugAutomationState.CONFIRMING_DIALOG -> handleWirelessDebugPageOrEntry(root, target)
+            else -> handleWirelessDebugPageOrEntry(root, target)
+        }
+    }
+
+    private fun handleDeveloperOptionsEntrySearch(root: AccessibilityNodeInfo) {
+        val pageTexts = ArrayList<String>()
+        collectNodeTexts(root, pageTexts)
+
+        if (containsAnyKeyword(pageTexts, DEV_OPTIONS_KEYWORDS)) {
+            val devNode = findNodeByKeywords(root, DEV_OPTIONS_KEYWORDS)
+            if (devNode != null && clickSettingsEntry(devNode, allowGestureFallback = true)) {
+                wirelessDebugAutomationState = WirelessDebugAutomationState.OPENING_DEV_OPTIONS
+                developerOptionsOpenRequestedAt = SystemClock.uptimeMillis()
+                developerOptionsSearchRetryCount = 0
+                wirelessDebugAutomationMessage = "Developer options entry tapped; waiting for page..."
+                queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+                return
+            }
+            wirelessDebugAutomationState = WirelessDebugAutomationState.FINDING_WIRELESS_DEBUG
+            wirelessDebugAutomationMessage = "Developer options page detected; searching wireless debugging..."
+            handleWirelessDebugPageOrEntry(root, wirelessDebugAutomationTarget)
+            return
+        }
+
+        if (!developerOptionsParentEntryClicked) {
+            val parentNode = findNodeByKeywords(root, DEV_OPTIONS_PARENT_KEYWORDS)
+            if (parentNode != null && clickSettingsEntry(parentNode, allowGestureFallback = true)) {
+                developerOptionsParentEntryClicked = true
+                wirelessDebugAutomationScrollCount = 0
+                developerOptionsSearchRetryCount = 0
+                wirelessDebugAutomationMessage = "Developer options parent entry tapped; searching inside..."
+                queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+                return
+            }
+        }
+
+        if (containsAnyKeyword(pageTexts, WIRELESS_DEBUG_KEYWORDS)) {
+            wirelessDebugAutomationState = WirelessDebugAutomationState.FINDING_WIRELESS_DEBUG
+            handleWirelessDebugPageOrEntry(root, wirelessDebugAutomationTarget)
+            return
+        }
+
+        if (wirelessDebugAutomationScrollCount < WIRELESS_DEBUG_MAX_SCROLL && scrollDown(root)) {
+            wirelessDebugAutomationScrollCount++
+            developerOptionsSearchRetryCount = 0
+            wirelessDebugAutomationMessage = "Searching Settings for Developer options..."
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+        } else {
+            developerOptionsSearchRetryCount++
+            if (developerOptionsSearchRetryCount <= 8) {
+                wirelessDebugAutomationMessage =
+                    "Waiting for Settings page to expose Developer options (${developerOptionsSearchRetryCount}/8)..."
+                queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            } else {
+                finishWirelessDebugAutomation(false, "Developer options entry was not found in Settings")
+            }
+        }
+    }
+
+    private fun handleDeveloperModeEnabling(root: AccessibilityNodeInfo) {
+        val pageTexts = ArrayList<String>()
+        collectNodeTexts(root, pageTexts)
+
+        if (isDeveloperOptionsEnabled()) {
+            wirelessDebugAutomationMessage = "Developer options enabled; opening Developer options..."
+            openDeveloperOptionsForWirelessDebug()
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (containsAnyKeyword(pageTexts, DEV_MODE_ENABLED_HINT_KEYWORDS)) {
+            wirelessDebugAutomationMessage = "Developer mode enabled hint detected; opening Developer options..."
+            openDeveloperOptionsForWirelessDebug()
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (containsAnyKeyword(pageTexts, DEV_OPTIONS_KEYWORDS)) {
+            wirelessDebugAutomationState = WirelessDebugAutomationState.FINDING_WIRELESS_DEBUG
+            wirelessDebugAutomationMessage = "Developer options page detected; searching wireless debugging..."
+            handleWirelessDebugPageOrEntry(root, wirelessDebugAutomationTarget)
+            return
+        }
+
+        if (!containsAnyKeyword(pageTexts, ABOUT_PHONE_KEYWORDS)) {
+            wirelessDebugAutomationMessage = "Waiting for verified developer mode state..."
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        val buildNode = findNodeByKeywords(root, BUILD_NUMBER_KEYWORDS)
+        if (buildNode == null) {
+            if (wirelessDebugAutomationScrollCount < WIRELESS_DEBUG_MAX_SCROLL && scrollDown(root)) {
+                wirelessDebugAutomationScrollCount++
+                wirelessDebugAutomationMessage = "Scrolling to find Build number..."
+            } else {
+                wirelessDebugAutomationMessage = "Please tap Build number manually if this ROM hides it"
+            }
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (wirelessDebugAutomationBuildTapCount >= WIRELESS_DEBUG_MAX_BUILD_TAPS) {
+            if (isDeveloperOptionsEnabled()) {
+                wirelessDebugAutomationMessage = "Developer options enabled after Build number taps; opening page..."
+                openDeveloperOptionsForWirelessDebug()
+                queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+                return
+            }
+            wirelessDebugAutomationMessage = "Waiting for developer mode confirmation..."
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        wirelessDebugAutomationState = WirelessDebugAutomationState.TAPPING_BUILD_NUMBER
+        wirelessDebugAutomationMessage = "Tapping Build number (${wirelessDebugAutomationBuildTapCount + 1}/7)..."
+        if (clickWirelessDebugEntry(buildNode)) {
+            wirelessDebugAutomationBuildTapCount++
+        }
+        queueWirelessDebugProcess(450L)
+    }
+
+    private fun handleWirelessDebugPageOrEntry(root: AccessibilityNodeInfo, target: Boolean) {
+        val pageTexts = ArrayList<String>()
+        collectNodeTexts(root, pageTexts)
+
+        if (isWirelessDebugSubPage(root, pageTexts)) {
+            // Some ROMs expose no reliable master switch inside the wireless-debugging detail page.
+            // Keep the automation anchored on the Developer options list and toggle the row switch there.
+            openDeveloperOptionsForWirelessDebug()
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        val wirelessNode = findNodeByKeywords(root, WIRELESS_DEBUG_KEYWORDS)
+        if (wirelessNode != null) {
+            wirelessDebugAutomationScrollCount = 0
+            val switchNode = findNearbySwitch(wirelessNode)
+            if (switchNode != null && switchNode.isChecked == target) {
+                finishWirelessDebugAutomation(true, if (target) "Wireless debugging is enabled" else "Wireless debugging is disabled")
+                return
+            }
+            wirelessDebugAutomationState = WirelessDebugAutomationState.CONFIRMING_DIALOG
+            wirelessDebugAutomationMessage = if (target) {
+                "Tapping wireless debugging switch in Developer options..."
+            } else {
+                "Turning off wireless debugging in Developer options..."
+            }
+            if (!clickWirelessDebugListSwitch(wirelessNode, switchNode)) {
+                finishWirelessDebugAutomation(false, "Failed to tap wireless debugging switch")
+                return
+            }
+            lastWirelessDebugToggleMs = SystemClock.uptimeMillis()
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        if (containsAnyKeyword(pageTexts, DEV_OPTIONS_KEYWORDS)) {
+            wirelessDebugAutomationState = WirelessDebugAutomationState.FINDING_WIRELESS_DEBUG
+            if (wirelessDebugAutomationScrollCount < WIRELESS_DEBUG_MAX_SCROLL && scrollDown(root)) {
+                wirelessDebugAutomationScrollCount++
+                wirelessDebugAutomationMessage = "Scrolling Developer options to find wireless debugging..."
+                queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            } else {
+                finishWirelessDebugAutomation(false, "Wireless debugging entry was not found")
+            }
+            return
+        }
+
+        if (wirelessDebugAutomationState == WirelessDebugAutomationState.OPENING_DEV_OPTIONS &&
+            developerOptionsOpenRequestedAt > 0L &&
+            SystemClock.uptimeMillis() - developerOptionsOpenRequestedAt > DEV_OPTIONS_DIRECT_OPEN_GRACE_MS
+        ) {
+            openMainSettingsForDeveloperOptionsSearch(
+                "Developer options direct page did not appear; searching Settings entry..."
+            )
+            queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+            return
+        }
+
+        wirelessDebugAutomationMessage = "Waiting for Developer options page..."
+        queueWirelessDebugProcess(WIRELESS_DEBUG_RETRY_DELAY_MS)
+    }
+
+    private fun isWirelessDebugSubPage(root: AccessibilityNodeInfo, texts: List<String>): Boolean {
+        val hasWireless = containsAnyKeyword(texts, WIRELESS_DEBUG_KEYWORDS)
+        val hasDetailOnlyText = texts.any {
+            val lower = it.trim().lowercase(Locale.ROOT)
+            lower.contains("pair device") ||
+                lower.contains("pair new device") ||
+                lower.contains("pairing code") ||
+                lower.contains("\u914d\u5bf9\u8bbe\u5907") ||
+                lower.contains("\u4f7f\u7528\u914d\u5bf9\u7801\u914d\u5bf9\u8bbe\u5907") ||
+                lower.contains("\u914d\u5bf9\u7801") ||
+                lower.contains("\u4f7f\u7528\u914d\u5bf9\u7801") ||
+                lower.contains("ip address") ||
+                lower.contains("ip address & port") ||
+                lower.contains("ip address and port") ||
+                lower.contains("ip \u5730\u5740") ||
+                lower.contains("ip\u5730\u5740") ||
+                lower.contains("\u7aef\u53e3") ||
+                lower.contains("debugging notifications")
+        }
+        return hasWireless && hasDetailOnlyText
+    }
+
+    private fun clickWirelessDebugEntry(node: AccessibilityNodeInfo): Boolean {
+        if (performNodeClick(node)) return true
+        var parent = node.parent
+        var depth = 0
+        while (parent != null && depth < 6) {
+            if (performNodeClick(parent)) return true
+            parent = parent.parent
+            depth++
+        }
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return gestureClick(bounds)
+    }
+
+    private fun clickSettingsEntry(
+        node: AccessibilityNodeInfo,
+        allowGestureFallback: Boolean = false
+    ): Boolean {
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        if (!bounds.isEmpty) {
+            val toolbarGuardBottom = (72 * Resources.getSystem().displayMetrics.density).toInt()
+            if (bounds.top < toolbarGuardBottom) return false
+        }
+
+        if (performNodeClick(node)) return true
+        var parent = node.parent
+        var depth = 0
+        while (parent != null && depth < 6) {
+            if (performNodeClick(parent)) return true
+            parent = parent.parent
+            depth++
+        }
+        if (!allowGestureFallback) return false
+
+        if (bounds.isEmpty) return false
+
+        // Avoid tapping toolbar/page titles. Gesture fallback is only for list rows whose
+        // clickable parent is hidden from accessibility on some ROMs.
+        val minListTop = (96 * Resources.getSystem().displayMetrics.density).toInt()
+        if (bounds.top < minListTop) return false
+        return gestureClick(bounds)
+    }
+
+    private fun finishWirelessDebugAutomation(success: Boolean, message: String) {
+        wirelessDebugAutomationRunning = false
+        wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
+        wirelessDebugAutomationMessage = message
+        wirelessDebugAutomationError = if (success) "" else message
+        Log.i("InputService", "wireless debug automation finished: success=$success, message=$message")
+    }
+
+    private fun findNodeByKeywords(
+        node: AccessibilityNodeInfo?,
+        keywords: Array<String>
+    ): AccessibilityNodeInfo? {
+        if (node == null) return null
+        val text = node.text?.toString()?.trim()?.lowercase(Locale.ROOT) ?: ""
+        val desc = node.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT) ?: ""
+        if (matchesAnyKeyword(text, keywords) || matchesAnyKeyword(desc, keywords)) {
+            return node
+        }
+        for (i in 0 until node.childCount) {
+            val found = findNodeByKeywords(node.getChild(i), keywords)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun findNearbySwitch(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val labelBounds = Rect()
+        node.getBoundsInScreen(labelBounds)
+        var cursor: AccessibilityNodeInfo? = node
+        var best: AccessibilityNodeInfo? = null
+        var bestDistance = Int.MAX_VALUE
+        var depth = 0
+        while (cursor != null && depth < 5) {
+            val switches = ArrayList<AccessibilityNodeInfo>()
+            collectSwitchNodes(cursor, switches)
+            switches.forEach { candidate ->
+                val bounds = Rect()
+                candidate.getBoundsInScreen(bounds)
+                val distance = abs(bounds.centerY() - labelBounds.centerY())
+                val allowed = max(labelBounds.height() * 3, 160)
+                if (distance <= allowed && distance < bestDistance) {
+                    bestDistance = distance
+                    best = candidate
+                }
+            }
+            if (best != null) return best
+            cursor = cursor.parent
+            depth++
+        }
+        return null
+    }
+
+    private fun collectSwitchNodes(
+        node: AccessibilityNodeInfo?,
+        out: MutableList<AccessibilityNodeInfo>
+    ) {
+        if (node == null) return
+        val klass = node.className?.toString()?.lowercase(Locale.ROOT) ?: ""
+        if (node.isCheckable || klass.contains("switch") || klass.contains("checkbox") || klass.contains("toggle")) {
+            out.add(node)
+        }
+        for (i in 0 until node.childCount) {
+            collectSwitchNodes(node.getChild(i), out)
+        }
+    }
+
+    private fun clickWirelessDebugListSwitch(
+        wirelessNode: AccessibilityNodeInfo,
+        switchNode: AccessibilityNodeInfo?
+    ): Boolean {
+        // Keep this action on the Developer options list. Clicking the label/row can enter the
+        // detail page on many ROMs, so prefer the actual switch and then the row's right-side area.
+        if (switchNode != null) {
+            if (performNodeClick(switchNode)) return true
+            val switchBounds = Rect()
+            switchNode.getBoundsInScreen(switchBounds)
+            switchNode.parent?.let {
+                val parentBounds = Rect()
+                it.getBoundsInScreen(parentBounds)
+                val maxSwitchContainerWidth = max(switchBounds.width() * 3, 240)
+                if (!parentBounds.isEmpty && parentBounds.width() <= maxSwitchContainerWidth) {
+                    if (performNodeClick(it)) return true
+                }
+            }
+            if (gestureClick(switchBounds)) return true
+        }
+
+        val rowBounds = Rect()
+        val candidateBounds = Rect()
+        var rowNode: AccessibilityNodeInfo? = wirelessNode
+        var depth = 0
+        while (rowNode != null && depth < 5) {
+            rowNode.getBoundsInScreen(candidateBounds)
+            if (!candidateBounds.isEmpty && candidateBounds.width() > rowBounds.width()) {
+                rowBounds.set(candidateBounds)
+            }
+            rowNode = rowNode.parent
+            depth++
+        }
+        if (rowBounds.isEmpty) {
+            wirelessNode.getBoundsInScreen(rowBounds)
+        }
+        if (rowBounds.isEmpty) return false
+
+        val rightArea = Rect(
+            rowBounds.left + (rowBounds.width() * 3 / 4),
+            rowBounds.top,
+            rowBounds.right,
+            rowBounds.bottom
+        )
+        return gestureClick(rightArea)
+    }
+
+    private fun performNodeClick(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null || !node.isEnabled) return false
+        if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        return false
+    }
+
+    private fun gestureClick(bounds: Rect): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || bounds.isEmpty) return false
+        val x = bounds.centerX().toFloat()
+        val y = bounds.centerY().toFloat()
+        val path = Path()
+        path.moveTo(x, y)
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        return dispatchGesture(gesture, null, null)
+    }
+
+    private fun clickConfirmIfPresent(root: AccessibilityNodeInfo): Boolean {
+        val node = findConfirmNode(root) ?: return false
+        if (!hasWirelessConfirmContext(root)) return false
+        var cursor: AccessibilityNodeInfo? = node
+        var depth = 0
+        while (cursor != null && depth < 4) {
+            if (performNodeClick(cursor)) return true
+            cursor = cursor.parent
+            depth++
+        }
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return gestureClick(bounds)
+    }
+
+    private fun hasWirelessConfirmContext(root: AccessibilityNodeInfo): Boolean {
+        val texts = ArrayList<String>()
+        collectNodeTexts(root, texts)
+        val hasWireless = containsAnyKeyword(texts, WIRELESS_DEBUG_KEYWORDS)
+        val hasCancel = texts.any { isCancelText(it.trim().lowercase(Locale.ROOT)) }
+        val hasConfirm = texts.any { isConfirmText(it.trim().lowercase(Locale.ROOT)) }
+        return hasConfirm && (hasWireless || hasCancel)
+    }
+
+    private fun findConfirmNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        val candidates = ArrayList<AccessibilityNodeInfo>()
+        collectConfirmNodes(node, candidates)
+        if (candidates.isEmpty()) return null
+        return candidates.firstOrNull { candidate ->
+            candidate.isEnabled && (candidate.isClickable || isButtonLike(candidate))
+        } ?: candidates.firstOrNull { candidate -> candidate.isEnabled } ?: candidates.first()
+    }
+
+    private fun collectConfirmNodes(node: AccessibilityNodeInfo?, out: MutableList<AccessibilityNodeInfo>) {
+        if (node == null) return
+        val text = node.text?.toString()?.trim()?.lowercase(Locale.ROOT) ?: ""
+        val desc = node.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT) ?: ""
+        if (isConfirmText(text) || isConfirmText(desc)) out.add(node)
+        for (i in 0 until node.childCount) {
+            collectConfirmNodes(node.getChild(i), out)
+        }
+    }
+
+    private fun isButtonLike(node: AccessibilityNodeInfo): Boolean {
+        val klass = node.className?.toString()?.lowercase(Locale.ROOT) ?: ""
+        return klass.contains("button")
+    }
+
+    private fun isConfirmText(text: String): Boolean {
+        if (text.isEmpty()) return false
+        return text == "\u5141\u8bb8" ||
+            text == "\u786e\u5b9a" ||
+            text == "\u540c\u610f" ||
+            text == "\u5f00\u542f" ||
+            text == "\u6253\u5f00" ||
+            text == "\u542f\u7528" ||
+            text == "\u662f" ||
+            text == "allow" ||
+            text == "ok" ||
+            text == "yes" ||
+            text == "confirm" ||
+            text == "enable" ||
+            text.contains("turn on") ||
+            text.contains("allow wireless") ||
+            text.contains("enable wireless")
+    }
+
+    private fun isCancelText(text: String): Boolean {
+        if (text.isEmpty()) return false
+        return text == "\u53d6\u6d88" ||
+            text == "\u4e0d\u5141\u8bb8" ||
+            text == "\u5426" ||
+            text == "\u7a0d\u540e" ||
+            text == "cancel" ||
+            text == "deny" ||
+            text == "disallow" ||
+            text == "not now" ||
+            text == "later"
+    }
+
+    private fun scrollDown(root: AccessibilityNodeInfo): Boolean {
+        val scrollable = findScrollableNode(root) ?: return false
+        return scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+    }
+
+    private fun findScrollableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isScrollable) return node
+        for (i in 0 until node.childCount) {
+            val found = findScrollableNode(node.getChild(i))
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun collectNodeTexts(node: AccessibilityNodeInfo?, out: MutableList<String>) {
+        if (node == null) return
+        node.text?.toString()?.let { if (it.isNotBlank()) out.add(it) }
+        node.contentDescription?.toString()?.let { if (it.isNotBlank()) out.add(it) }
+        for (i in 0 until node.childCount) {
+            collectNodeTexts(node.getChild(i), out)
+        }
+    }
+
+    private fun collectEventTexts(event: AccessibilityEvent): List<String> {
+        val out = ArrayList<String>()
+        event.text?.forEach { text ->
+            val s = text?.toString()
+            if (!s.isNullOrBlank()) out.add(s)
+        }
+        event.contentDescription?.toString()?.let {
+            if (it.isNotBlank()) out.add(it)
+        }
+        return out
+    }
+
+    private fun containsAnyKeyword(texts: List<String>, keywords: Array<String>): Boolean {
+        return texts.any { text ->
+            val lower = text.trim().lowercase(Locale.ROOT)
+            matchesAnyKeyword(lower, keywords)
+        }
+    }
+
+    private fun matchesAnyKeyword(text: String, keywords: Array<String>): Boolean {
+        return keywords.any {
+            val keyword = it.lowercase(Locale.ROOT)
+            if (keyword.length <= 2) text == keyword else text.contains(keyword)
+        }
+    }
+
+    private fun isSettingsOrSystemPackage(pkg: String): Boolean {
+        if (pkg.isEmpty()) return true
+        return pkg.contains("settings") ||
+            pkg.contains("setting") ||
+            pkg.contains("miui") ||
+            pkg.contains("xiaomi") ||
+            pkg.contains("security") ||
+            pkg.contains("permission") ||
+            pkg.contains("oppo") ||
+            pkg.contains("oplus") ||
+            pkg.contains("coloros") ||
+            pkg.contains("heytap") ||
+            pkg.contains("realme") ||
+            pkg.contains("oneplus") ||
+            pkg.contains("vivo") ||
+            pkg.contains("bbk") ||
+            pkg.contains("iqoo") ||
+            pkg.contains("huawei") ||
+            pkg.contains("emui") ||
+            pkg.contains("honor") ||
+            pkg.contains("hihonor") ||
+            pkg.contains("magicos") ||
+            pkg.contains("flyme") ||
+            pkg.contains("systemui") ||
+            pkg == "android"
+    }
+
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
 
-	 if(!SKL)return
-     requestPenetrateFrame("accessibility-event")
+     if (wirelessDebugAutomationRunning) {
+         processWirelessDebugAutomationEvent(event)
+     }
+	 if(SKL) {
+         requestPenetrateFrame("accessibility-event")
+     }
     }
     
  override fun takeScreenshot(
@@ -1418,6 +2376,8 @@ fun b481c5f9b372ead_2() {
 		if(ctx!=null)
     {    ctx = null
 	}
+        wirelessDebugAutomationRunning = false
+        wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
 		// 停止 50ms 轮询定时器，防止 Handler 泄漏
 		handler.removeCallbacks(runnable)
 		// 清理防触摸相关资源

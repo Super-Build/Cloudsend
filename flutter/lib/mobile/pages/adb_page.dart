@@ -22,29 +22,45 @@ class AdbPage extends StatefulWidget implements PageShape {
   State<AdbPage> createState() => _AdbPageState();
 }
 
-class _AdbPageState extends State<AdbPage> {
+class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   final _commandController = TextEditingController();
   final _terminalController = ScrollController();
 
   Timer? _pollTimer;
+  Timer? _debugPollTimer;
   String _terminalText = "";
   bool _busy = false;
+  bool _debugBusy = false;
+  bool _wirelessDebugEnabled = false;
   bool _shellReady = false;
   bool _serviceRequested = false;
+  String _lastWirelessDebugMessage = "";
+  String _lastWirelessDebugError = "";
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _appendLocalLine("CloudSend ADB module ready.");
     _appendLocalLine("Tap Start service to begin wireless-debugging setup.");
+    _refreshWirelessDebugStatus();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _debugPollTimer?.cancel();
     _commandController.dispose();
     _terminalController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshWirelessDebugStatus();
+    }
   }
 
   Future<void> _startAdbFlow() async {
@@ -167,6 +183,111 @@ class _AdbPageState extends State<AdbPage> {
       _applyState(state);
     } catch (e) {
       _appendLocalLine("Command failed: $e");
+    }
+  }
+
+  Future<void> _toggleWirelessDebug() async {
+    if (_debugBusy) {
+      await _cancelWirelessDebugAutomation();
+      return;
+    }
+    try {
+      final status = await AndroidAdbManager.wirelessDebugStatus();
+      _applyWirelessDebugStatus(status, appendMessage: false);
+      final target = !(status['enabled'] == true);
+      if (status['accessibility'] != true) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            content: const Text("\u8bf7\u6253\u5f00\u9996\u9875\u7f51\u7edc\u52a0\u5bc6\u6743\u9650\u540e\u91cd\u8bd5"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      setState(() => _debugBusy = true);
+      _lastWirelessDebugError = "";
+      _appendLocalLine(target
+          ? "Starting wireless debugging automation..."
+          : "Stopping wireless debugging automation...");
+      final next = await AndroidAdbManager.setWirelessDebugging(enable: target);
+      _applyWirelessDebugStatus(next);
+      if (next['running'] == true) {
+        _ensureDebugPolling();
+      } else if (next.isEmpty && mounted) {
+        setState(() => _debugBusy = false);
+      }
+    } catch (e) {
+      _appendLocalLine("Wireless debugging automation failed: $e");
+      if (mounted) setState(() => _debugBusy = false);
+    }
+  }
+
+  Future<void> _cancelWirelessDebugAutomation() async {
+    try {
+      _appendLocalLine("Cancelling wireless debugging automation...");
+      final status = await AndroidAdbManager.cancelWirelessDebugging();
+      _applyWirelessDebugStatus(status);
+    } catch (e) {
+      _appendLocalLine("Cancel failed: $e");
+    } finally {
+      _debugPollTimer?.cancel();
+      _debugPollTimer = null;
+      if (mounted) {
+        setState(() => _debugBusy = false);
+      }
+    }
+  }
+
+  void _ensureDebugPolling() {
+    _debugPollTimer ??= Timer.periodic(const Duration(milliseconds: 700), (_) {
+      _refreshWirelessDebugStatus();
+    });
+  }
+
+  Future<void> _refreshWirelessDebugStatus() async {
+    try {
+      final status = await AndroidAdbManager.wirelessDebugStatus();
+      _applyWirelessDebugStatus(status);
+    } catch (_) {
+      // Keep UI stable when the native side is temporarily unavailable.
+    }
+  }
+
+  void _applyWirelessDebugStatus(
+    Map<String, dynamic> status, {
+    bool appendMessage = true,
+  }) {
+    if (!mounted || status.isEmpty) return;
+    final enabled = status['enabled'] == true;
+    final running = status['running'] == true;
+    final message = status['message']?.toString() ?? "";
+    final error = status['error']?.toString() ?? "";
+    setState(() {
+      _wirelessDebugEnabled = enabled;
+      _debugBusy = running;
+    });
+    if (appendMessage && message.isNotEmpty && message != _lastWirelessDebugMessage) {
+      _lastWirelessDebugMessage = message;
+      _appendLocalLine(message);
+    }
+    if (appendMessage &&
+        error.isNotEmpty &&
+        error != message &&
+        error != _lastWirelessDebugError) {
+      _lastWirelessDebugError = error;
+      _appendLocalLine(error);
+    }
+    if (!running) {
+      _debugPollTimer?.cancel();
+      _debugPollTimer = null;
     }
   }
 
@@ -366,16 +487,28 @@ class _AdbPageState extends State<AdbPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.settings_remote),
-                        onPressed: () {},
-                        label: const Text("\u6253\u5f00\u8c03\u8bd5"),
+                        icon: Icon(_wirelessDebugEnabled
+                            ? Icons.stop
+                            : Icons.settings_remote),
+                        style: _wirelessDebugEnabled
+                            ? ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              )
+                            : null,
+                        onPressed: _toggleWirelessDebug,
+                        label: Text(_debugBusy
+                            ? "\u505c\u6b62\u6267\u884c"
+                            : _wirelessDebugEnabled
+                                ? "\u5173\u95ed\u8c03\u8bd5"
+                                : "\u6253\u5f00\u8c03\u8bd5"),
                       ),
                     ),
                   ],
                 ),
               ),
               _AdbTerminalCard(
-                busy: _busy || (_serviceRequested && !_shellReady),
+                busy: _debugBusy || _busy || (_serviceRequested && !_shellReady),
                 controller: _terminalController,
                 text: _terminalText,
               ),
