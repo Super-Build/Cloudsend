@@ -52,9 +52,7 @@ object CloudSendAdbManager {
         val currentRunner = currentRunner(context)
         currentRunner.pair(port, code)
         val next = updateFromRunner(currentRunner, preservePaired = false)
-        if (next.paired) {
-            setPairedBefore(context, true)
-        }
+        setPairedBefore(context, next.paired)
         return next
     }
 

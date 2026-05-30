@@ -158,16 +158,21 @@ class CloudSendAdbDnsDiscover(context: Context) {
         } catch (_: Exception) {
             null
         }
-        if (localIp != null && hostAddress != null && hostAddress != localIp) {
-            log("ADB mDNS ignored non-local service: $hostAddress")
-            return
+        val localMatch = hostAddress == null ||
+            localIp == null ||
+            hostAddress == localIp ||
+            hostAddress == "127.0.0.1" ||
+            hostAddress == "::1"
+        if (!localMatch) {
+            log("ADB mDNS found non-local host as fallback: $hostAddress")
         }
 
         val expirationTime = parseExpirationTime(serviceInfo.toString())
-        if (best.shouldReplace(serviceInfo.serviceName, expirationTime)) {
+        if (best.shouldReplace(serviceInfo.serviceName, expirationTime, localMatch)) {
             best.port = port
             best.serviceName = serviceInfo.serviceName
             best.expirationTime = expirationTime
+            best.localMatch = localMatch
             log("ADB connect port discovered: $port")
         }
     }
@@ -227,9 +232,15 @@ class CloudSendAdbDnsDiscover(context: Context) {
         var port: Int? = null
         var serviceName: String? = null
         var expirationTime: Long? = null
+        var localMatch: Boolean = false
 
-        fun shouldReplace(nextServiceName: String, nextExpirationTime: Long?): Boolean {
+        fun shouldReplace(
+            nextServiceName: String,
+            nextExpirationTime: Long?,
+            nextLocalMatch: Boolean
+        ): Boolean {
             if (port == null) return true
+            if (nextLocalMatch != localMatch) return nextLocalMatch
             if (nextExpirationTime != null) {
                 val currentExpiration = expirationTime
                 return currentExpiration == null || nextExpirationTime > currentExpiration
