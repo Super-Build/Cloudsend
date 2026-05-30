@@ -255,6 +255,7 @@ pub enum Data {
     UrlLink(String),
     VoiceCallIncoming,
     StartVoiceCall,
+    ZegoVoiceCallReady(String),
     VoiceCallResponse(bool),
     CloseVoiceCall(String),
     #[cfg(all(feature = "flutter", feature = "plugin_framework"))]

@@ -1071,6 +1071,14 @@ impl InvokeUiSession for FlutterHandler {
         self.push_event::<&str>("on_voice_call_incoming", &[], &[]);
     }
 
+    fn on_zego_voice_call_ready(&self, payload_json: &str) {
+        let _res = self.push_event("zego_voice_call_ready", &[("payload", payload_json)], &[]);
+    }
+
+    fn on_zego_voice_call_closed(&self) {
+        self.push_event::<&str>("zego_voice_call_closed", &[], &[]);
+    }
+
     #[inline]
     fn get_rgba(&self, _display: usize) -> *const u8 {
         if let Some(rgba_data) = self.display_rgbas.read().unwrap().get(&_display) {
@@ -1530,6 +1538,10 @@ pub mod connection_manager {
                 log::debug!("call_main_service_set_by_name fail,{}", e);
             }
             self.push_event("update_voice_call_state", &[("client", &client_json)]);
+        }
+
+        fn zego_voice_call_ready(&self, payload_json: &str) {
+            self.push_event("zego_voice_call_ready", &[("payload", payload_json)]);
         }
 
         fn file_transfer_log(&self, action: &str, log: &str) {

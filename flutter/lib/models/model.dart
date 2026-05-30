@@ -24,6 +24,7 @@ import 'package:flutter_hbb/models/user_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/models/desktop_render_texture.dart';
 import 'package:flutter_hbb/models/terminal_model.dart';
+import 'package:flutter_hbb/models/zego_voice_call_model.dart';
 import 'package:flutter_hbb/plugin/event.dart';
 import 'package:flutter_hbb/plugin/manager.dart';
 import 'package:flutter_hbb/plugin/widgets/desc_ui.dart';
@@ -482,6 +483,12 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'on_voice_call_incoming') {
         // Voice call is requested by the peer.
         parent.target?.chatModel.onVoiceCallIncoming();
+      } else if (name == 'zego_voice_call_ready') {
+        final payload = evt['payload']?.toString() ?? '';
+        unawaited(parent.target?.zegoVoiceCallModel.joinFromJson(payload) ??
+            Future.value());
+      } else if (name == 'zego_voice_call_closed') {
+        unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
       } else if (name == 'update_voice_call_state') {
         parent.target?.serverModel.updateVoiceCallState(evt);
       } else if (name == 'fingerprint') {
@@ -3196,6 +3203,7 @@ class FFI {
   late final CanvasModel canvasModel; // session
   late final ServerModel serverModel; // global
   late final ChatModel chatModel; // session
+  late final ZegoVoiceCallModel zegoVoiceCallModel; // session
   late final FileModel fileModel; // session
   late final AbModel abModel; // global
   late final GroupModel groupModel; // global
@@ -3226,6 +3234,7 @@ class FFI {
     canvasModel = CanvasModel(WeakReference(this));
     serverModel = ServerModel(WeakReference(this));
     chatModel = ChatModel(WeakReference(this));
+    zegoVoiceCallModel = ZegoVoiceCallModel();
     fileModel = FileModel(WeakReference(this));
     userModel = UserModel(WeakReference(this));
     peerTabModel = PeerTabModel(WeakReference(this));
@@ -3499,6 +3508,7 @@ class FFI {
   Future<void> close({bool closeSession = true}) async {
     closed = true;
     chatModel.close();
+    await zegoVoiceCallModel.leave();
     // Close all terminal models
     for (final model in _terminalModels.values) {
       model.dispose();

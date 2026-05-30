@@ -56,6 +56,44 @@ Current canonical keywords:
 
 Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, `librustdesk.dll`, or `rustdesk_core_main` in Android/PC work.
 
+## ZEGO Voice Call Entrypoints (2026-05-31)
+
+For CloudSend third-party 1v1 voice call tasks, start here:
+
+- `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+- `libs/hbb_common/protos/message.proto`
+- `src/client/helper.rs`
+- `src/client/io_loop.rs`
+- `src/server/connection.rs`
+- `src/ipc.rs`
+- `src/ui_cm_interface.rs`
+- `src/flutter.rs`
+- `src/ui_session_interface.rs`
+- `flutter/lib/models/zego_voice_call_model.dart`
+- `flutter/lib/models/model.dart`
+- `flutter/lib/models/chat_model.dart`
+- `flutter/lib/models/server_model.dart`
+- `flutter/lib/desktop/widgets/remote_toolbar.dart`
+- `flutter/pubspec.yaml`
+
+Current canonical keywords:
+
+- `ZegoVoiceCallInfo`
+- `request_zego_voice_call_info`
+- `new_zego_voice_call_request`
+- `ZegoVoiceCallModel`
+- `zego_voice_call_ready`
+- `zego_voice_call_closed`
+- `Data::ZegoVoiceCallReady`
+- `cloudsend-zego-token-url`
+- `cloudsend-zego-token-api-key`
+
+Boundary:
+
+- ZEGO voice-call work must not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless the future task explicitly proves those systems are involved.
+- The original RustDesk voice-call media path must remain hidden from the CloudSend PC toolbar voice button.
+
 Android visible app name tasks must start from:
 
 - `flutter/android/app/src/main/res/values/strings.xml` (`app_name`)

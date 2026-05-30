@@ -15,7 +15,8 @@ use crate::platform::WallPaperRemover;
 use crate::portable_service::client as portable_client;
 use crate::{
     client::{
-        new_voice_call_request, new_voice_call_response, start_audio_thread, MediaData, MediaSender,
+        new_voice_call_request, new_voice_call_response, start_audio_thread, MediaData,
+        MediaSender, ZegoVoiceCallInfo,
     },
     display_service, ipc, privacy_mode, video_service, VERSION,
 };
@@ -286,6 +287,7 @@ pub struct Connection {
     from_switch: bool,
     voice_call_request_timestamp: Option<NonZeroI64>,
     voice_calling: bool,
+    pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
     options_in_login: Option<OptionMessage>,
     #[cfg(not(any(target_os = "ios")))]
     pressed_modifiers: HashSet<rdev::Key>,
@@ -450,6 +452,7 @@ impl Connection {
             audio_sender: None,
             voice_call_request_timestamp: None,
             voice_calling: false,
+            pending_zego_voice_call: None,
             options_in_login: None,
             #[cfg(not(any(target_os = "ios")))]
             pressed_modifiers: Default::default(),
@@ -2956,6 +2959,18 @@ impl Connection {
                             NonZeroI64::new(request.req_timestamp)
                                 .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
                         );
+                        self.pending_zego_voice_call = Some(ZegoVoiceCallInfo {
+                            rtc_provider: request.rtc_provider.clone(),
+                            app_id: request.app_id,
+                            room_id: request.room_id.clone(),
+                            caller_user_id: request.caller_user_id.clone(),
+                            callee_user_id: request.callee_user_id.clone(),
+                            caller_stream_id: request.caller_stream_id.clone(),
+                            callee_stream_id: request.callee_stream_id.clone(),
+                            caller_token: request.caller_token.clone(),
+                            callee_token: request.callee_token.clone(),
+                            expires_at: request.expires_at,
+                        });
                         // Notify the connection manager.
                         self.send_to_cm(Data::VoiceCallIncoming);
                     } else {
@@ -3280,42 +3295,32 @@ impl Connection {
         if let Some(ts) = self.voice_call_request_timestamp.take() {
             let msg = new_voice_call_response(ts.get(), accepted);
             if accepted {
-                crate::audio_service::set_voice_call_input_device(
-                    crate::get_default_sound_input(),
-                    false,
-                );
                 self.send_to_cm(Data::StartVoiceCall);
+                if let Some(info) = self.pending_zego_voice_call.clone() {
+                    self.send_to_cm(Data::ZegoVoiceCallReady(info.callee_payload_json()));
+                } else {
+                    log::warn!("Accepted ZEGO voice call without pending payload");
+                }
             } else {
+                self.pending_zego_voice_call = None;
                 self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
             }
             self.send(msg).await;
-            self.voice_calling = accepted;
-            if self.is_authed_view_camera_conn() {
-                if let Some(s) = self.server.upgrade() {
-                    s.write().unwrap().subscribe(
-                        super::audio_service::NAME,
-                        self.inner.clone(),
-                        self.audio_enabled() && accepted,
-                    );
-                }
-            }
+            // CloudSend ZEGO calls use Flutter/ZEGO for media. Keep the legacy
+            // audio_service voice-call flag off so permission/option updates
+            // cannot subscribe the old RustDesk audio path by accident.
+            self.voice_calling = false;
         } else {
             log::warn!("Possible a voice call attack.");
         }
     }
 
     pub async fn close_voice_call(&mut self) {
-        crate::audio_service::set_voice_call_input_device(None, true);
         // Notify the connection manager that the voice call has been closed.
         self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
         self.voice_calling = false;
-        if self.is_authed_view_camera_conn() {
-            if let Some(s) = self.server.upgrade() {
-                s.write()
-                    .unwrap()
-                    .subscribe(super::audio_service::NAME, self.inner.clone(), false);
-            }
-        }
+        self.voice_call_request_timestamp = None;
+        self.pending_zego_voice_call = None;
     }
 
     async fn update_options(&mut self, o: &OptionMessage) {

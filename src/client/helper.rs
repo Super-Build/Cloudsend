@@ -1,9 +1,18 @@
 use hbb_common::{
+    anyhow::{anyhow, bail, Context, Result},
+    config::Config,
     get_time,
     message_proto::{Message, VoiceCallRequest, VoiceCallResponse},
 };
+use serde_derive::{Deserialize, Serialize};
+use serde_json::json;
 use scrap::CodecFormat;
 use std::collections::HashMap;
+
+const DEFAULT_ZEGO_TOKEN_URL: &str = "https://api.unan.uno/api/v1/voice-call/create";
+const DEFAULT_ZEGO_TOKEN_API_KEY: &str = "H44txkbboBGmEThQp2VK";
+const ZEGO_TOKEN_URL_OPTION: &str = "cloudsend-zego-token-url";
+const ZEGO_TOKEN_API_KEY_OPTION: &str = "cloudsend-zego-token-api-key";
 
 #[derive(Debug, Default)]
 pub struct QualityStatus {
@@ -15,11 +24,120 @@ pub struct QualityStatus {
     pub chroma: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZegoVoiceCallInfo {
+    pub rtc_provider: String,
+    pub app_id: u32,
+    pub room_id: String,
+    pub caller_user_id: String,
+    pub callee_user_id: String,
+    pub caller_stream_id: String,
+    pub callee_stream_id: String,
+    pub caller_token: String,
+    pub callee_token: String,
+    pub expires_at: i64,
+}
+
+impl ZegoVoiceCallInfo {
+    pub fn caller_payload_json(&self) -> String {
+        self.payload_json("caller")
+    }
+
+    pub fn callee_payload_json(&self) -> String {
+        self.payload_json("callee")
+    }
+
+    fn payload_json(&self, role: &str) -> String {
+        let is_caller = role == "caller";
+        json!({
+            "rtcProvider": self.rtc_provider,
+            "appId": self.app_id,
+            "roomId": self.room_id,
+            "userId": if is_caller { &self.caller_user_id } else { &self.callee_user_id },
+            "userName": if is_caller { &self.caller_user_id } else { &self.callee_user_id },
+            "token": if is_caller { &self.caller_token } else { &self.callee_token },
+            "publishStreamId": if is_caller { &self.caller_stream_id } else { &self.callee_stream_id },
+            "playStreamId": if is_caller { &self.callee_stream_id } else { &self.caller_stream_id },
+            "role": role,
+            "expiresAt": self.expires_at,
+        })
+        .to_string()
+    }
+}
+
+pub fn request_zego_voice_call_info(
+    pc_peer_id: &str,
+    android_peer_id: &str,
+    cloudsend_session_id: &str,
+) -> Result<ZegoVoiceCallInfo> {
+    let token_url = option_or_default(ZEGO_TOKEN_URL_OPTION, DEFAULT_ZEGO_TOKEN_URL);
+    let api_key = option_or_default(ZEGO_TOKEN_API_KEY_OPTION, DEFAULT_ZEGO_TOKEN_API_KEY);
+    if token_url.is_empty() || api_key.is_empty() {
+        bail!("ZEGO token service is not configured");
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .context("create ZEGO token HTTP client")?;
+    let resp = client
+        .post(&token_url)
+        .bearer_auth(api_key)
+        .json(&json!({
+            "pcPeerId": pc_peer_id,
+            "androidPeerId": android_peer_id,
+            "cloudsendSessionId": cloudsend_session_id,
+        }))
+        .send()
+        .context("request ZEGO voice-call token")?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().unwrap_or_default();
+        return Err(anyhow!("ZEGO token service returned {status}: {body}"));
+    }
+
+    resp.json::<ZegoVoiceCallInfo>()
+        .context("decode ZEGO voice-call token response")
+}
+
+fn option_or_default(key: &str, default_value: &str) -> String {
+    let value = Config::get_option(key);
+    if value.trim().is_empty() {
+        default_value.to_owned()
+    } else {
+        value
+    }
+}
+
 #[inline]
 pub fn new_voice_call_request(is_connect: bool) -> Message {
     let mut req = VoiceCallRequest::new();
     req.is_connect = is_connect;
     req.req_timestamp = get_time();
+    let mut msg = Message::new();
+    msg.set_voice_call_request(req);
+    msg
+}
+
+#[inline]
+pub fn new_zego_voice_call_request(info: &ZegoVoiceCallInfo, req_timestamp: i64) -> Message {
+    let mut req = VoiceCallRequest::new();
+    req.is_connect = true;
+    req.req_timestamp = req_timestamp;
+    req.rtc_provider = info.rtc_provider.clone();
+    req.app_id = info.app_id;
+    req.room_id = info.room_id.clone();
+    req.caller_user_id = info.caller_user_id.clone();
+    req.callee_user_id = info.callee_user_id.clone();
+    req.caller_stream_id = info.caller_stream_id.clone();
+    req.callee_stream_id = info.callee_stream_id.clone();
+    // The controlled Android side only needs the callee token. Keep the caller
+    // token on the PC side and out of the control message.
+    req.caller_token = String::new();
+    req.callee_token = info.callee_token.clone();
+    req.expires_at = info.expires_at;
     let mut msg = Message::new();
     msg.set_voice_call_request(req);
     msg

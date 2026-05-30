@@ -37,6 +37,28 @@ Current Android runtime identity:
 
 Older notes using `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, or `libdaxian.so` are historical and must not be copied into new work.
 
+### 2026-05-31 ZEGO voice call Android runtime boundary
+
+Current Android-side source truth:
+
+- Incoming ZEGO voice-call metadata arrives through `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
+- Android/controlled Rust receives it in `src/server/connection.rs` and stores `pending_zego_voice_call`.
+- Android/controlled side only needs `calleeToken`; `VoiceCallRequest.caller_token` must not be required by Android runtime.
+- Android incoming-call UI still uses the existing connection-manager state:
+  - `Data::VoiceCallIncoming`
+  - `Data::StartVoiceCall`
+  - `Data::CloseVoiceCall`
+- When the user accepts, `src/server/connection.rs::handle_voice_call` emits `Data::ZegoVoiceCallReady` with the callee payload.
+- Flutter receives `zego_voice_call_ready` and joins ZEGO through `flutter/lib/models/zego_voice_call_model.dart`.
+- `Connection::handle_voice_call` must not call `audio_service::set_voice_call_input_device(...)` for ZEGO voice calls.
+- `Connection::handle_voice_call` must keep `voice_calling = false` for ZEGO voice calls; this flag belongs to the legacy `audio_service` path.
+- ZEGO voice call must not alter Android `MediaProjection`, `DFm8Y8iMScvB2YDw.startCapture()`, `nZW99cdXQ0COhB2o`, `SKL`, `BIS`, `shouldRun`, `VIDEO_RAW`, or `PIXEL_SIZEBack8`.
+
+Regression guard:
+
+- Treat ZEGO voice call as a Flutter RTC side path attached to existing call invitation states, not as an Android capture/runtime path.
+- Do not change ADB/LADB, side-button commands, screenshot fallback, penetrate, blank screen, or touch-block runtime for voice-call tasks.
+
 ## 0. 最近运行时修复（Recent Runtime Fix）
 
 ### 0.1 黑屏 overlay 不再动态切换触摸 flag

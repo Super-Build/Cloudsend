@@ -1875,34 +1875,7 @@ class _VoiceCallMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     menuChildrenGetter() {
-      final audioInput = AudioInput(
-        builder: (devices, currentDevice, setDevice) {
-          return Column(
-            children: devices
-                .map((d) => RdoMenuButton<String>(
-                      child: Container(
-                        child: Text(
-                          d,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        constraints: BoxConstraints(maxWidth: 250),
-                      ),
-                      value: d,
-                      groupValue: currentDevice,
-                      onChanged: (v) {
-                        if (v != null) setDevice(v);
-                      },
-                      ffi: ffi,
-                    ))
-                .toList(),
-          );
-        },
-        isCm: false,
-        isVoiceCall: true,
-      );
       return [
-        audioInput,
-        Divider(),
         MenuButton(
           child: Text(translate('End call')),
           onPressed: () => bind.sessionCloseVoiceCall(sessionId: ffi.sessionId),

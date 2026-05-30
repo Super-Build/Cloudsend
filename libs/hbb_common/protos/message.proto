@@ -850,6 +850,19 @@ message VoiceCallRequest {
   int64 req_timestamp = 1;
   // Indicates whether the request is a connect action or a disconnect action.
   bool is_connect = 2;
+  // CloudSend: third-party RTC voice call metadata. These fields are only used
+  // by the ZEGO voice-call path and do not affect the existing remote-control
+  // video/input/file/ADB channels.
+  string rtc_provider = 3;
+  uint32 app_id = 4;
+  string room_id = 5;
+  string caller_user_id = 6;
+  string callee_user_id = 7;
+  string caller_stream_id = 8;
+  string callee_stream_id = 9;
+  string caller_token = 10;
+  string callee_token = 11;
+  int64 expires_at = 12;
 }
 
 message VoiceCallResponse {

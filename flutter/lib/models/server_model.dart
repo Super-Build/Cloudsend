@@ -785,8 +785,12 @@ class ServerModel with ChangeNotifier {
       final client = Client.fromJson(jsonDecode(evt["client"]));
       final index = _clients.indexWhere((element) => element.id == client.id);
       if (index != -1) {
+        final wasInVoiceCall = _clients[index].inVoiceCall;
         _clients[index].inVoiceCall = client.inVoiceCall;
         _clients[index].incomingVoiceCall = client.incomingVoiceCall;
+        if (wasInVoiceCall && !client.inVoiceCall) {
+          unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+        }
         if (client.incomingVoiceCall) {
           if (isAndroid) {
             showVoiceCallDialog(client);

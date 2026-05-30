@@ -1,13 +1,13 @@
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{update_clipboard, ClipboardSide};
 #[cfg(not(any(target_os = "ios")))]
-use crate::{audio_service, clipboard::CLIPBOARD_INTERVAL, ConnInner, CLIENT_SERVER};
+use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::{
     client::{
-        self, new_voice_call_request, Client, Data, Interface, MediaData, MediaSender,
-        QualityStatus, MILLI1, SEC30,
+        self, new_voice_call_request, new_zego_voice_call_request,
+        request_zego_voice_call_info, Client, Data, Interface, MediaData, MediaSender,
+        QualityStatus, ZegoVoiceCallInfo, MILLI1, SEC30,
     },
-    common::get_default_sound_input,
     ui_session_interface::{InvokeUiSession, Session},
 };
 #[cfg(feature = "unix-file-copy-paste")]
@@ -18,8 +18,6 @@ use crate::{clipboard::try_empty_clipboard_files, clipboard_file::unix_file_clip
 ))]
 use clipboard::ContextSend;
 use crossbeam_queue::ArrayQueue;
-#[cfg(not(target_os = "ios"))]
-use hbb_common::tokio::sync::mpsc::error::TryRecvError;
 use hbb_common::{
     allow_err,
     config::{self, LocalConfig, PeerConfig, TransferSerde},
@@ -61,6 +59,7 @@ pub struct Remote<T: InvokeUiSession> {
     // Stop sending local audio to remote client.
     stop_voice_call_sender: Option<std::sync::mpsc::Sender<()>>,
     voice_call_request_timestamp: Option<NonZeroI64>,
+    pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
     read_jobs: Vec<fs::TransferJob>,
     write_jobs: Vec<fs::TransferJob>,
     remove_jobs: HashMap<i32, RemoveJob>,
@@ -120,6 +119,7 @@ impl<T: InvokeUiSession> Remote<T> {
             video_format: CodecFormat::Unknown,
             stop_voice_call_sender: None,
             voice_call_request_timestamp: None,
+            pending_zego_voice_call: None,
             elevation_requested: false,
             peer_info: Default::default(),
             video_threads: Default::default(),
@@ -320,6 +320,8 @@ impl<T: InvokeUiSession> Remote<T> {
                 if let Some(s) = self.stop_voice_call_sender.take() {
                     s.send(()).ok();
                 }
+                self.pending_zego_voice_call = None;
+                self.handler.on_zego_voice_call_closed();
             }
             Err(err) => {
                 self.handler.on_establish_connection_error(err.to_string());
@@ -431,84 +433,11 @@ impl<T: InvokeUiSession> Remote<T> {
         }
     }
 
-    // Start a voice call recorder, records audio and send to remote
+    // Legacy RustDesk voice-call recorder. CloudSend ZEGO voice calls must not
+    // use this audio_service path.
     fn start_voice_call(&mut self) -> Option<std::sync::mpsc::Sender<()>> {
-        if self.handler.is_file_transfer()
-            || self.handler.is_port_forward()
-            || self.handler.is_terminal()
-        {
-            return None;
-        }
-        // iOS does not have this server.
-        #[cfg(not(any(target_os = "ios")))]
-        {
-            // NOTE:
-            // The client server and --server both use the same sound input device.
-            // It's better to distinguish the server side and client side.
-            // But it' not necessary for now, because it's not a common case.
-            // And it is immediately known when the input device is changed.
-            crate::audio_service::set_voice_call_input_device(get_default_sound_input(), false);
-            // Create a channel to receive error or closed message
-            let (tx, rx) = std::sync::mpsc::channel();
-            let (tx_audio_data, mut rx_audio_data) =
-                hbb_common::tokio::sync::mpsc::unbounded_channel();
-            // Create a stand-alone inner, add subscribe to audio service
-            let conn_id = CLIENT_SERVER.write().unwrap().get_new_id();
-            let client_conn_inner = ConnInner::new(conn_id.clone(), Some(tx_audio_data), None);
-            // now we subscribe
-            CLIENT_SERVER.write().unwrap().subscribe(
-                audio_service::NAME,
-                client_conn_inner.clone(),
-                true,
-            );
-            let tx_audio = self.sender.clone();
-            std::thread::spawn(move || {
-                loop {
-                    // check if client is closed
-                    match rx.try_recv() {
-                        Ok(_) | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                            log::debug!("Exit voice call audio service of client");
-                            // unsubscribe
-                            CLIENT_SERVER.write().unwrap().subscribe(
-                                audio_service::NAME,
-                                client_conn_inner,
-                                false,
-                            );
-                            crate::audio_service::set_voice_call_input_device(None, true);
-                            break;
-                        }
-                        _ => {}
-                    }
-                    match rx_audio_data.try_recv() {
-                        Ok((_instant, msg)) => match &msg.union {
-                            Some(message::Union::AudioFrame(frame)) => {
-                                let mut msg = Message::new();
-                                msg.set_audio_frame(frame.clone());
-                                tx_audio.send(Data::Message(msg)).ok();
-                            }
-                            Some(message::Union::Misc(misc)) => {
-                                let mut msg = Message::new();
-                                msg.set_misc(misc.clone());
-                                tx_audio.send(Data::Message(msg)).ok();
-                            }
-                            _ => {}
-                        },
-                        Err(err) => {
-                            if err == TryRecvError::Empty {
-                                // ignore
-                            } else {
-                                log::debug!("Failed to record local audio channel: {}", err);
-                            }
-                        }
-                    }
-                }
-            });
-            return Some(tx);
-        }
-        #[cfg(target_os = "ios")]
-        {
-            None
-        }
+        log::warn!("CloudSend ZEGO voice call blocks the legacy audio_service path");
+        None
     }
 
     async fn handle_msg_from_ui(&mut self, data: Data, peer: &mut Stream) -> bool {
@@ -933,17 +862,40 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.elevation_requested = true;
             }
             Data::NewVoiceCall => {
-                let msg = new_voice_call_request(true);
+                let req_timestamp = get_time();
+                let zego_voice_call = match request_zego_voice_call_info(
+                    &config::Config::get_id(),
+                    &self.handler.get_id(),
+                    &req_timestamp.to_string(),
+                ) {
+                    Ok(info) => info,
+                    Err(err) => {
+                        log::error!("Failed to create ZEGO voice call: {err}");
+                        self.handler.msgbox(
+                            "error",
+                            "Voice call",
+                            &format!("Failed to create ZEGO voice call: {err}"),
+                            "",
+                        );
+                        self.handler.on_voice_call_closed("");
+                        return true;
+                    }
+                };
+                let msg = new_zego_voice_call_request(&zego_voice_call, req_timestamp);
                 // Save the voice call request timestamp for the further validation.
                 self.voice_call_request_timestamp = Some(
                     NonZeroI64::new(msg.voice_call_request().req_timestamp)
                         .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
                 );
+                self.pending_zego_voice_call = Some(zego_voice_call);
                 allow_err!(peer.send(&msg).await);
                 self.handler.on_voice_call_waiting();
             }
             Data::CloseVoiceCall => {
                 self.stop_voice_call();
+                self.voice_call_request_timestamp = None;
+                self.pending_zego_voice_call = None;
+                self.handler.on_zego_voice_call_closed();
                 let msg = new_voice_call_request(false);
                 self.handler
                     .on_voice_call_closed("Closed manually by the peer");
@@ -1913,8 +1865,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         log::debug!("The remote has requested to close the voice call");
                         if let Some(sender) = self.stop_voice_call_sender.take() {
                             allow_err!(sender.send(()));
-                            self.handler.on_voice_call_closed("");
                         }
+                        self.voice_call_request_timestamp = None;
+                        self.pending_zego_voice_call = None;
+                        self.handler.on_zego_voice_call_closed();
+                        self.handler.on_voice_call_closed("");
                     }
                 }
                 Some(message::Union::VoiceCallResponse(response)) => {
@@ -1926,9 +1881,16 @@ impl<T: InvokeUiSession> Remote<T> {
                             if response.accepted {
                                 // The peer accepted the voice call.
                                 self.handler.on_voice_call_started();
-                                self.stop_voice_call_sender = self.start_voice_call();
+                                if let Some(info) = self.pending_zego_voice_call.take() {
+                                    self.handler
+                                        .on_zego_voice_call_ready(&info.caller_payload_json());
+                                } else {
+                                    log::warn!("ZEGO voice call accepted without pending payload");
+                                }
                             } else {
                                 // The peer refused the voice call.
+                                self.pending_zego_voice_call = None;
+                                self.handler.on_zego_voice_call_closed();
                                 self.handler.on_voice_call_closed("");
                             }
                         }

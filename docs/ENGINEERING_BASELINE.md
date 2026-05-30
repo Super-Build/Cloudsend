@@ -694,6 +694,39 @@ Feature gate：
 
 ---
 
+## 7.1 2026-05-31 ZEGO voice call baseline
+
+Current source truth:
+
+- CloudSend 1v1 voice call now uses ZEGO RTC for media transport.
+- Existing RustDesk voice-call UI/control states remain as the invitation shell:
+  - `VoiceCallRequest`
+  - `VoiceCallResponse`
+  - `VoiceCallIncoming`
+  - `StartVoiceCall`
+  - `CloseVoiceCall`
+- Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
+- PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
+- PC/controller sends ZEGO metadata from `src/client/io_loop.rs::Data::NewVoiceCall`.
+- `src/client/helper.rs::new_zego_voice_call_request` does not send the real caller token; `callerToken` stays in PC memory, Android only receives `calleeToken`.
+- PC/controller no longer starts old audio capture through `Remote::start_voice_call()` after `VoiceCallResponse.accepted`.
+- `src/client/io_loop.rs::Remote::start_voice_call` is a legacy guard for CloudSend and returns `None`; the ZEGO voice button must not send old RustDesk `AudioFrame` packets.
+- Android/controlled side stores ZEGO callee metadata in `src/server/connection.rs` and emits `Data::ZegoVoiceCallReady` when the user accepts.
+- Android/controlled side no longer calls `audio_service::set_voice_call_input_device(...)` from `Connection::handle_voice_call`.
+- Android/controlled side keeps `Connection::voice_calling = false` for ZEGO calls so audio permission/option updates cannot subscribe the legacy `audio_service` path.
+- Flutter joins/leaves ZEGO room through `flutter/lib/models/zego_voice_call_model.dart`.
+- Flutter emits visible/debug diagnostics such as `ZEGO voice: loginRoom errorCode=0`, `publishing stream=...`, and `playing stream=...`.
+- PC toolbar no longer shows old `AudioInput(isVoiceCall: true)` under `_VoiceCallMenu`.
+- Token service deployment and operational contract are documented in `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
+- Project integration map is documented in `docs/ZEGO_VOICE_CALL_INTEGRATION.md`.
+
+Isolation rule:
+
+- Do not modify video frame paths, `MediaProjection`, ADB/LADB, side-button commands, file transfer, clipboard, terminal, or port-forwarding for ZEGO voice-call changes unless a future bug is proven in that subsystem.
+- Do not place `ZEGO_SERVER_SECRET` in PC, Android, Flutter, Rust client code, or Git-tracked docs.
+
+---
+
 ## 8. 后续文档维护标准（How to Keep This Baseline Healthy）
 
 修改后如果以下任一项变化，必须同步本文件：

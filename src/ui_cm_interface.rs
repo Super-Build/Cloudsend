@@ -107,6 +107,7 @@ pub trait InvokeUiCM: Send + Clone + 'static + Sized {
     fn show_elevation(&self, show: bool);
 
     fn update_voice_call_state(&self, client: &Client);
+    fn zego_voice_call_ready(&self, _payload_json: &str) {}
 
     fn file_transfer_log(&self, action: &str, log: &str);
 }
@@ -253,6 +254,10 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             client.in_voice_call = false;
             self.ui_handler.update_voice_call_state(client);
         }
+    }
+
+    fn zego_voice_call_ready(&self, payload_json: &str) {
+        self.ui_handler.zego_voice_call_ready(payload_json);
     }
 }
 
@@ -495,6 +500,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                 Data::StartVoiceCall => {
                                     self.cm.voice_call_started(self.conn_id);
                                 }
+                                Data::ZegoVoiceCallReady(payload_json) => {
+                                    self.cm.zego_voice_call_ready(payload_json.as_str());
+                                }
                                 Data::VoiceCallIncoming => {
                                     self.cm.voice_call_incoming(self.conn_id);
                                 }
@@ -726,6 +734,9 @@ pub async fn start_listen<T: InvokeUiCM>(
             }
             Some(Data::StartVoiceCall) => {
                 cm.voice_call_started(current_id);
+            }
+            Some(Data::ZegoVoiceCallReady(payload_json)) => {
+                cm.zego_voice_call_ready(payload_json.as_str());
             }
             Some(Data::VoiceCallIncoming) => {
                 cm.voice_call_incoming(current_id);
