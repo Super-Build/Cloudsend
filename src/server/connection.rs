@@ -288,6 +288,7 @@ pub struct Connection {
     voice_call_request_timestamp: Option<NonZeroI64>,
     voice_calling: bool,
     pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
+    zego_voice_call_active: bool,
     options_in_login: Option<OptionMessage>,
     #[cfg(not(any(target_os = "ios")))]
     pressed_modifiers: HashSet<rdev::Key>,
@@ -453,6 +454,7 @@ impl Connection {
             voice_call_request_timestamp: None,
             voice_calling: false,
             pending_zego_voice_call: None,
+            zego_voice_call_active: false,
             options_in_login: None,
             #[cfg(not(any(target_os = "ios")))]
             pressed_modifiers: Default::default(),
@@ -2955,11 +2957,22 @@ impl Connection {
                 }
                 Some(message::Union::VoiceCallRequest(request)) => {
                     if request.is_connect {
+                        if self.zego_voice_call_active
+                            || self.voice_call_request_timestamp.is_some()
+                            || self.pending_zego_voice_call.is_some()
+                        {
+                            log::warn!(
+                                "Rejecting ZEGO voice call while another call is pending or active"
+                            );
+                            self.send(new_voice_call_response(request.req_timestamp, false))
+                                .await;
+                            return true;
+                        }
                         self.voice_call_request_timestamp = Some(
                             NonZeroI64::new(request.req_timestamp)
                                 .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
                         );
-                        self.pending_zego_voice_call = Some(ZegoVoiceCallInfo {
+                        let zego_voice_call = ZegoVoiceCallInfo {
                             rtc_provider: request.rtc_provider.clone(),
                             app_id: request.app_id,
                             room_id: request.room_id.clone(),
@@ -2970,7 +2983,19 @@ impl Connection {
                             caller_token: request.caller_token.clone(),
                             callee_token: request.callee_token.clone(),
                             expires_at: request.expires_at,
-                        });
+                        };
+                        if !zego_voice_call.is_valid_callee_invite() {
+                            log::warn!(
+                                "Rejecting voice call without a valid CloudSend ZEGO payload"
+                            );
+                            self.voice_call_request_timestamp = None;
+                            self.pending_zego_voice_call = None;
+                            self.zego_voice_call_active = false;
+                            self.send(new_voice_call_response(request.req_timestamp, false))
+                                .await;
+                            return true;
+                        }
+                        self.pending_zego_voice_call = Some(zego_voice_call);
                         // Notify the connection manager.
                         self.send_to_cm(Data::VoiceCallIncoming);
                     } else {
@@ -3293,19 +3318,24 @@ impl Connection {
 
     pub async fn handle_voice_call(&mut self, accepted: bool) {
         if let Some(ts) = self.voice_call_request_timestamp.take() {
-            let msg = new_voice_call_response(ts.get(), accepted);
             if accepted {
-                self.send_to_cm(Data::StartVoiceCall);
                 if let Some(info) = self.pending_zego_voice_call.clone() {
+                    self.send_to_cm(Data::StartVoiceCall);
+                    self.zego_voice_call_active = true;
                     self.send_to_cm(Data::ZegoVoiceCallReady(info.callee_payload_json()));
+                    self.send(new_voice_call_response(ts.get(), true)).await;
                 } else {
                     log::warn!("Accepted ZEGO voice call without pending payload");
+                    self.zego_voice_call_active = false;
+                    self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
+                    self.send(new_voice_call_response(ts.get(), false)).await;
                 }
             } else {
                 self.pending_zego_voice_call = None;
+                self.zego_voice_call_active = false;
                 self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
+                self.send(new_voice_call_response(ts.get(), false)).await;
             }
-            self.send(msg).await;
             // CloudSend ZEGO calls use Flutter/ZEGO for media. Keep the legacy
             // audio_service voice-call flag off so permission/option updates
             // cannot subscribe the old RustDesk audio path by accident.
@@ -3319,6 +3349,7 @@ impl Connection {
         // Notify the connection manager that the voice call has been closed.
         self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
         self.voice_calling = false;
+        self.zego_voice_call_active = false;
         self.voice_call_request_timestamp = None;
         self.pending_zego_voice_call = None;
     }
@@ -3643,16 +3674,8 @@ impl Connection {
             return;
         }
         self.closed = true;
-        // If voice A,B -> C, and A,B has voice call
-        // B disconnects, C will reset the voice call input.
-        //
-        // It may be acceptable, because it's not a common case,
-        // and it's immediately known when the input device changes.
-        // C can change the input device manually in cm interface.
-        //
-        // We can add a (Vec<conn_id>, input device) to avoid this.
-        // But it's not necessary now and we have to consider two audio services(client, server).
-        crate::audio_service::set_voice_call_input_device(None, true);
+        // CloudSend voice calls are handled by ZEGO; connection close must not
+        // reset legacy RustDesk audio_service voice-call devices.
         log::info!("#{} Connection closed: {}", self.inner.id(), reason);
         if lock && self.lock_after_session_end && self.keyboard {
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

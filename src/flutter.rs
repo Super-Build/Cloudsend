@@ -1541,6 +1541,12 @@ pub mod connection_manager {
         }
 
         fn zego_voice_call_ready(&self, payload_json: &str) {
+            #[cfg(target_os = "android")]
+            if let Err(e) =
+                call_main_service_set_by_name("zego_voice_call_ready", Some(payload_json), None)
+            {
+                log::debug!("call_main_service_set_by_name fail,{}", e);
+            }
             self.push_event("zego_voice_call_ready", &[("payload", payload_json)]);
         }
 
@@ -1586,9 +1592,6 @@ pub mod connection_manager {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn start_listen_ipc(new_thread: bool) {
         use crate::ui_cm_interface::{start_ipc, ConnectionManager};
-
-        #[cfg(target_os = "linux")]
-        std::thread::spawn(crate::ipc::start_pa);
 
         let cm = ConnectionManager {
             ui_handler: FlutterHandler {},

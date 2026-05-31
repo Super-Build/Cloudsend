@@ -252,7 +252,7 @@ class _RemotePageState extends State<RemotePage>
       _ffi.inputModel.enterOrLeave(false);
     }
     DesktopMultiWindow.removeListener(this);
-    _ffi.dialogManager.hideMobileActionsOverlay();//这里是pc执行
+    _ffi.dialogManager.hideMobileActionsOverlay(); // PC side cleanup.
     _ffi.imageModel.disposeImage();
     _ffi.cursorModel.disposeImages();
     _rawKeyFocusNode.dispose();
@@ -330,7 +330,7 @@ class _RemotePageState extends State<RemotePage>
             children: [
               _ffi.ffiModel.pi.isSet.isTrue &&
                       _ffi.ffiModel.waitForFirstImage.isTrue
-                  ?  /*Obx(() => Offstage(
+                  ? /*Obx(() => Offstage(
                       offstage:
                           _ffi.dialogManager.mobileActionsOverlayVisible.isFalse,
                       child: Overlay(initialEntries: [
@@ -341,7 +341,7 @@ class _RemotePageState extends State<RemotePage>
                         )
                       ]),
                     ))*/
-                   emptyOverlay()
+                  emptyOverlay()
                   : () {
                       if (!_ffi.ffiModel.isPeerAndroid) {
                         return Offstage();
@@ -352,7 +352,8 @@ class _RemotePageState extends State<RemotePage>
                               child: Overlay(initialEntries: [
                                 makeMobileActionsOverlayEntry(
                                   () => _ffi.dialogManager
-                                      .setMobileActionsOverlayVisible(false),//false
+                                      .setMobileActionsOverlayVisible(
+                                          false), //false
                                   ffi: _ffi,
                                 )
                               ]),
@@ -364,6 +365,7 @@ class _RemotePageState extends State<RemotePage>
                   ? Overlay(
                       initialEntries: [OverlayEntry(builder: remoteToolbar)])
                   : remoteToolbar(context),
+              _buildZegoVoiceCallPanel(),
               _ffi.ffiModel.pi.isSet.isFalse ? emptyOverlay() : Offstage(),
             ],
           ),
@@ -399,6 +401,124 @@ class _RemotePageState extends State<RemotePage>
           return bodyWidget();
         }
       }),
+    );
+  }
+
+  Widget _buildZegoVoiceCallPanel() {
+    return AnimatedBuilder(
+      animation: _ffi.zegoVoiceCallModel,
+      builder: (context, _) {
+        final model = _ffi.zegoVoiceCallModel;
+        if (!model.active) return Offstage();
+        return Positioned(
+          right: 24,
+          bottom: 24,
+          child: Material(
+            elevation: 10,
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.transparent,
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor.withOpacity(0.96),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: MyTheme.color(context).border!),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: model.hasError
+                              ? Colors.red
+                              : model.mediaReady
+                                  ? Colors.green
+                                  : Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '\u8bed\u97f3\u901a\u8bdd',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '\u72b6\u6001: ${model.statusText}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '\u623f\u95f4\u53f7: ${model.roomId}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '\u901a\u8bdd\u65f6\u957f: ${formatDurationToTime(model.callDuration)}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '\u672c\u7aef\u97f3\u9891: ${model.localAudioText} / ${model.localAudioQualityText}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '\u8fdc\u7aef\u97f3\u9891: ${model.remoteAudioText} / ${model.remoteAudioQualityText}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  if (model.errorText.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '\u5f02\u5e38\u4fe1\u606f: ${model.errorText}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(92, 34),
+                      ),
+                      onPressed: () =>
+                          bind.sessionCloseVoiceCall(sessionId: sessionId),
+                      icon: const Icon(Icons.call_end, size: 16),
+                      label: const Text('\u6302\u65ad'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

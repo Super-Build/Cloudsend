@@ -13,6 +13,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
+import 'package:flutter_hbb/models/developer_login_bypass_model.dart';
 
 import '../../common.dart';
 import '../../common/formatter/id_formatter.dart';
@@ -366,6 +367,7 @@ class _ConnectionPageState extends State<ConnectionPage>
     Get.put<TextEditingController>(_idEditingController);
     Get.put<IDTextEditingController>(_idController);
     windowManager.addListener(this);
+    HardwareKeyboard.instance.addHandler(_handleDeveloperLoginBypassShortcut);
   }
 
   @override
@@ -382,7 +384,29 @@ class _ConnectionPageState extends State<ConnectionPage>
     if (Get.isRegistered<TextEditingController>()) {
       Get.delete<TextEditingController>();
     }
+    HardwareKeyboard.instance.removeHandler(_handleDeveloperLoginBypassShortcut);
     super.dispose();
+  }
+
+  bool _handleDeveloperLoginBypassShortcut(KeyEvent event) {
+    if (!isDesktop ||
+        desktopType != DesktopType.main ||
+        event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.keyH ||
+        !HardwareKeyboard.instance.isControlPressed ||
+        !HardwareKeyboard.instance.isShiftPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return false;
+    }
+    enableDeveloperLoginBypass();
+    showToast('Developer login bypass enabled');
+    return true;
+  }
+
+  bool _canConnectWithProductLoginState() {
+    return gFFI.userModel.userName.value.isNotEmpty ||
+        developerLoginBypassEnabled.isTrue;
   }
 
   @override
@@ -463,13 +487,15 @@ class _ConnectionPageState extends State<ConnectionPage>
         bool isTerminal = false}) {
         gFFI.userModel.refreshCurrentUser(); 
     
-      if (gFFI.userModel.userName.value.isEmpty) {
+      if (!_canConnectWithProductLoginState()) {
         loginDialog();
         return;
       }
       var id = _idController.id;
       connect(context, id,
-          isFileTransfer: isFileTransfer, isViewCamera: isViewCamera);
+          isFileTransfer: isFileTransfer,
+          isViewCamera: isViewCamera,
+          isTerminal: isTerminal);
     }
 
   /// UI for the remote ID TextField.
@@ -666,6 +692,17 @@ class _ConnectionPageState extends State<ConnectionPage>
                             logOutConfirmDialog();
                           },
                           child: Text(translate("Logout")),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ]);
+                  } else if (developerLoginBypassEnabled.isTrue) {
+                    return Row(children: [
+                      SizedBox(
+                        height: 28.0,
+                        child: ElevatedButton(
+                          onPressed: () {},
+                          child: const Text('Developer bypass'),
                         ),
                       ),
                       const SizedBox(width: 8),

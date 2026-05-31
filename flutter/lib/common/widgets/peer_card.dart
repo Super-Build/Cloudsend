@@ -5,6 +5,7 @@ import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/models/developer_login_bypass_model.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -51,6 +52,20 @@ final peerCardUiType = PeerUiType.grid.obs;
 
 bool? hideUsernameOnCard;
 
+bool canConnectWithProductLoginState() {
+  return gFFI.userModel.userName.value.isNotEmpty ||
+      (isDesktop && developerLoginBypassEnabled.isTrue);
+}
+
+bool requireProductLoginForPeerConnect() {
+  gFFI.userModel.refreshCurrentUser();
+  if (!canConnectWithProductLoginState()) {
+    loginDialog();
+    return false;
+  }
+  return true;
+}
+
 class _PeerCard extends StatefulWidget {
   final Peer peer;
   final PeerTabIndex tab;
@@ -90,10 +105,7 @@ class _PeerCardState extends State<_PeerCard>
     return GestureDetector(
 
         onDoubleTap: () {
-          gFFI.userModel.refreshCurrentUser(); 
-          if (gFFI.userModel.userName.value.isEmpty) {
-            loginDialog();
-          } else {
+          if (requireProductLoginForPeerConnect()) {
             if (peerTabModel.multiSelectionMode) {
 
             } else {
@@ -102,10 +114,7 @@ class _PeerCardState extends State<_PeerCard>
           }
         },
         onTap: () {
-          gFFI.userModel.refreshCurrentUser();  
-          if (gFFI.userModel.userName.value.isEmpty) {
-            loginDialog();
-          } else {
+          if (requireProductLoginForPeerConnect()) {
             if (peerTabModel.multiSelectionMode) {
               peerTabModel.select(peer);
             } else {
@@ -512,10 +521,7 @@ abstract class BasePeerCard extends StatelessWidget {
 
   Future<List<mod_menu.PopupMenuEntry<String>>> _buildPopupMenuEntry(
           BuildContext context) async {
-      gFFI.userModel.refreshCurrentUser();
-
-      if (gFFI.userModel.userName.value.isEmpty) {
-        loginDialog();
+      if (!requireProductLoginForPeerConnect()) {
         return [];
       }
       
@@ -1487,6 +1493,7 @@ void connectInPeerTab(BuildContext context, Peer peer, PeerTabIndex tab,
     bool isTcpTunneling = false,
     bool isRDP = false,
     bool isTerminal = false}) async {
+  if (!requireProductLoginForPeerConnect()) return;
   var password = '';
   bool isSharedPassword = false;
   if (tab == PeerTabIndex.ab) {

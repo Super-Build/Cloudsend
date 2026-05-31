@@ -47,9 +47,32 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, RwLock,
+        Arc, Mutex, RwLock,
     },
 };
+
+static ZEGO_VOICE_CALL_OWNER: Mutex<Option<String>> = Mutex::new(None);
+
+fn try_acquire_zego_voice_call_owner(owner: &str) -> bool {
+    match ZEGO_VOICE_CALL_OWNER.lock() {
+        Ok(mut active_owner) => match active_owner.as_deref() {
+            None => {
+                *active_owner = Some(owner.to_owned());
+                true
+            }
+            Some(_) => false,
+        },
+        Err(_) => false,
+    }
+}
+
+fn release_zego_voice_call_owner(owner: &str) {
+    if let Ok(mut active_owner) = ZEGO_VOICE_CALL_OWNER.lock() {
+        if active_owner.as_deref() == Some(owner) {
+            *active_owner = None;
+        }
+    }
+}
 
 pub struct Remote<T: InvokeUiSession> {
     handler: Session<T>,
@@ -57,9 +80,10 @@ pub struct Remote<T: InvokeUiSession> {
     receiver: mpsc::UnboundedReceiver<Data>,
     sender: mpsc::UnboundedSender<Data>,
     // Stop sending local audio to remote client.
-    stop_voice_call_sender: Option<std::sync::mpsc::Sender<()>>,
     voice_call_request_timestamp: Option<NonZeroI64>,
     pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
+    zego_voice_call_active: bool,
+    zego_voice_call_owner: Option<String>,
     read_jobs: Vec<fs::TransferJob>,
     write_jobs: Vec<fs::TransferJob>,
     remove_jobs: HashMap<i32, RemoveJob>,
@@ -117,9 +141,10 @@ impl<T: InvokeUiSession> Remote<T> {
             client_conn_id: 0,
             data_count: Arc::new(AtomicUsize::new(0)),
             video_format: CodecFormat::Unknown,
-            stop_voice_call_sender: None,
             voice_call_request_timestamp: None,
             pending_zego_voice_call: None,
+            zego_voice_call_active: false,
+            zego_voice_call_owner: None,
             elevation_requested: false,
             peer_info: Default::default(),
             video_threads: Default::default(),
@@ -316,11 +341,9 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 log::debug!("Exit io_loop of id={}", self.handler.get_id());
-                // Stop client audio server.
-                if let Some(s) = self.stop_voice_call_sender.take() {
-                    s.send(()).ok();
-                }
                 self.pending_zego_voice_call = None;
+                self.zego_voice_call_active = false;
+                self.release_owned_zego_voice_call();
                 self.handler.on_zego_voice_call_closed();
             }
             Err(err) => {
@@ -343,6 +366,12 @@ impl<T: InvokeUiSession> Remote<T> {
         #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
         if self.handler.is_default() && _set_disconnected_ok {
             crate::clipboard::try_empty_clipboard_files(ClipboardSide::Client, self.client_conn_id);
+        }
+    }
+
+    fn release_owned_zego_voice_call(&mut self) {
+        if let Some(owner) = self.zego_voice_call_owner.take() {
+            release_zego_voice_call_owner(&owner);
         }
     }
 
@@ -424,20 +453,6 @@ impl<T: InvokeUiSession> Remote<T> {
         } else {
             self.handler.job_done(id, file_num);
         }
-    }
-
-    fn stop_voice_call(&mut self) {
-        let voice_call_sender = std::mem::replace(&mut self.stop_voice_call_sender, None);
-        if let Some(stopper) = voice_call_sender {
-            let _ = stopper.send(());
-        }
-    }
-
-    // Legacy RustDesk voice-call recorder. CloudSend ZEGO voice calls must not
-    // use this audio_service path.
-    fn start_voice_call(&mut self) -> Option<std::sync::mpsc::Sender<()>> {
-        log::warn!("CloudSend ZEGO voice call blocks the legacy audio_service path");
-        None
     }
 
     async fn handle_msg_from_ui(&mut self, data: Data, peer: &mut Stream) -> bool {
@@ -862,19 +877,80 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.elevation_requested = true;
             }
             Data::NewVoiceCall => {
+                if self.peer_info.platform != "Android" {
+                    log::warn!(
+                        "Ignoring ZEGO voice-call request for non-Android peer: {}",
+                        self.peer_info.platform
+                    );
+                    self.handler.msgbox(
+                        "warning",
+                        "语音通话",
+                        "ZEGO 语音通话仅支持连接 Android 后使用。",
+                        "",
+                    );
+                    self.handler.on_voice_call_closed("");
+                    return true;
+                }
+                if self.zego_voice_call_active
+                    || self.voice_call_request_timestamp.is_some()
+                    || self.pending_zego_voice_call.is_some()
+                {
+                    log::warn!("Ignoring duplicate ZEGO voice-call request while busy");
+                    self.handler.msgbox(
+                        "warning",
+                        "语音通话",
+                        "已有 ZEGO 语音通话正在等待或进行中。",
+                        "",
+                    );
+                    return true;
+                }
                 let req_timestamp = get_time();
-                let zego_voice_call = match request_zego_voice_call_info(
-                    &config::Config::get_id(),
-                    &self.handler.get_id(),
-                    &req_timestamp.to_string(),
-                ) {
-                    Ok(info) => info,
-                    Err(err) => {
+                let pc_peer_id = config::Config::get_id();
+                let android_peer_id = self.handler.get_id();
+                let zego_owner = format!("{}:{}", pc_peer_id, android_peer_id);
+                if !try_acquire_zego_voice_call_owner(&zego_owner) {
+                    log::warn!("Ignoring ZEGO voice-call request because another call owns the process");
+                    self.handler.msgbox(
+                        "warning",
+                        "语音通话",
+                        "当前 PC 已有 ZEGO 语音通话，请先挂断后再发起新的通话。",
+                        "",
+                    );
+                    self.handler.on_voice_call_closed("");
+                    return true;
+                }
+                self.zego_voice_call_owner = Some(zego_owner.clone());
+                let cloudsend_session_id =
+                    format!("{}_{}_{}", pc_peer_id, android_peer_id, req_timestamp);
+                let zego_voice_call = match tokio::task::spawn_blocking(move || {
+                    request_zego_voice_call_info(
+                        &pc_peer_id,
+                        &android_peer_id,
+                        &cloudsend_session_id,
+                    )
+                })
+                .await
+                {
+                    Ok(Ok(info)) => info,
+                    Ok(Err(err)) => {
                         log::error!("Failed to create ZEGO voice call: {err}");
+                        self.release_owned_zego_voice_call();
                         self.handler.msgbox(
                             "error",
-                            "Voice call",
-                            &format!("Failed to create ZEGO voice call: {err}"),
+                            "语音通话",
+                            "创建 ZEGO 通话失败，请检查 Token 服务和网络。",
+                            "",
+                        );
+                        self.handler.on_voice_call_closed("");
+                        return true;
+                    }
+                    Err(err) => {
+                        log::error!("Failed to run ZEGO voice-call token task: {err}");
+                        self.release_owned_zego_voice_call();
+                        self.handler.msgbox(
+                            "error",
+                            "语音通话",
+                            "创建 ZEGO 通话失败，请检查 Token 服务和网络。",
                             "",
                         );
                         self.handler.on_voice_call_closed("");
@@ -892,9 +968,10 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.handler.on_voice_call_waiting();
             }
             Data::CloseVoiceCall => {
-                self.stop_voice_call();
                 self.voice_call_request_timestamp = None;
                 self.pending_zego_voice_call = None;
+                self.zego_voice_call_active = false;
+                self.release_owned_zego_voice_call();
                 self.handler.on_zego_voice_call_closed();
                 let msg = new_voice_call_request(false);
                 self.handler
@@ -1863,11 +1940,10 @@ impl<T: InvokeUiSession> Remote<T> {
                         // TODO: maybe we will do a voice call from the peer in the future.
                     } else {
                         log::debug!("The remote has requested to close the voice call");
-                        if let Some(sender) = self.stop_voice_call_sender.take() {
-                            allow_err!(sender.send(()));
-                        }
                         self.voice_call_request_timestamp = None;
                         self.pending_zego_voice_call = None;
+                        self.zego_voice_call_active = false;
+                        self.release_owned_zego_voice_call();
                         self.handler.on_zego_voice_call_closed();
                         self.handler.on_voice_call_closed("");
                     }
@@ -1877,19 +1953,29 @@ impl<T: InvokeUiSession> Remote<T> {
                     if let Some(ts) = ts {
                         if response.req_timestamp != ts.get() {
                             log::debug!("Possible encountering a voice call attack.");
+                            self.pending_zego_voice_call = None;
+                            self.zego_voice_call_active = false;
+                            self.release_owned_zego_voice_call();
+                            self.handler.on_zego_voice_call_closed();
+                            self.handler.on_voice_call_closed("");
                         } else {
                             if response.accepted {
                                 // The peer accepted the voice call.
                                 self.handler.on_voice_call_started();
                                 if let Some(info) = self.pending_zego_voice_call.take() {
+                                    self.zego_voice_call_active = true;
                                     self.handler
                                         .on_zego_voice_call_ready(&info.caller_payload_json());
                                 } else {
                                     log::warn!("ZEGO voice call accepted without pending payload");
+                                    self.zego_voice_call_active = false;
+                                    self.release_owned_zego_voice_call();
                                 }
                             } else {
                                 // The peer refused the voice call.
                                 self.pending_zego_voice_call = None;
+                                self.zego_voice_call_active = false;
+                                self.release_owned_zego_voice_call();
                                 self.handler.on_zego_voice_call_closed();
                                 self.handler.on_voice_call_closed("");
                             }

@@ -19,6 +19,7 @@ import '../mobile/pages/server_page.dart';
 import 'model.dart';
 
 const kLoginDialogTag = "LOGIN";
+const kVoiceCallDialogTag = "VOICE_CALL";
 
 const kUseTemporaryPassword = "use-temporary-password";
 const kUsePermanentPassword = "use-permanent-password";
@@ -211,9 +212,9 @@ class ServerModel with ChangeNotifier {
 
     // file
     //if (!await AndroidPermissionManager.check(kManageExternalStorage)) {
-      _fileOk = false;
-      bind.mainSetOption(key: kOptionEnableFileTransfer, value: "N");
-   /* } else {
+    _fileOk = false;
+    bind.mainSetOption(key: kOptionEnableFileTransfer, value: "N");
+    /* } else {
       final fileOption =
           await bind.mainGetOption(key: kOptionEnableFileTransfer);
       _fileOk = fileOption != 'N';
@@ -632,12 +633,12 @@ class ServerModel with ChangeNotifier {
   void showLoginDialog(Client client) {
     // showClientDialog(
     //   client,
-    //   client.isFileTransfer 
-    //       ? "Transfer file" 
+    //   client.isFileTransfer
+    //       ? "Transfer file"
     //       : client.isViewCamera
     //           ? "View camera"
-    //           : client.isTerminal 
-    //               ? "Terminal" 
+    //           : client.isTerminal
+    //               ? "Terminal"
     //               : "Share screen",
     //   'Do you accept?',
     //   'android_new_connection_tip',
@@ -648,22 +649,48 @@ class ServerModel with ChangeNotifier {
 
   handleVoiceCall(Client client, bool accept) {
     parent.target?.invokeMethod("cancel_notification", client.id);
+    parent.target?.dialogManager.dismissByTag(getVoiceCallDialogTag(client.id));
     bind.cmHandleIncomingVoiceCall(id: client.id, accept: accept);
   }
 
   showVoiceCallDialog(Client client) {
+    parent.target?.dialogManager.dismissByTag(getVoiceCallDialogTag(client.id));
     showClientDialog(
       client,
-      'Voice call',
+      '\u8bed\u97f3\u901a\u8bdd',
       'Do you accept?',
       'android_new_voice_call_tip',
       () => handleVoiceCall(client, false),
-      () => handleVoiceCall(client, true),
+      () => unawaited(_acceptZegoVoiceCall(client)),
+      tag: getVoiceCallDialogTag(client.id),
+      showSubmit: true,
+      closeAsCancel: true,
     );
   }
 
+  Future<void> _acceptZegoVoiceCall(Client client) async {
+    if (!await AndroidPermissionManager.check(kRecordAudio)) {
+      final granted = await AndroidPermissionManager.request(kRecordAudio);
+      if (!granted) {
+        showToast(translate('Failed'));
+        handleVoiceCall(client, false);
+        return;
+      }
+    }
+    handleVoiceCall(client, true);
+  }
+
+  bool _hasLocalAndroidVoiceCall(int clientId) {
+    final hasOtherClientCall = _clients.any((client) =>
+        client.id != clientId &&
+        (client.inVoiceCall || client.incomingVoiceCall));
+    return hasOtherClientCall ||
+        (parent.target?.zegoVoiceCallModel.active ?? false);
+  }
+
   showClientDialog(Client client, String title, String contentTitle,
-      String content, VoidCallback onCancel, VoidCallback onSubmit) {
+      String content, VoidCallback onCancel, VoidCallback onSubmit,
+      {String? tag, bool? showSubmit, bool closeAsCancel = false}) {
     parent.target?.dialogManager.show((setState, close, context) {
       cancel() {
         onCancel();
@@ -679,7 +706,9 @@ class ServerModel with ChangeNotifier {
         title:
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(translate(title)),
-          IconButton(onPressed: close, icon: const Icon(Icons.close))
+          IconButton(
+              onPressed: closeAsCancel ? cancel : close,
+              icon: const Icon(Icons.close))
         ]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -696,13 +725,13 @@ class ServerModel with ChangeNotifier {
         ),
         actions: [
           dialogButton("Dismiss", onPressed: cancel, isOutline: true),
-          if (approveMode != 'password')
+          if (showSubmit ?? (approveMode != 'password'))
             dialogButton("Accept", onPressed: submit),
         ],
         onSubmit: submit,
         onCancel: cancel,
       );
-    }, tag: getLoginDialogTag(client.id));
+    }, tag: tag ?? getLoginDialogTag(client.id));
   }
 
   scrollToBottom() {
@@ -740,14 +769,21 @@ class ServerModel with ChangeNotifier {
       if (_clients.any((c) => c.id == id)) {
         final index = _clients.indexWhere((client) => client.id == id);
         if (index >= 0) {
+          final wasVoiceCall =
+              _clients[index].inVoiceCall || _clients[index].incomingVoiceCall;
           if (close) {
             _clients.removeAt(index);
             tabController.remove(index);
           } else {
             _clients[index].disconnected = true;
           }
+          if (wasVoiceCall) {
+            unawaited(
+                parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+          }
         }
         parent.target?.dialogManager.dismissByTag(getLoginDialogTag(id));
+        parent.target?.dialogManager.dismissByTag(getVoiceCallDialogTag(id));
         parent.target?.invokeMethod("cancel_notification", id);
       }
       if (desktopType == DesktopType.cm && _clients.isEmpty) {
@@ -783,26 +819,42 @@ class ServerModel with ChangeNotifier {
   void updateVoiceCallState(Map<String, dynamic> evt) {
     try {
       final client = Client.fromJson(jsonDecode(evt["client"]));
-      final index = _clients.indexWhere((element) => element.id == client.id);
-      if (index != -1) {
-        final wasInVoiceCall = _clients[index].inVoiceCall;
-        _clients[index].inVoiceCall = client.inVoiceCall;
-        _clients[index].incomingVoiceCall = client.incomingVoiceCall;
-        if (wasInVoiceCall && !client.inVoiceCall) {
-          unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
-        }
-        if (client.incomingVoiceCall) {
-          if (isAndroid) {
-            showVoiceCallDialog(client);
-          } else {
-            // Has incoming phone call, let's set the window on top.
-            Future.delayed(Duration.zero, () {
-              windowOnTop(null);
-            });
-          }
-        }
-        notifyListeners();
+      var index = _clients.indexWhere((element) => element.id == client.id);
+      if (index == -1) {
+        _clients.add(client);
+        _addTab(client);
+        index = _clients.length - 1;
       }
+
+      if (client.incomingVoiceCall && _hasLocalAndroidVoiceCall(client.id)) {
+        _clients[index].inVoiceCall = false;
+        _clients[index].incomingVoiceCall = false;
+        showToast('\u8bed\u97f3\u901a\u8bdd\u5fd9');
+        handleVoiceCall(_clients[index], false);
+        notifyListeners();
+        return;
+      }
+
+      final wasInVoiceCall = _clients[index].inVoiceCall;
+      _clients[index].inVoiceCall = client.inVoiceCall;
+      _clients[index].incomingVoiceCall = client.incomingVoiceCall;
+      if (wasInVoiceCall && !client.inVoiceCall) {
+        unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+      }
+      if (client.incomingVoiceCall) {
+        if (isAndroid) {
+          showVoiceCallDialog(_clients[index]);
+        } else {
+          // Has incoming phone call, let's set the window on top.
+          Future.delayed(Duration.zero, () {
+            windowOnTop(null);
+          });
+        }
+      } else {
+        parent.target?.dialogManager
+            .dismissByTag(getVoiceCallDialogTag(client.id));
+      }
+      notifyListeners();
     } catch (e) {
       debugPrint("updateVoiceCallState failed: $e");
     }
@@ -929,6 +981,10 @@ class Client {
 
 String getLoginDialogTag(int id) {
   return kLoginDialogTag + id.toString();
+}
+
+String getVoiceCallDialogTag(int id) {
+  return kVoiceCallDialogTag + id.toString();
 }
 
 showInputWarnAlert(FFI ffi) {

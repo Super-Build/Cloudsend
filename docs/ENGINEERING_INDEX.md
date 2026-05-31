@@ -26,9 +26,11 @@
 - Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
 - Android status protocol: `cloudsend_status`, `CloudSendStatusModel`, `CloudSendStatusMonitor`, `show_cloudsend_status_monitor`.
 - Virtual display platform addition key: `cloudsend_virtual_displays`.
-- ZEGO voice-call integration docs: `docs/ZEGO_VOICE_CALL_INTEGRATION.md` and `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
+- ZEGO voice-call architecture/integration docs: `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, and `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
 - ZEGO voice-call runtime anchors: `ZegoVoiceCallInfo`, `ZegoVoiceCallModel`, `zego_voice_call_ready`, `Data::ZegoVoiceCallReady`.
+- ZEGO voice-call Android permission anchors: `android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`, `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`, `flutter/android/app/proguard-rules`.
 - ZEGO voice-call isolation rule: do not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless a future task proves direct involvement.
+- PC developer login bypass anchor: `flutter/lib/models/developer_login_bypass_model.dart`; `Ctrl+Shift+H` enables a process-only connection bypass for developers without changing product account login state.
 
 This section overrides any older Daxian/RustDesk naming text that remains in historical notes below.
 

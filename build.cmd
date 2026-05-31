@@ -118,7 +118,7 @@ goto check_loop
 
 call :exec_step "1. Cleaning Flutter" "cd /d "%ROOT_FOLDER%\flutter" && (if exist pubspec.yaml flutter clean || echo [ERROR] Flutter does not exist)"
 call :exec_step "2. Get dependencies" "cd /d "%ROOT_FOLDER%\flutter" && (if exist pubspec.yaml flutter pub get || echo [ERROR] Flutter does not exist)"
-call :exec_step "3. Cleaning Cargo Build" "cd /d "%ROOT_FOLDER%" && cargo clean"
+call :exec_step "3. Preserve Cargo target" "cd /d "%ROOT_FOLDER%" && echo Keeping target directory for incremental builds"
 :: call :exec_step "4. Build program" "cd /d "%ROOT_FOLDER%" && python .\build.py --portable --flutter --skip-portable-pack"
 call :exec_step "4. Build program" "cd /d "%ROOT_FOLDER%" && python .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack"
 
@@ -194,7 +194,7 @@ popd
 if not exist ZClient mkdir ZClient
 
 
-move /Y target\release\cloudsend-portable-packer.exe ZClient\%FOLDER_NAME%.exe
+copy /Y target\release\cloudsend-portable-packer.exe ZClient\%FOLDER_NAME%.exe
 
 del res\manifest.xml
 ren res\manifest_backup.xml manifest.xml || (
@@ -225,14 +225,9 @@ del usbmmidd_v2.zip 2>nul || (
 )
 
 if exist "target\" (
-    rd /s /q "target" 2>nul && (
-        echo [INFO] Delete
-    ) || (
-        echo [ERROR] Failed
-        exit /b 1
-    )
+    echo [INFO] Keeping target folder: "%ROOT_FOLDER%\target"
 ) else (
-    echo [WARNING] The target folder does not exist, no need to delete it.
+    echo [WARNING] The target folder does not exist.
 )
 
 

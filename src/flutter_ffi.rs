@@ -1495,25 +1495,11 @@ pub fn cm_close_voice_call(id: i32) {
 }
 
 pub fn set_voice_call_input_device(_is_cm: bool, _device: String) {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if _is_cm {
-        let _ = crate::ipc::set_config("voice-call-input", _device);
-    } else {
-        crate::audio_service::set_voice_call_input_device(Some(_device), true);
-    }
+    // CloudSend voice calls are fully handled by ZEGO. Keep this legacy
+    // RustDesk voice-call device setter inert even if an old UI path calls it.
 }
 
 pub fn get_voice_call_input_device(_is_cm: bool) -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if _is_cm {
-        match crate::ipc::get_config("voice-call-input") {
-            Ok(Some(device)) => device,
-            _ => "".to_owned(),
-        }
-    } else {
-        crate::audio_service::get_voice_call_input_device().unwrap_or_default()
-    }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
     "".to_owned()
 }
 

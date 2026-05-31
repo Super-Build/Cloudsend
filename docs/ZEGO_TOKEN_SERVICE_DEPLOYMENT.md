@@ -1,110 +1,124 @@
-# ZEGO Token Service Deployment / 宝塔部署文档
+# ZEGO Token Service Deployment / 宝塔可视化部署方案
 
-最后一次整理：2026-05-31
+最后同步：2026-06-01
 
-> 本文档用于部署 CloudSend 第三方 1v1 语音通话所需的 ZEGO Token 服务。
-> 服务端负责生成短时 ZEGO Token；PC 和 Android 客户端不得保存 `ZEGO_SERVER_SECRET`。
->
-> 代码路径、接口名、环境变量、服务名保留 English anchor，中文负责解释。
+本文是 CloudSend 1v1 ZEGO 语音通话 Token 服务的完整部署文档。新域名：
+
+```text
+https://2.2662275.xyz
+```
+
+最终接口：
+
+```text
+GET  https://2.2662275.xyz/api/v1/health
+POST https://2.2662275.xyz/api/v1/voice-call/create
+```
+
+> 安全约定：`ZEGO_SERVER_SECRET` 和 `VOICE_API_KEY` 只能写入服务器 `.env`，不要写入 Git 跟踪文档、PC 客户端、Android 客户端或日志。
 
 ---
 
-## 1. 目标架构
+## 1. 架构图
 
-CloudSend 的语音通话入口仍复用现有 PC 工具栏与 Android 来电确认流程，但媒体链路改为 ZEGO RTC。
-
-```text
-PC 语音按钮
-  -> HTTPS POST /api/v1/voice-call/create
-  -> 宝塔 Nginx / reverse proxy
-  -> cloudsend-zego-token service 127.0.0.1:8787
-  -> 返回 roomId / callerToken / calleeToken
-  -> PC 使用 callerToken 加入 ZEGO room
-  -> PC 通过现有 CloudSend 远控连接把 calleeToken 发送给 Android
-  -> Android 接听后使用 calleeToken 加入同一个 ZEGO room
+```mermaid
+flowchart LR
+    PC["PC 客户端"] --> Domain["https://2.2662275.xyz"]
+    Domain --> Nginx["宝塔 Nginx 反向代理"]
+    Nginx --> Go["cloudsend-zego-token<br/>127.0.0.1:8787"]
+    Go --> Token["生成 ZEGO Token04"]
+    PC --> Android["CloudSend 控制链路发送 Android Token"]
+    PC --> Zego["ZEGO 房间"]
+    Android --> Zego
 ```
 
-核心隔离原则：
+核心规则：
 
-- 每次通话生成独立 `roomId`。
-- PC 使用 `callerToken`，Android 使用 `calleeToken`。
-- `ZEGO_SERVER_SECRET` 只存在宝塔服务器 `.env`，不能写入 PC / Android / Git 仓库。
-- `roomId` 包含 `androidPeerId + pcPeerId + cloudsendSessionId + nonce`，避免不同 PC / Android 之间串房。
+- PC 请求 Token 服务生成本次 1v1 通话的 `roomId`、双端 `userId`、双端 `streamId`、双端 Token。
+- PC 使用 `callerToken` 加入 ZEGO 房间。
+- PC 通过现有 CloudSend 远控连接把 Android 所需的 `calleeToken` 发给 Android。
+- Android 接听后使用 `calleeToken` 加入同一个 ZEGO 房间。
+- Token 服务使用 `payload=""` 的官方基础 Token 形态，避免未开通高级权限鉴权时出现 `1002033`。
 
 ---
 
-## 2. 服务器与域名准备
+## 2. 删除旧部署
 
-推荐环境：
+### 2.1 删除旧 systemd 服务
 
-```text
-OS: Ubuntu 22.04 LTS
-Panel: 宝塔面板
-Web Server: Nginx / Tengine
-Service Runtime: Go
-Domain: api.unan.uno
-Service Port: 127.0.0.1:8787
+```bash
+systemctl stop cloudsend-zego-token 2>/dev/null
+systemctl disable cloudsend-zego-token 2>/dev/null
+rm -f /etc/systemd/system/cloudsend-zego-token.service
+systemctl daemon-reload
+systemctl reset-failed
 ```
 
-域名 DNS 需要添加：
+### 2.2 删除旧服务目录
+
+```bash
+rm -rf /www/wwwroot/cloudsend-zego-token
+```
+
+### 2.3 删除旧宝塔站点
+
+宝塔面板操作：
+
+```text
+宝塔面板 -> 网站 -> 找到旧域名 api.unan.uno -> 删除站点
+```
+
+如果命令行里仍有旧 Nginx 配置：
+
+```bash
+rm -f /www/server/panel/vhost/nginx/api.unan.uno.conf
+nginx -t && systemctl reload nginx
+```
+
+---
+
+## 3. DNS 准备
+
+新域名：
+
+```text
+2.2662275.xyz
+```
+
+域名 DNS 后台添加：
 
 ```text
 类型：A
-主机记录：api
+主机记录：2
 记录值：服务器公网 IP
 ```
 
-验证：
+验证解析：
 
 ```bash
-ping api.unan.uno
+ping 2.2662275.xyz
 ```
 
-返回的 IP 应等于服务器公网 IP。
+解析到服务器公网 IP 后继续。
 
 ---
 
-## 3. 宝塔创建站点
+## 4. 宝塔创建新站点
 
-在宝塔面板执行：
+宝塔面板操作：
 
 ```text
 网站 -> 添加站点
-域名：api.unan.uno
+域名：2.2662275.xyz
 PHP版本：纯静态
-根目录：/www/wwwroot/api.unan.uno
+根目录：/www/wwwroot/2.2662275.xyz
 ```
 
-然后配置 SSL：
+申请 SSL：
 
 ```text
-网站 -> api.unan.uno -> SSL -> Let's Encrypt -> 申请证书
-```
-
-建议开启：
-
-```text
+网站 -> 2.2662275.xyz -> SSL -> Let's Encrypt -> 申请证书
 强制 HTTPS：开启
-```
-
-如果不使用宝塔 SSL，也可以用 `certbot` 手动申请证书。
-
----
-
-## 4. 安装 Go
-
-宝塔终端执行：
-
-```bash
-apt update -y
-apt install -y golang-go
-go version
-```
-
-确认输出类似：
-
-```text
-go version go1.18.x linux/amd64
 ```
 
 ---
@@ -118,17 +132,17 @@ cd /www/wwwroot/cloudsend-zego-token
 
 ---
 
-## 6. 创建环境变量文件
+## 6. 创建 `.env`
 
-创建 `.env`：
+> 下面是完整结构。部署时把 `<ZEGO_SERVER_SECRET>` 和 `<VOICE_API_KEY>` 替换成实际值；不要把真实密钥提交到仓库。
 
 ```bash
 cat > .env <<'EOF'
 PORT=8787
-ZEGO_APP_ID=你的ZEGO_AppID
-ZEGO_SERVER_SECRET=你的ZEGO_ServerSecret
+ZEGO_APP_ID=726162948
+ZEGO_SERVER_SECRET=<ZEGO_SERVER_SECRET>
 VOICE_TOKEN_TTL_SECONDS=3600
-VOICE_API_KEY=改成一串很长的随机API_KEY
+VOICE_API_KEY=<VOICE_API_KEY>
 EOF
 
 chmod 600 .env
@@ -136,23 +150,17 @@ chmod 600 .env
 
 字段说明：
 
-| 环境变量 | 说明 |
+| 字段 | 说明 |
 |---|---|
-| `PORT` | 本地监听端口，默认 `8787` |
-| `ZEGO_APP_ID` | ZEGO 控制台的 AppID |
-| `ZEGO_SERVER_SECRET` | ZEGO 控制台服务端密钥，只能放服务端 |
-| `VOICE_TOKEN_TTL_SECONDS` | Token 有效期，建议先用 `3600` 秒 |
-| `VOICE_API_KEY` | CloudSend 请求 Token 服务时使用的内部鉴权密钥 |
-
-生成随机 `VOICE_API_KEY` 的方式：
-
-```bash
-openssl rand -base64 32
-```
+| `PORT` | 本机监听端口，固定 `8787` |
+| `ZEGO_APP_ID` | ZEGO 控制台 AppID |
+| `ZEGO_SERVER_SECRET` | ZEGO ServerSecret，只允许放服务器 `.env` |
+| `VOICE_TOKEN_TTL_SECONDS` | Token 有效期，当前建议 `3600` 秒 |
+| `VOICE_API_KEY` | PC 请求 Token 服务时使用的 Bearer 鉴权 key |
 
 ---
 
-## 7. 创建 Go Module
+## 7. 创建 `go.mod`
 
 ```bash
 cat > go.mod <<'EOF'
@@ -166,7 +174,7 @@ EOF
 
 ---
 
-## 8. 创建 main.go
+## 8. 创建完整 `main.go`
 
 ```bash
 cat > main.go <<'EOF'
@@ -213,15 +221,21 @@ type errorResponse struct {
 func main() {
 	port := getenv("PORT", "8787")
 
-	http.HandleFunc("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-	})
-
+	http.HandleFunc("/", handleRoot)
+	http.HandleFunc("/api/v1/health", handleHealth)
 	http.HandleFunc("/api/v1/voice-call/create", handleCreate)
 
 	addr := "127.0.0.1:" + port
 	log.Println("cloudsend zego token service listening on", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusNotFound, errorResponse{"not_found"})
+}
+
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -271,20 +285,21 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nonce := randomHex(8)
+
 	roomId := trim(fmt.Sprintf("cs_voice_%s_%s_%s_%s", androidPeerId, pcPeerId, sessionId, nonce), 128)
 	callerUserId := trim(fmt.Sprintf("pc_%s_%s", pcPeerId, sessionId), 64)
 	calleeUserId := trim(fmt.Sprintf("android_%s_%s", androidPeerId, sessionId), 64)
 	callerStreamId := trim(fmt.Sprintf("cs_voice_pub_%s_pc", nonce), 64)
 	calleeStreamId := trim(fmt.Sprintf("cs_voice_pub_%s_android", nonce), 64)
 
-	callerToken, err := makeToken(appId, callerUserId, secret, ttl, roomId, callerStreamId)
+	callerToken, err := makeToken(appId, callerUserId, secret, ttl)
 	if err != nil {
 		log.Println("caller token error:", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{"caller_token_failed"})
 		return
 	}
 
-	calleeToken, err := makeToken(appId, calleeUserId, secret, ttl, roomId, calleeStreamId)
+	calleeToken, err := makeToken(appId, calleeUserId, secret, ttl)
 	if err != nil {
 		log.Println("callee token error:", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{"callee_token_failed"})
@@ -305,22 +320,8 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func makeToken(appId uint32, userId string, secret string, ttl int64, roomId string, streamId string) (string, error) {
-	payload := map[string]interface{}{
-		"room_id": roomId,
-		"privilege": map[string]int{
-			"1": 1,
-			"2": 1,
-		},
-		"stream_id_list": []string{streamId},
-	}
-
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	return token04.GenerateToken04(appId, userId, secret, ttl, string(b))
+func makeToken(appId uint32, userId string, secret string, ttl int64) (string, error) {
+	return token04.GenerateToken04(appId, userId, secret, ttl, "")
 }
 
 func authorized(r *http.Request) bool {
@@ -349,7 +350,10 @@ func clean(s string) string {
 	s = strings.TrimSpace(s)
 	var b strings.Builder
 	for _, r := range s {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+		if r >= 'a' && r <= 'z' ||
+			r >= 'A' && r <= 'Z' ||
+			r >= '0' && r <= '9' ||
+			r == '_' || r == '-' {
 			b.WriteRune(r)
 		}
 	}
@@ -364,11 +368,11 @@ func trim(s string, max int) string {
 }
 
 func randomHex(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 16)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(buf)
 }
 EOF
 ```
@@ -382,12 +386,6 @@ cd /www/wwwroot/cloudsend-zego-token
 GOPROXY=https://goproxy.cn,direct go mod tidy
 GOPROXY=https://goproxy.cn,direct go build -o cloudsend-zego-token main.go
 chmod +x cloudsend-zego-token
-```
-
-确认二进制存在：
-
-```bash
-ls -lh /www/wwwroot/cloudsend-zego-token/cloudsend-zego-token
 ```
 
 ---
@@ -419,22 +417,56 @@ systemctl enable --now cloudsend-zego-token
 systemctl status cloudsend-zego-token --no-pager
 ```
 
-成功状态：
+---
 
-```text
-Active: active (running)
+## 11. 本机测试
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8787/api/v1/health
 ```
 
-如果看到 `status=203/EXEC`，通常表示 `cloudsend-zego-token` 文件不存在或没有执行权限，重新执行第 9 步。
+正常返回：
+
+```json
+{"ok":true}
+```
+
+Token 创建测试：
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/v1/voice-call/create \
+  -H "Authorization: Bearer <VOICE_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
+```
+
+正常返回字段：
+
+```json
+{
+  "rtcProvider": "zego",
+  "appId": 726162948,
+  "roomId": "cs_voice_xxx",
+  "callerUserId": "pc_xxx",
+  "calleeUserId": "android_xxx",
+  "callerStreamId": "cs_voice_pub_xxx_pc",
+  "calleeStreamId": "cs_voice_pub_xxx_android",
+  "callerToken": "04...",
+  "calleeToken": "04...",
+  "expiresAt": 1780000000
+}
+```
 
 ---
 
-## 11. 宝塔反向代理
+## 12. 宝塔反向代理
 
-在宝塔面板执行：
+宝塔面板操作：
 
 ```text
-网站 -> api.unan.uno -> 反向代理 -> 添加反向代理
+网站 -> 2.2662275.xyz -> 反向代理 -> 添加反向代理
 ```
 
 填写：
@@ -445,177 +477,75 @@ Active: active (running)
 发送域名：$host
 ```
 
-如果宝塔有“代理目录”，建议填：
-
-```text
-/
-```
-
-如果只想代理接口路径，也可以填：
-
-```text
-/api/v1/
-```
-
----
-
-## 12. Nginx 手动配置参考
-
-如果不使用宝塔反向代理，可以手动写 Nginx 配置：
-
-```nginx
-server {
-    listen 80;
-    server_name api.unan.uno;
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name api.unan.uno;
-
-    ssl_certificate /etc/letsencrypt/live/api.unan.uno/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.unan.uno/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location /api/v1/health {
-        proxy_pass http://127.0.0.1:8787/api/v1/health;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /api/v1/voice-call/ {
-        proxy_pass http://127.0.0.1:8787/api/v1/voice-call/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        return 404;
-    }
-}
-```
-
-检查并重载：
+保存后测试：
 
 ```bash
-/www/server/nginx/sbin/nginx -t
-/www/server/nginx/sbin/nginx -s reload
+curl https://2.2662275.xyz/api/v1/health
 ```
 
----
-
-## 13. 接口测试
-
-本机健康检查：
-
-```bash
-curl http://127.0.0.1:8787/api/v1/health
-```
-
-期望返回：
+正常返回：
 
 ```json
 {"ok":true}
 ```
 
-外网健康检查：
+公网 Token 测试：
 
 ```bash
-curl https://api.unan.uno/api/v1/health
-```
-
-期望返回：
-
-```json
-{"ok":true}
-```
-
-创建通话 Token：
-
-```bash
-curl -X POST https://api.unan.uno/api/v1/voice-call/create \
-  -H "Authorization: Bearer 你的VOICE_API_KEY" \
+curl -X POST https://2.2662275.xyz/api/v1/voice-call/create \
+  -H "Authorization: Bearer <VOICE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
 ```
 
-成功返回示例：
+---
 
-```json
-{
-  "rtcProvider": "zego",
-  "appId": 726162948,
-  "roomId": "cs_voice_android_test_pc_test_sess_test_xxxxxxxx",
-  "callerUserId": "pc_pc_test_sess_test",
-  "calleeUserId": "android_android_test_sess_test",
-  "callerStreamId": "cs_voice_pub_xxxxxxxx_pc",
-  "calleeStreamId": "cs_voice_pub_xxxxxxxx_android",
-  "callerToken": "04...",
-  "calleeToken": "04...",
-  "expiresAt": 1780169977
+## 13. 手动 Nginx 配置备选
+
+如果不用宝塔反向代理，可手动创建 HTTP 反向代理配置：
+
+```bash
+cat > /www/server/panel/vhost/nginx/2.2662275.xyz.conf <<'EOF'
+server {
+    listen 80;
+    server_name 2.2662275.xyz;
+
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
+EOF
+
+nginx -t && systemctl reload nginx
 ```
+
+生产环境建议优先通过宝塔 SSL 面板申请证书，并开启强制 HTTPS。
 
 ---
 
-## 14. CloudSend 客户端后续对接信息
-
-CloudSend 后续代码改造需要配置：
-
-```text
-ZEGO Token API:
-https://api.unan.uno/api/v1/voice-call/create
-
-Authorization:
-Bearer <VOICE_API_KEY>
-```
-
-请求体：
-
-```json
-{
-  "pcPeerId": "当前PC ID",
-  "androidPeerId": "当前Android ID",
-  "cloudsendSessionId": "当前远控会话ID"
-}
-```
-
-PC 使用返回的：
-
-```text
-callerUserId
-callerStreamId
-callerToken
-roomId
-```
-
-Android 使用返回的：
-
-```text
-calleeUserId
-calleeStreamId
-calleeToken
-roomId
-```
-
-PC 通过 CloudSend 现有远控连接把 Android 所需字段发送给 Android。
-
----
-
-## 15. 运维命令
+## 14. 日志与运维
 
 查看服务状态：
 
 ```bash
 systemctl status cloudsend-zego-token --no-pager
+```
+
+实时日志：
+
+```bash
+journalctl -u cloudsend-zego-token -f
+```
+
+最近 100 行日志：
+
+```bash
+journalctl -u cloudsend-zego-token -n 100 --no-pager
 ```
 
 重启服务：
@@ -624,54 +554,62 @@ systemctl status cloudsend-zego-token --no-pager
 systemctl restart cloudsend-zego-token
 ```
 
-查看日志：
+检查 Nginx：
 
 ```bash
-journalctl -u cloudsend-zego-token -f
+nginx -t
+systemctl status nginx --no-pager
 ```
 
-修改配置后生效：
+重载 Nginx：
 
 ```bash
-cd /www/wwwroot/cloudsend-zego-token
-vim .env
-systemctl restart cloudsend-zego-token
-```
-
-重新构建：
-
-```bash
-cd /www/wwwroot/cloudsend-zego-token
-GOPROXY=https://goproxy.cn,direct go build -o cloudsend-zego-token main.go
-chmod +x cloudsend-zego-token
-systemctl restart cloudsend-zego-token
+systemctl reload nginx
 ```
 
 ---
 
-## 16. 安全要求
+## 15. PC 客户端配置
 
-必须遵守：
+PC 客户端请求地址应配置为：
 
-- 不要把 `ZEGO_SERVER_SECRET` 写入 PC 客户端。
-- 不要把 `ZEGO_SERVER_SECRET` 写入 Android 客户端。
-- 不要把 `.env` 提交到 Git。
-- 不要在日志里打印 `callerToken` / `calleeToken`。
-- 宝塔、SSH、ZEGO 密钥如果曾经暴露，应立即轮换。
-- 正式环境必须走 HTTPS。
-- `VOICE_API_KEY` 应使用强随机字符串，长度建议 32 字节以上。
+```text
+https://2.2662275.xyz/api/v1/voice-call/create
+```
 
-建议后续增强：
+鉴权：
 
-- 使用 CloudSend 登录态替代固定 `VOICE_API_KEY`。
-- 服务端校验 PC 用户是否有权限控制目标 Android。
-- 加入忙线逻辑：同一 Android 同一时间只允许一个 ZEGO voice call。
-- 加入 `/api/v1/voice-call/end` 记录挂断状态。
-- 加入 Redis / SQLite 保存短时 active room。
+```text
+Authorization: Bearer <VOICE_API_KEY>
+```
+
+当前 Rust 配置锚点：
+
+- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`
+- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`
+- 本地可覆盖配置 key：`cloudsend-zego-token-url`
+- 本地可覆盖配置 key：`cloudsend-zego-token-api-key`
 
 ---
 
-## 17. 常见问题
+## 16. 常见问题
+
+### Android 显示 `ZEGO Token 鉴权失败` 或 `1002033`
+
+含义：ZEGO `loginRoom` 鉴权失败，通常是 Token 不正确或已过期。
+
+检查：
+
+- `.env` 中 `ZEGO_APP_ID` 是否正确。
+- `.env` 中 `ZEGO_SERVER_SECRET` 是否属于同一个 ZEGO 项目。
+- `makeToken(...)` 是否使用：
+
+```go
+return token04.GenerateToken04(appId, userId, secret, ttl, "")
+```
+
+- 服务端时间是否正常。
+- 修改 `.env` 或 `main.go` 后是否重新构建并重启服务。
 
 ### `curl 127.0.0.1:8787/api/v1/health` 连接失败
 
@@ -679,7 +617,7 @@ systemctl restart cloudsend-zego-token
 
 ```bash
 systemctl status cloudsend-zego-token --no-pager
-journalctl -u cloudsend-zego-token -n 80 --no-pager
+journalctl -u cloudsend-zego-token -n 100 --no-pager
 ```
 
 ### `status=203/EXEC`
@@ -688,48 +626,30 @@ journalctl -u cloudsend-zego-token -n 80 --no-pager
 
 ```bash
 cd /www/wwwroot/cloudsend-zego-token
-GOPROXY=https://goproxy.cn,direct go build -o cloudsend-zego-token main.go
+ls -lh cloudsend-zego-token
 chmod +x cloudsend-zego-token
 systemctl restart cloudsend-zego-token
 ```
 
-### 返回 `unauthorized`
-
-请求头缺少：
-
-```text
-Authorization: Bearer <VOICE_API_KEY>
-```
-
-### 返回 `caller_token_failed` 或 `callee_token_failed`
+### 公网 `https://2.2662275.xyz/api/v1/health` 不通
 
 检查：
 
-```bash
-cat /www/wwwroot/cloudsend-zego-token/.env
-```
-
-重点确认：
-
-```text
-ZEGO_APP_ID
-ZEGO_SERVER_SECRET
-```
-
-### 外网 HTTPS 不通，本机 127.0.0.1 正常
-
-检查：
-
-```bash
-curl http://127.0.0.1:8787/api/v1/health
-curl https://api.unan.uno/api/v1/health
-```
-
-如果本机正常、外网不正常，重点检查：
-
-- DNS 是否指向服务器公网 IP。
-- 宝塔站点是否绑定 `api.unan.uno`。
+- DNS 是否解析到服务器公网 IP。
+- 宝塔站点是否创建。
 - SSL 是否申请成功。
 - 反向代理目标是否是 `http://127.0.0.1:8787`。
-- Nginx 是否已重载。
+- Nginx 是否通过 `nginx -t`。
+- 防火墙是否放行 80/443。
 
+---
+
+## 17. 最终验收清单
+
+- `systemctl status cloudsend-zego-token --no-pager` 显示 `active (running)`。
+- `curl http://127.0.0.1:8787/api/v1/health` 返回 `{"ok":true}`。
+- `curl https://2.2662275.xyz/api/v1/health` 返回 `{"ok":true}`。
+- `POST /api/v1/voice-call/create` 返回 `callerToken` 和 `calleeToken`。
+- PC 客户端 Token URL 使用 `https://2.2662275.xyz/api/v1/voice-call/create`。
+- PC 客户端 Bearer key 与服务器 `.env` 中 `VOICE_API_KEY` 一致。
+- Android 接听后不再出现 `1002033`。

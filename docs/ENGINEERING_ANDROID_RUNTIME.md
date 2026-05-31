@@ -44,14 +44,38 @@ Current Android-side source truth:
 - Incoming ZEGO voice-call metadata arrives through `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - Android/controlled Rust receives it in `src/server/connection.rs` and stores `pending_zego_voice_call`.
 - Android/controlled side only needs `calleeToken`; `VoiceCallRequest.caller_token` must not be required by Android runtime.
+- Android/controlled side rejects an incoming voice-call request if the ZEGO callee payload is incomplete.
 - Android incoming-call UI still uses the existing connection-manager state:
   - `Data::VoiceCallIncoming`
   - `Data::StartVoiceCall`
   - `Data::CloseVoiceCall`
 - When the user accepts, `src/server/connection.rs::handle_voice_call` emits `Data::ZegoVoiceCallReady` with the callee payload.
+- Android Flutter shows the existing accept/reject incoming-call dialog in `flutter/lib/models/server_model.dart::showVoiceCallDialog`; ZEGO calls must not auto-accept.
+- Android `showVoiceCallDialog` close (`X`) must reject the voice call, not only dismiss the dialog, so `voice_call_request_timestamp` does not remain pending while PC waits.
+- Android Flutter checks/requests `android.permission.RECORD_AUDIO` only after the user accepts; if the microphone permission is denied, it rejects the call.
+- `flutter/lib/models/server_model.dart::updateVoiceCallState` must preserve incoming voice-call events even if the local `_clients` list has not yet received the matching connection add event.
+- `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` must reject a second simultaneous incoming call only on the same Android endpoint while that Android already has a pending or active ZEGO call.
+- `src/server/connection.rs::zego_voice_call_active` prevents duplicate ZEGO invites on the same controlled connection.
+- `src/server/connection.rs::handle_voice_call` must reject instead of accepting if `pending_zego_voice_call` is missing when Android accepts, so PC cannot join a ZEGO room without Android joining.
+- `flutter/lib/models/server_model.dart::onClientRemove` must leave `ZegoVoiceCallModel` when the removed client was in or receiving a ZEGO call, preventing stale busy state after abnormal disconnect.
+- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, and `BLUETOOTH_CONNECT`; release minification keeps ZEGO classes through `flutter/android/app/proguard-rules`.
+- `flutter/lib/models/zego_voice_call_model.dart` must keep ZEGO join/play/audio-frame failures visible in the Android status card through Chinese error diagnostics; do not silently hide failed joins or show fake connected state.
+- Android Flutter enables speaker routing through `ZegoExpressEngine.instance.setAudioRouteToSpeaker(true)`.
+- Android Flutter explicitly keeps ZEGO capture/playback audio unmuted through `enableAudioCaptureDevice(true)`, `mutePublishStreamAudio(false)`, `muteAllPlayStreamAudio(false)`, and `mutePlayStreamAudio(streamId, false)`.
+- Android Flutter calls `startPlayingStream(playStreamId)` directly after `loginRoom` + `startPublishingStream`, then retries/refreshes it through `onRoomStreamUpdate(Add)` until `onPlayerRecvAudioFirstFrame` arrives. The code must not depend only on receiving the stream-add callback.
+- Android Flutter mirrors the official ZEGO Flutter demo's audio diagnostics: `onPublisherCapturedAudioFirstFrame` for microphone capture, `onPublisherSendAudioFirstFrame` for local audio sent, `onPlayerRecvAudioFirstFrame` for remote audio received, and `onPublisherQualityUpdate` / `onPlayerQualityUpdate` for ongoing audio `fps/kbps`.
 - Flutter receives `zego_voice_call_ready` and joins ZEGO through `flutter/lib/models/zego_voice_call_model.dart`.
+- On Android, `zego_voice_call_ready` must be routed through `src/flutter.rs` -> `call_main_service_set_by_name("zego_voice_call_ready", ...)` -> `DFm8Y8iMScvB2YDwSBN` -> `flutterMethodChannel` -> `androidChannelInit` before `ZegoVoiceCallModel.joinFromJson(...)` runs. Do not rely only on the global Flutter event stream for Android controlled-side call acceptance.
+- On Android, `update_voice_call_state` is mirrored to `androidChannelInit` through `flutterMethodChannel` while preserving the existing MainService notification branch.
+- `flutter/lib/models/zego_voice_call_model.dart` must ignore duplicate same-call payloads while joining or joined, because Android can receive the ZEGO ready signal through both the MainService bridge and the global event stream.
+- Android screen-sharing page shows `ZegoVoiceCallStatusCard` under `PermissionChecker` in `flutter/lib/mobile/pages/server_page.dart`.
+- Android `ZegoVoiceCallStatusCard` must not expose a hangup button; PC controls hangup through the existing `CloseVoiceCall` path.
+- Android voice-call status must distinguish play request from real audio using ZEGO state callbacks and first-audio-frame callbacks. Missing local or remote first-audio-frame callbacks must surface as Chinese failures, not as `通话中`; quality callbacks are diagnostics and must not mark the call connected by themselves.
+- Android voice-call UI must not show ZEGO debug toasts such as payload/play/publish request logs; user-visible text is limited to Chinese call state, room id, duration, audio readiness, and concise error text.
+- `flutter/lib/models/zego_voice_call_model.dart::ZegoVoiceCallModel.mediaReady` is the only in-app meaning of real two-way audio: ZEGO room joined, publisher/player state normal, local first audio frame sent, and remote first audio frame received.
 - `Connection::handle_voice_call` must not call `audio_service::set_voice_call_input_device(...)` for ZEGO voice calls.
 - `Connection::handle_voice_call` must keep `voice_calling = false` for ZEGO voice calls; this flag belongs to the legacy `audio_service` path.
+- `src/ui_session_interface.rs::request_voice_call`, `src/flutter.rs`, `src/ui.rs`, `src/ui/cm.rs`, `src/flutter_ffi.rs::*voice_call_input_device`, `src/ipc.rs::voice-call-input`, and `src/server/connection.rs::on_close` must not start, configure, or reset the legacy RustDesk `audio_service` voice-call path.
 - ZEGO voice call must not alter Android `MediaProjection`, `DFm8Y8iMScvB2YDw.startCapture()`, `nZW99cdXQ0COhB2o`, `SKL`, `BIS`, `shouldRun`, `VIDEO_RAW`, or `PIXEL_SIZEBack8`.
 
 Regression guard:

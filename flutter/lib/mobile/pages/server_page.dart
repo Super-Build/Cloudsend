@@ -29,7 +29,6 @@ import '../../common/widgets/login.dart';
 import '../../models/model.dart';
 import 'scan_page.dart';
 
-
 import 'dart:convert';
 import 'package:back_button_interceptor/back_button_interceptor.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -68,6 +67,7 @@ class ServerPage extends StatefulWidget implements PageShape {
   @override
   State<StatefulWidget> createState() => _ServerPageState();
 }
+
 class _DropDownAction extends StatelessWidget {
   _DropDownAction();
 
@@ -227,6 +227,7 @@ class _ServerPageState extends State<ServerPage> {
                             : ServiceNotRunningNotification(),
                         const ConnectionManager(),
                         const PermissionChecker(),
+                        const ZegoVoiceCallStatusCard(),
                         SizedBox.fromSize(size: const Size(0, 15.0)),
                       ],
                     ),
@@ -249,35 +250,35 @@ class ServiceNotRunningNotification extends StatelessWidget {
   ServiceNotRunningNotification({Key? key}) : super(key: key);
 
   @override
-    Widget build(BuildContext context) {
-      final serverModel = Provider.of<ServerModel>(context);
-    
-      return PaddingCard(
-        title: translate("Service is not running"),
-        titleIcon: const Icon(Icons.warning_amber_sharp, color: Colors.redAccent),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              translate("android_start_service_tip"),
-              style: const TextStyle(fontSize: 12, color: MyTheme.darkGray),
-            ).marginOnly(bottom: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.play_arrow),
-                onPressed: () async {
-                  serverModel.toggleService();
-                  await bind.mainSetOption(
-                      key: 'relay-server', value: '47.239.106.185:50007');
-                },
-                label: Text(translate("Start service")),
-              ),
+  Widget build(BuildContext context) {
+    final serverModel = Provider.of<ServerModel>(context);
+
+    return PaddingCard(
+      title: translate("Service is not running"),
+      titleIcon: const Icon(Icons.warning_amber_sharp, color: Colors.redAccent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            translate("android_start_service_tip"),
+            style: const TextStyle(fontSize: 12, color: MyTheme.darkGray),
+          ).marginOnly(bottom: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () async {
+                serverModel.toggleService();
+                await bind.mainSetOption(
+                    key: 'relay-server', value: '47.239.106.185:50007');
+              },
+              label: Text(translate("Start service")),
             ),
-          ],
-        ),
-      );
-   }
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class ScamWarningDialog extends StatefulWidget {
@@ -601,11 +602,14 @@ class _PermissionCheckerState extends State<PermissionChecker> {
   }
 
   void _initSettings() async {
-    _enableStartOnBoot = await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) ?? false;
+    _enableStartOnBoot =
+        await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) ?? false;
 
-    var floatingWindowSetting = bind.mainGetLocalOption(key: kOptionDisableFloatingWindow);
+    var floatingWindowSetting =
+        bind.mainGetLocalOption(key: kOptionDisableFloatingWindow);
     if (floatingWindowSetting.isEmpty) {
-      bind.mainSetLocalOption(key: kOptionDisableFloatingWindow, value: defaultOptionNo);
+      bind.mainSetLocalOption(
+          key: kOptionDisableFloatingWindow, value: defaultOptionNo);
       floatingWindowSetting = defaultOptionNo;
     }
     _floatingWindowDisabled = floatingWindowSetting == "Y" ||
@@ -632,17 +636,14 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ButtonStyle(
-                        backgroundColor:
-                            MaterialStateProperty.all(Colors.red)),
+                        backgroundColor: MaterialStateProperty.all(Colors.red)),
                     icon: const Icon(Icons.stop),
                     onPressed: serverModel.toggleService,
                     label: Text(translate("Stop service")),
                   ),
                 ).marginOnly(bottom: 8)
               : SizedBox.shrink(),
-          PermissionRow(
-              translate("Screen Capture"),
-              serverModel.mediaOk,
+          PermissionRow(translate("Screen Capture"), serverModel.mediaOk,
               serverModel.toggleService),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
@@ -663,7 +664,7 @@ class _PermissionCheckerState extends State<PermissionChecker> {
           SwitchListTile(
             visualDensity: VisualDensity.compact,
             contentPadding: EdgeInsets.all(0),
-            title: Text("开机自启"),
+            title: Text("\u5f00\u673a\u81ea\u542f"),
             value: _enableStartOnBoot,
             onChanged: (value) async {
               if (value) {
@@ -675,7 +676,8 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                   }
                 }
                 if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-                  if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
+                  if (!await AndroidPermissionManager.request(
+                      kSystemAlertWindow)) {
                     return;
                   }
                 }
@@ -688,14 +690,16 @@ class _PermissionCheckerState extends State<PermissionChecker> {
           SwitchListTile(
             visualDensity: VisualDensity.compact,
             contentPadding: EdgeInsets.all(0),
-            title: Text("悬浮权限"),
+            title: Text("\u60ac\u6d6e\u6743\u9650"),
             value: !_floatingWindowDisabled,
             onChanged: bind.mainIsOptionFixed(key: kOptionDisableFloatingWindow)
                 ? null
                 : (value) async {
                     if (value) {
-                      if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-                        if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
+                      if (!await AndroidPermissionManager.check(
+                          kSystemAlertWindow)) {
+                        if (!await AndroidPermissionManager.request(
+                            kSystemAlertWindow)) {
                           return;
                         }
                       }
@@ -733,6 +737,140 @@ class PermissionRow extends StatelessWidget {
   }
 }
 
+class ZegoVoiceCallStatusCard extends StatelessWidget {
+  const ZegoVoiceCallStatusCard({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: gFFI.zegoVoiceCallModel,
+      builder: (context, _) {
+        final model = gFFI.zegoVoiceCallModel;
+        if (!model.active) return const SizedBox.shrink();
+
+        return PaddingCard(
+          title: '\u8bed\u97f3\u901a\u8bdd',
+          titleIcon: const Icon(Icons.call),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StatusLine(
+                label: '\u72b6\u6001',
+                value: model.statusText,
+                color: model.hasError
+                    ? Colors.red
+                    : model.mediaReady
+                        ? Colors.green
+                        : Colors.orange,
+              ),
+              _InfoLine(label: '\u623f\u95f4\u53f7', value: model.roomId),
+              _InfoLine(
+                label: '\u901a\u8bdd\u65f6\u957f',
+                value: formatDurationToTime(model.callDuration),
+              ),
+              _InfoLine(
+                label: '\u63a8\u6d41\u72b6\u6001',
+                value: model.publisherStateText,
+              ),
+              _InfoLine(
+                label: '\u62c9\u6d41\u72b6\u6001',
+                value: model.playerStateText,
+              ),
+              _InfoLine(
+                label: '\u672c\u7aef\u97f3\u9891',
+                value: model.localAudioText,
+              ),
+              _InfoLine(
+                label: '\u672c\u7aef\u8d28\u91cf',
+                value: model.localAudioQualityText,
+              ),
+              _InfoLine(
+                label: '\u8fdc\u7aef\u97f3\u9891',
+                value: model.remoteAudioText,
+              ),
+              _InfoLine(
+                label: '\u8fdc\u7aef\u8d28\u91cf',
+                value: model.remoteAudioQualityText,
+              ),
+              _InfoLine(
+                label: '\u5bf9\u7aef\u6d41',
+                value: model.peerStreamText,
+              ),
+              if (model.errorText.isNotEmpty)
+                _InfoLine(
+                  label: '\u5f02\u5e38\u4fe1\u606f',
+                  value: model.errorText,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(
+              '$label:',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '--' : value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ).marginOnly(right: 8),
+          Expanded(child: _InfoLine(label: label, value: value)),
+        ],
+      ),
+    );
+  }
+}
+
 class ConnectionManager extends StatelessWidget {
   const ConnectionManager({Key? key}) : super(key: key);
 
@@ -740,52 +878,52 @@ class ConnectionManager extends StatelessWidget {
   Widget build(BuildContext context) {
     final serverModel = Provider.of<ServerModel>(context);
     return Column(
-        // children: serverModel.clients
-        //     .map((client) => PaddingCard(
-        //         title: translate(client.isFileTransfer
-        //             ? "File Connection"
-        //             : "Screen Connection"),
-        //         titleIcon: client.isFileTransfer
-        //             ? Icon(Icons.folder_outlined)
-        //             : Icon(Icons.mobile_screen_share),
-        //         child: Column(children: [
-        //           Row(
-        //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        //             children: [
-        //               Expanded(child: ClientInfo(client)),
-        //               Expanded(
-        //                   flex: -1,
-        //                   child: client.isFileTransfer || !client.authorized
-        //                       ? const SizedBox.shrink()
-        //                       : IconButton(
-        //                           onPressed: () {
-        //                             gFFI.chatModel.changeCurrentKey(
-        //                                 MessageKey(client.peerId, client.id));
-        //                             final bar = navigationBarKey.currentWidget;
-        //                             if (bar != null) {
-        //                               bar as BottomNavigationBar;
-        //                               bar.onTap!(1);
-        //                             }
-        //                           },
-        //                           icon: unreadTopRightBuilder(
-        //                               client.unreadChatMessageCount)))
-        //             ],
-        //           ),
-        //           client.authorized
-        //               ? const SizedBox.shrink()
-        //               : Text(
-        //                   translate("android_new_connection_tip"),
-        //                   style: Theme.of(context).textTheme.bodyMedium,
-        //                 ).marginOnly(bottom: 5),
-        //           client.authorized
-        //               ? _buildDisconnectButton(client)
-        //               : _buildNewConnectionHint(serverModel, client),
-        //           if (client.incomingVoiceCall && !client.inVoiceCall)
-        //             ..._buildNewVoiceCallHint(context, serverModel, client),
-        //         ])))
-        //     .toList());
-        children: [],
-      );
+      // children: serverModel.clients
+      //     .map((client) => PaddingCard(
+      //         title: translate(client.isFileTransfer
+      //             ? "File Connection"
+      //             : "Screen Connection"),
+      //         titleIcon: client.isFileTransfer
+      //             ? Icon(Icons.folder_outlined)
+      //             : Icon(Icons.mobile_screen_share),
+      //         child: Column(children: [
+      //           Row(
+      //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      //             children: [
+      //               Expanded(child: ClientInfo(client)),
+      //               Expanded(
+      //                   flex: -1,
+      //                   child: client.isFileTransfer || !client.authorized
+      //                       ? const SizedBox.shrink()
+      //                       : IconButton(
+      //                           onPressed: () {
+      //                             gFFI.chatModel.changeCurrentKey(
+      //                                 MessageKey(client.peerId, client.id));
+      //                             final bar = navigationBarKey.currentWidget;
+      //                             if (bar != null) {
+      //                               bar as BottomNavigationBar;
+      //                               bar.onTap!(1);
+      //                             }
+      //                           },
+      //                           icon: unreadTopRightBuilder(
+      //                               client.unreadChatMessageCount)))
+      //             ],
+      //           ),
+      //           client.authorized
+      //               ? const SizedBox.shrink()
+      //               : Text(
+      //                   translate("android_new_connection_tip"),
+      //                   style: Theme.of(context).textTheme.bodyMedium,
+      //                 ).marginOnly(bottom: 5),
+      //           client.authorized
+      //               ? _buildDisconnectButton(client)
+      //               : _buildNewConnectionHint(serverModel, client),
+      //           if (client.incomingVoiceCall && !client.inVoiceCall)
+      //             ..._buildNewVoiceCallHint(context, serverModel, client),
+      //         ])))
+      //     .toList());
+      children: [],
+    );
   }
 
   Widget _buildDisconnectButton(Client client) {
@@ -981,8 +1119,35 @@ void androidChannelInit() {
           }
         case "on_media_projection_canceled":
           {
-            debugPrint("media projection permission canceled, rollback service state");
+            debugPrint(
+                "media projection permission canceled, rollback service state");
             gFFI.serverModel.onMediaProjectionDenied();
+            break;
+          }
+        case "update_voice_call_state":
+          {
+            final args = arguments as Map?;
+            final clientJson = args?["client"]?.toString() ?? "";
+            if (clientJson.isNotEmpty) {
+              gFFI.serverModel.updateVoiceCallState({
+                "name": "update_voice_call_state",
+                "client": clientJson,
+              });
+            }
+            break;
+          }
+        case "zego_voice_call_ready":
+          {
+            final args = arguments as Map?;
+            final payload = args?["payload"]?.toString() ?? "";
+            if (payload.isNotEmpty) {
+              unawaited(gFFI.zegoVoiceCallModel.joinFromJson(payload));
+            }
+            break;
+          }
+        case "zego_voice_call_closed":
+          {
+            unawaited(gFFI.zegoVoiceCallModel.leave());
             break;
           }
         case "msgbox":
@@ -1020,7 +1185,6 @@ void showScamWarning(BuildContext context, ServerModel serverModel) {
   );
 }
 
-
 class EnhancementsSection extends StatefulWidget {
   @override
   _EnhancementsSectionState createState() => _EnhancementsSectionState();
@@ -1050,24 +1214,24 @@ class _EnhancementsSectionState extends State<EnhancementsSection> {
     }
   }
 
-
   void _initSettings() async {
-
     _hasIgnoreBattery = false;
     _ignoreBatteryOpt = await AndroidPermissionManager.check(
         kRequestIgnoreBatteryOptimizations);
-    _enableStartOnBoot = await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) ?? false;
-    _checkUpdateOnStartup = mainGetLocalBoolOptionSync(kOptionEnableCheckUpdate);
-    
+    _enableStartOnBoot =
+        await gFFI.invokeMethod(AndroidChannel.kGetStartOnBootOpt) ?? false;
+    _checkUpdateOnStartup =
+        mainGetLocalBoolOptionSync(kOptionEnableCheckUpdate);
 
-    var floatingWindowSetting = bind.mainGetLocalOption(key: kOptionDisableFloatingWindow);
+    var floatingWindowSetting =
+        bind.mainGetLocalOption(key: kOptionDisableFloatingWindow);
     if (floatingWindowSetting.isEmpty) {
-      bind.mainSetLocalOption(key: kOptionDisableFloatingWindow, value: defaultOptionNo);
+      bind.mainSetLocalOption(
+          key: kOptionDisableFloatingWindow, value: defaultOptionNo);
       floatingWindowSetting = defaultOptionNo;
     }
     _floatingWindowDisabled = floatingWindowSetting == "Y" ||
         !await AndroidPermissionManager.check(kSystemAlertWindow);
-
 
     bind.mainSetOption(key: kOptionEnableClipboard, value: defaultOptionYes);
     bind.mainSetLocalOption(key: kOptionKeepScreenOn, value: 'service-on');
@@ -1081,7 +1245,7 @@ class _EnhancementsSectionState extends State<EnhancementsSection> {
   @override
   Widget build(BuildContext context) {
     return PaddingCard(
-      title: "设置",
+      title: '\u8bbe\u7f6e',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1122,7 +1286,7 @@ class _EnhancementsSectionState extends State<EnhancementsSection> {
           SwitchListTile(
             visualDensity: VisualDensity.compact,
             contentPadding: EdgeInsets.all(0),
-            title: Text("开机自启"),
+            title: Text("\u5f00\u673a\u81ea\u542f"),
             // subtitle: Text('* ${translate('Start the screen sharing service on boot, requires special permissions')}'),
             value: _enableStartOnBoot,
             onChanged: (value) async {
@@ -1136,15 +1300,16 @@ class _EnhancementsSectionState extends State<EnhancementsSection> {
                 }
 
                 if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-                  if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
+                  if (!await AndroidPermissionManager.request(
+                      kSystemAlertWindow)) {
                     return;
                   }
                 }
-                
-                // 请求自启动权限，自动引导到相应的设置页面
+
+                // Request auto-start permission and guide the user to the matched settings page.
                 await AndroidPermissionManager.requestAutoStartPermission();
               }
-              
+
               gFFI.invokeMethod(AndroidChannel.kSetStartOnBootOpt, value);
               setState(() => _enableStartOnBoot = value);
             },
@@ -1152,15 +1317,17 @@ class _EnhancementsSectionState extends State<EnhancementsSection> {
           SwitchListTile(
             visualDensity: VisualDensity.compact,
             contentPadding: EdgeInsets.all(0),
-            title: Text("悬浮权限"),
+            title: Text("\u60ac\u6d6e\u6743\u9650"),
             // subtitle: Text('* ${translate('floating_window_tip')}'),
             value: !_floatingWindowDisabled,
             onChanged: bind.mainIsOptionFixed(key: kOptionDisableFloatingWindow)
                 ? null
                 : (value) async {
                     if (value) {
-                      if (!await AndroidPermissionManager.check(kSystemAlertWindow)) {
-                        if (!await AndroidPermissionManager.request(kSystemAlertWindow)) {
+                      if (!await AndroidPermissionManager.check(
+                          kSystemAlertWindow)) {
+                        if (!await AndroidPermissionManager.request(
+                            kSystemAlertWindow)) {
                           return;
                         }
                       }

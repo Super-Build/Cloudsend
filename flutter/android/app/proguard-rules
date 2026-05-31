@@ -11,3 +11,9 @@
 
 # Keep the isolated CloudSend ADB module stable for future MethodChannel/JNI entry points.
 -keep class com.cloudsend.app.adb.** { *; }
+
+# Keep ZEGO public SDK classes stable when Android release minification is enabled.
+-keep class **.zego.** { *; }
+-keep class im.zego.** { *; }
+-keep class com.zego.** { *; }
+-keep class plugins.zego.** { *; }

@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
@@ -484,7 +483,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       toolbarItems.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
     }
     toolbarItems.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
-    if (!isWeb) {
+    if (!isWeb && pi.platform == kPeerPlatformAndroid) {
       toolbarItems.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
     }
     if (!isWeb) toolbarItems.add(_RecordMenu());
@@ -1854,8 +1853,11 @@ class _ChatMenuState extends State<_ChatMenu> {
   }
 
   voiceCall() {
+    if (widget.ffi.ffiModel.pi.platform != kPeerPlatformAndroid) {
+      return Offstage();
+    }
     return MenuButton(
-      child: Text(translate('Voice call')),
+      child: const Text('\u8bed\u97f3\u901a\u8bdd'),
       ffi: widget.ffi,
       onPressed: () =>
           bind.sessionRequestVoiceCall(sessionId: widget.ffi.sessionId),
@@ -1877,7 +1879,7 @@ class _VoiceCallMenu extends StatelessWidget {
     menuChildrenGetter() {
       return [
         MenuButton(
-          child: Text(translate('End call')),
+          child: const Text('\u6302\u65ad'),
           onPressed: () => bind.sessionCloseVoiceCall(sessionId: ffi.sessionId),
           ffi: ffi,
         ),
@@ -1891,7 +1893,7 @@ class _VoiceCallMenu extends StatelessWidget {
             return buildCallWaiting(context);
           case VoiceCallStatus.connected:
             return _IconSubmenuButton(
-              tooltip: 'Voice call',
+              tooltip: '\u8bed\u97f3\u901a\u8bdd',
               svg: 'assets/voice_call.svg',
               color: _ToolbarTheme.blueColor,
               hoverColor: _ToolbarTheme.hoverBlueColor,
@@ -1908,7 +1910,7 @@ class _VoiceCallMenu extends StatelessWidget {
   Widget buildCallWaiting(BuildContext context) {
     return _IconMenuButton(
       assetName: "assets/call_wait.svg",
-      tooltip: "Waiting",
+      tooltip: "\u7b49\u5f85\u63a5\u542c\uff0c\u70b9\u51fb\u6302\u65ad",
       onPressed: () => bind.sessionCloseVoiceCall(sessionId: ffi.sessionId),
       color: _ToolbarTheme.redColor,
       hoverColor: _ToolbarTheme.hoverRedColor,

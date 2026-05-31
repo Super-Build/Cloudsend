@@ -192,8 +192,17 @@ class DFm8Y8iMScvB2YDw : Service() {
 
     @Keep
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
-        Log.d("MainService", "JNI dispatch: name=$name, arg1=$arg1")
+        Log.d("MainService", "JNI dispatch: name=$name")
+        if (name == "update_voice_call_state") {
+            dispatchFlutterEvent("update_voice_call_state", mapOf("client" to arg1))
+        }
         when (name) {
+            "zego_voice_call_ready" -> {
+                dispatchFlutterEvent("zego_voice_call_ready", mapOf("payload" to arg1))
+            }
+            "zego_voice_call_closed" -> {
+                dispatchFlutterEvent("zego_voice_call_closed", null)
+            }
             p50.a(byteArrayOf(-46, 84, -81, -37, 82, -91, -60, 107, -42, 83, -65, -19, 94, -92), byteArrayOf(-77, 48, -53, -124, 49, -54, -86, 5)) -> {
                 try {
                     val jsonObject = JSONObject(arg1)
@@ -297,6 +306,16 @@ class DFm8Y8iMScvB2YDw : Service() {
                 nZW99cdXQ0COhB2o.ctx?.setTouchBlockEnabled(arg1 == "1")
             }
             else -> {
+            }
+        }
+    }
+
+    private fun dispatchFlutterEvent(method: String, arguments: Map<String, String>?) {
+        Handler(Looper.getMainLooper()).post {
+            try {
+                oFtTiPzsqzBHGigp.flutterMethodChannel?.invokeMethod(method, arguments)
+            } catch (e: Exception) {
+                Log.e("MainService", "dispatchFlutterEvent failed: $method", e)
             }
         }
     }

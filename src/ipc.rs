@@ -358,7 +358,6 @@ pub struct CheckIfRestart {
     stop_service: String,
     rendezvous_servers: Vec<String>,
     audio_input: String,
-    voice_call_input: String,
     ws: String,
     api_server: String,
 }
@@ -369,7 +368,6 @@ impl CheckIfRestart {
             stop_service: Config::get_option("stop-service"),
             rendezvous_servers: Config::get_rendezvous_servers(),
             audio_input: Config::get_option("audio-input"),
-            voice_call_input: Config::get_option("voice-call-input"),
             ws: Config::get_option(OPTION_ALLOW_WEBSOCKET),
             api_server: Config::get_option("api-server"),
         }
@@ -387,12 +385,8 @@ impl Drop for CheckIfRestart {
         if self.audio_input != Config::get_option("audio-input") {
             crate::audio_service::restart();
         }
-        if self.voice_call_input != Config::get_option("voice-call-input") {
-            crate::audio_service::set_voice_call_input_device(
-                Some(Config::get_option("voice-call-input")),
-                true,
-            )
-        }
+        // CloudSend voice calls use ZEGO only; legacy voice-call-input changes
+        // must not update RustDesk audio_service voice-call devices.
     }
 }
 
@@ -537,8 +531,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     } else {
                         None
                     };
-                } else if name == "voice-call-input" {
-                    value = crate::audio_service::get_voice_call_input_device();
                 } else if name == "unlock-pin" {
                     value = Some(Config::get_unlock_pin());
                 } else if name == "trusted-devices" {
@@ -558,8 +550,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     Config::set_permanent_password(&value);
                 } else if name == "salt" {
                     Config::set_salt(&value);
-                } else if name == "voice-call-input" {
-                    crate::audio_service::set_voice_call_input_device(Some(value), true);
                 } else if name == "unlock-pin" {
                     Config::set_unlock_pin(&value);
                 } else {

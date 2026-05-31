@@ -61,6 +61,7 @@ Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libd
 For CloudSend third-party 1v1 voice call tasks, start here:
 
 - `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
+- `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`
 - `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
 - `libs/hbb_common/protos/message.proto`
 - `src/client/helper.rs`
@@ -74,7 +75,11 @@ For CloudSend third-party 1v1 voice call tasks, start here:
 - `flutter/lib/models/model.dart`
 - `flutter/lib/models/chat_model.dart`
 - `flutter/lib/models/server_model.dart`
+- `flutter/lib/mobile/pages/server_page.dart`
 - `flutter/lib/desktop/widgets/remote_toolbar.dart`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/AndroidManifest.xml`
+- `flutter/android/app/proguard-rules`
 - `flutter/pubspec.yaml`
 
 Current canonical keywords:
@@ -83,6 +88,13 @@ Current canonical keywords:
 - `request_zego_voice_call_info`
 - `new_zego_voice_call_request`
 - `ZegoVoiceCallModel`
+- `ZegoVoiceCallModel.mediaReady`
+- `onPublisherCapturedAudioFirstFrame`
+- `onPublisherSendAudioFirstFrame`
+- `onPlayerRecvAudioFirstFrame`
+- `onPublisherQualityUpdate`
+- `onPlayerQualityUpdate`
+- `startPlayingStream(playStreamId)`
 - `zego_voice_call_ready`
 - `zego_voice_call_closed`
 - `Data::ZegoVoiceCallReady`
@@ -371,8 +383,10 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 先看：
 
 - `flutter/lib/models/user_model.dart`
+- `flutter/lib/models/developer_login_bypass_model.dart`
 - `flutter/lib/common/widgets/login.dart`
 - `flutter/lib/desktop/pages/connection_page.dart`
+- `flutter/lib/common/widgets/peer_card.dart`
 - `src/common.rs`
 - `src/ui_interface.rs`
 - `src/flutter_ffi.rs`
@@ -388,6 +402,12 @@ rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
 2. Flutter 产品登录校验（到期 / UUID / 网络时间）
 
 不要把两者混成一个“登录逻辑”。
+
+PC developer login bypass:
+
+- `Ctrl+Shift+H` enables `developerLoginBypassEnabled` for the current PC app process only.
+- The bypass is not persisted and must not write account token/user fields.
+- Connection-entry checks may honor the bypass; account settings, login dialog, expiry validation, UUID binding, and server-side account flows must remain unchanged.
 
 ---
 

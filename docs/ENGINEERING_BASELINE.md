@@ -523,6 +523,17 @@ Feature gate：
 
 - 不要把 Rust `verify_login()` 当成当前产品登录的真实准入逻辑。
 
+### 3.5.1 2026-05-31 PC developer login bypass
+
+Current source truth:
+
+- Developer login bypass state lives only in memory at `flutter/lib/models/developer_login_bypass_model.dart::developerLoginBypassEnabled`.
+- `Ctrl+Shift+H` is handled by `flutter/lib/desktop/pages/connection_page.dart::_handleDeveloperLoginBypassShortcut`.
+- The bypass only affects PC desktop connection-entry checks in `flutter/lib/desktop/pages/connection_page.dart` and `flutter/lib/common/widgets/peer_card.dart`.
+- The bypass does not write `access_token`, `user_info`, `user_email`, `UserModel.userName`, or any persisted local option.
+- Closing the PC app clears the bypass naturally because it is not persisted.
+- Normal product login, logout, expiry validation, UUID binding, address book account state, and Rust transport login stay unchanged.
+
 ### 3.6 OIDC / 下载 / 上传 / 同步（HBBS HTTP Flow）
 
 #### 账号 / OIDC
@@ -707,18 +718,55 @@ Current source truth:
   - `CloseVoiceCall`
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
+- PC/controller default ZEGO Token endpoint is `https://2.2662275.xyz/api/v1/voice-call/create`; `src/client/helper.rs::option_or_default` treats the old `api.unan.uno` endpoint and old default API key as stale local configuration and falls back to the new default service.
+- PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
+- `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp` when requesting the token service. The token service must include this value in room/stream derivation so each established PC-Android control connection gets an isolated 1v1 ZEGO room.
 - PC/controller sends ZEGO metadata from `src/client/io_loop.rs::Data::NewVoiceCall`.
+- `src/client/helper.rs::request_zego_voice_call_info` rejects incomplete token-service responses before any call invite is sent.
 - `src/client/helper.rs::new_zego_voice_call_request` does not send the real caller token; `callerToken` stays in PC memory, Android only receives `calleeToken`.
-- PC/controller no longer starts old audio capture through `Remote::start_voice_call()` after `VoiceCallResponse.accepted`.
-- `src/client/io_loop.rs::Remote::start_voice_call` is a legacy guard for CloudSend and returns `None`; the ZEGO voice button must not send old RustDesk `AudioFrame` packets.
+- PC/controller no longer starts old RustDesk audio capture after `VoiceCallResponse.accepted`; the ZEGO voice button must not send old RustDesk `AudioFrame` voice-call packets.
+- PC Flutter only shows ZEGO toolbar/chat-menu voice-call entries when `PeerInfo.platform == kPeerPlatformAndroid`, so non-Android sessions cannot start the CloudSend ZEGO 1v1 Android call flow from visible PC UI.
+- `src/client/io_loop.rs::Data::NewVoiceCall` rejects non-Android peers at the Rust session layer, so hidden or legacy UI entrypoints cannot start the ZEGO Android call flow for Windows/Linux/macOS remotes.
+- `src/ui_session_interface.rs::request_voice_call` only sends `Data::NewVoiceCall`; it does not start `ipc::start_pa` or other legacy RustDesk audio helpers.
+- `src/flutter.rs`, `src/ui.rs`, and `src/ui/cm.rs` must not pre-start `ipc::start_pa` for old RustDesk voice-call support.
+- `src/client/io_loop.rs` has no `stop_voice_call_sender` legacy audio thread handle; ZEGO close only clears ZEGO state and sends the existing close signal.
+- `src/flutter_ffi.rs::set_voice_call_input_device` and `src:flutter_ffi.rs::get_voice_call_input_device` are inert in CloudSend ZEGO mode.
+- `src/ipc.rs` ignores legacy `voice-call-input` get/set changes for ZEGO voice-call work.
+- `src/server/connection.rs::on_close` must not call `audio_service::set_voice_call_input_device(...)` for ZEGO voice-call cleanup.
+- `src/client/io_loop.rs` tracks `zego_voice_call_active`, `voice_call_request_timestamp`, and `pending_zego_voice_call`; duplicate PC-side voice-call creation is rejected while a call is pending or active.
 - Android/controlled side stores ZEGO callee metadata in `src/server/connection.rs` and emits `Data::ZegoVoiceCallReady` when the user accepts.
+- Android/controlled `Data::ZegoVoiceCallReady` must cross the Android MainService bridge before Flutter joins ZEGO: `src/flutter.rs` calls `call_main_service_set_by_name("zego_voice_call_ready", ...)`, `DFm8Y8iMScvB2YDwSBN` forwards to `flutterMethodChannel`, and `androidChannelInit` calls `ZegoVoiceCallModel.joinFromJson(...)`.
+- Android/controlled `update_voice_call_state` is mirrored through `flutterMethodChannel` so the incoming dialog and active-call cleanup remain reliable while preserving the existing MainService notification branch.
+- `flutter/lib/models/zego_voice_call_model.dart` ignores duplicate same-call payloads while joining or joined, preventing Android bridge/global-event double delivery from double-joining the same ZEGO room.
+- Android/controlled side rejects incoming voice-call requests without valid ZEGO callee metadata instead of auto-accepting a legacy/non-ZEGO invite.
+- Android/controlled `Connection::handle_voice_call` returns `VoiceCallResponse.accepted = false` if the user accepts but `pending_zego_voice_call` is missing, preventing a false-positive PC-only ZEGO room join.
 - Android/controlled side no longer calls `audio_service::set_voice_call_input_device(...)` from `Connection::handle_voice_call`.
 - Android/controlled side keeps `Connection::voice_calling = false` for ZEGO calls so audio permission/option updates cannot subscribe the legacy `audio_service` path.
 - Flutter joins/leaves ZEGO room through `flutter/lib/models/zego_voice_call_model.dart`.
-- Flutter emits visible/debug diagnostics such as `ZEGO voice: loginRoom errorCode=0`, `publishing stream=...`, and `playing stream=...`.
+- Flutter must not emit visible ZEGO debug toasts such as payload, publish request, play request, or stream id traces. ZEGO internals are log-only; user-visible voice text is concise Chinese state and error text.
+- `flutter/lib/models/zego_voice_call_model.dart` must not treat `startPlayingStream(...)` as proof of real media. Real media readiness is based on ZEGO callbacks: `onRoomStateChanged`, `onPublisherStateUpdate`, `onPlayerStateUpdate`, `onPublisherSendAudioFirstFrame`, and `onPlayerRecvAudioFirstFrame`.
+- Android shows the existing accept/reject dialog for incoming ZEGO voice calls in `flutter/lib/models/server_model.dart::showVoiceCallDialog`; ZEGO calls must not auto-accept.
+- Android checks/requests `android.permission.RECORD_AUDIO` after the user accepts; denied microphone permission rejects the call.
+- Android `flutter/lib/models/server_model.dart::updateVoiceCallState` must not drop incoming voice-call events when the local `_clients` list has not yet received the connection add event.
+- Android `src/server/connection.rs` tracks `zego_voice_call_active` per connection and rejects duplicate incoming ZEGO requests while that connection has a pending or active call.
+- Android `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` rejects a second simultaneous incoming ZEGO call on the same Android device while one ZEGO call is pending or active. This is local to that Android endpoint.
+- Android `flutter/lib/models/server_model.dart::onClientRemove` leaves `ZegoVoiceCallModel` if the removed client was in or receiving a ZEGO call, clearing stale busy state after abnormal disconnect.
+- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, and `BLUETOOTH_CONNECT`; Android release minification keeps ZEGO classes in `flutter/android/app/proguard-rules`.
+- Android calls `setAudioRouteToSpeaker(true)` from `flutter/lib/models/zego_voice_call_model.dart` so the speaker is enabled by default.
+- Flutter explicitly enables ZEGO audio capture and audio transport with `enableAudioCaptureDevice(true)`, `mutePublishStreamAudio(false)`, `muteAllPlayStreamAudio(false)`, and `mutePlayStreamAudio(streamId, false)`.
+- `src/client/io_loop.rs` has a process-level ZEGO call owner guard so one PC process cannot run two simultaneous ZEGO calls through the singleton Flutter ZEGO engine and mix callbacks across rooms.
+- `flutter/lib/models/chat_model.dart::onVoiceCallStarted` and `onVoiceCallClosed` no longer invoke Android legacy `on_voice_call_started` / `on_voice_call_closed` platform methods for CloudSend ZEGO voice calls.
+- `flutter/lib/models/zego_voice_call_model.dart` calls `startPlayingStream(playStreamId)` directly after `loginRoom` + `startPublishingStream` with the known expected stream id, and also retries/refreshes play when `onRoomStreamUpdate(Add)` arrives. A missed/delayed stream-add callback must not leave either side permanently waiting.
+- `flutter/lib/models/zego_voice_call_model.dart` follows the official ZEGO Flutter demo's callback evidence model: `onPublisherCapturedAudioFirstFrame` records microphone capture, `onPublisherSendAudioFirstFrame` records local audio leaving the device, and `onPlayerRecvAudioFirstFrame` records remote audio arriving.
+- `flutter/lib/models/zego_voice_call_model.dart` treats ZEGO first-audio-frame callbacks as mandatory: missing `onPublisherSendAudioFirstFrame` becomes `未采集到本端音频` or `本端音频未发送`; exhausting remote play retries before `onPlayerRecvAudioFirstFrame` becomes `未收到远端音频` or `未发现对端推流`.
+- `flutter/lib/models/zego_voice_call_model.dart` listens to `onPublisherQualityUpdate` and `onPlayerQualityUpdate`; `flutter/lib/mobile/pages/server_page.dart::ZegoVoiceCallStatusCard` displays audio send/receive `fps/kbps` as diagnostics.
+- PC shows the active ZEGO voice-call panel from `flutter/lib/desktop/pages/remote_page.dart`, including `roomId`, call duration, local/remote audio readiness, audio quality, and Chinese `挂断`.
+- Android shows `ZegoVoiceCallStatusCard` under the permission card in `flutter/lib/mobile/pages/server_page.dart`, including status, room id, duration, publish/play states, peer stream state, and concise error text. Android does not expose a hangup button; PC remains the hangup controller.
+- PC and Android voice-call status text is Chinese.
 - PC toolbar no longer shows old `AudioInput(isVoiceCall: true)` under `_VoiceCallMenu`.
+- Windows child Flutter engines created by `desktop_multi_window` must register ZEGO in `flutter/windows/runner/flutter_window.cpp`; otherwise the remote window raises `MissingPluginException` for `createEngineWithProfile`.
 - Token service deployment and operational contract are documented in `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
-- Project integration map is documented in `docs/ZEGO_VOICE_CALL_INTEGRATION.md`.
+- Project integration map is documented in `docs/ZEGO_VOICE_CALL_INTEGRATION.md`; diagram-level architecture is documented in `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`.
 
 Isolation rule:
 
