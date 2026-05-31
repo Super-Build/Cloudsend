@@ -1,6 +1,7 @@
 # 任务入口点 / Task Entrypoints
 
 最后一次从全仓源码核验：2026-05-18
+最近一次文档入口整理：2026-06-01
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -124,6 +125,39 @@ Version / packaging tasks must start from:
 - `res/PKGBUILD`
 - `Cargo.lock` project package entries only; do not rewrite third-party dependency versions.
 
+## Documentation Maintenance Entrypoints (2026-06-01)
+
+For documentation cleanup, consolidation, trust-level review, or engineering-memory updates, start here:
+
+- `docs/ENGINEERING_INDEX.md`
+- `docs/DOCUMENT_AUDIT.md`
+- `docs/TASK_ENTRYPOINTS.md`
+- `docs/REPO_TRUE_STRUCTURE_MAP.md`
+- `docs/ENGINEERING_BASELINE.md`
+- `docs/ENGINEERING_ANDROID_RUNTIME.md` (only when Android runtime facts are involved)
+- `AGENTS.md`
+- `CLAUDE.md`
+- `PC-Build.md` (only for Windows build-environment background)
+- `terminal.md` (history only; verify against source before trusting)
+
+Documentation maintenance rules:
+
+- Do not create a new competing memory document when an existing engineering doc can carry the fact.
+- Prefer classifying and cross-linking existing docs over moving files, unless a future task explicitly asks for physical relocation.
+- Keep implementation facts in `ENGINEERING_BASELINE.md`, Android runtime facts in `ENGINEERING_ANDROID_RUNTIME.md`, task entry files in this document, and trust boundaries in `DOCUMENT_AUDIT.md`.
+- Keep deployment docs free of real server passwords, `ZEGO_SERVER_SECRET`, private API keys, and private tokens.
+- Treat `README.md`, `docs/README-ZH.md`, `docs/CONTRIBUTING*.md`, `docs/CODE_OF_CONDUCT*.md`, `docs/SECURITY.md`, and `docs/DEVCONTAINER.md` as community/reference docs, not current engineering truth.
+
+Current document categories:
+
+- Engineering truth: `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, `docs/REPO_TRUE_STRUCTURE_MAP.md`, `docs/DOCUMENT_AUDIT.md`.
+- Topic docs: `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, `docs/ADB_LADB_INTEGRATION_MEMORY.md`.
+- Agent entry docs: `AGENTS.md`, `CLAUDE.md`.
+- Background/history docs: `PC-Build.md`, `terminal.md`, `docs/CHANGELOG.md`, `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`.
+- Community/reference docs: `README.md`, `docs/README-ZH.md`, `docs/CONTRIBUTING*.md`, `docs/CODE_OF_CONDUCT*.md`, `docs/SECURITY.md`, `docs/DEVCONTAINER.md`.
+
+---
+
 ## 0. 当前任务纪律与最新热修入口（Current Task Guard）
 
 后续任务必须遵守：
@@ -222,7 +256,7 @@ Version / packaging tasks must start from:
 
 ```bash
 git -c safe.directory="$PWD" status --short
-rg -n "<feature keyword>" src libs flutter docs CLAUDE.md terminal.md
+rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md terminal.md README.md
 ```
 
 然后判断：

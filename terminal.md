@@ -1,8 +1,13 @@
 # CloudSend Terminal Service Implementation
 
+> [!IMPORTANT]
+> This file is a historical terminal design note. The current documentation audit classifies it as reference-only: verify terminal facts against `src/server/terminal_service.rs`, `src/server/connection.rs`, and `flutter/lib/models/terminal_model.dart` before using them as implementation truth.
+>
+> Known drift: the historical `service_id` examples below use `tmp_` / `persist_`, while the current source-truth audit records `src/server/terminal_service.rs::generate_service_id()` as using `ts_<uuid>`.
+
 ## Overview
 
-The CloudSend terminal service provides remote terminal/shell access with support for multiple concurrent terminal sessions per connection. It features persistence support, allowing terminal sessions to survive connection drops and be resumed later.
+This historical note describes remote terminal/shell access with multiple concurrent terminal sessions per connection and a persistence-oriented design. Treat the persistence details below as design background unless the current source files confirm the behavior.
 
 Current source-truth note (verified 2026-05-18): this subsystem is inherited from the upstream RustDesk terminal implementation, but project documentation should refer to the current product/runtime as CloudSend unless explicitly discussing upstream history.
 

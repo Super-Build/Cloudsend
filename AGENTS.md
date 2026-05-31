@@ -1,6 +1,7 @@
 # AGENTS.md — CloudSend / 云计划 v5.2.1
 
 最后一次与全仓源码对齐：2026-05-18
+最近一次文档分层整理：2026-06-01
 
 > 本文件是 **Codex** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
@@ -247,9 +248,11 @@ cargo test
 | waiting/reconnect | `flutter/lib/models/model.dart`, `flutter/lib/common.dart`, `src/server/connection.rs` |
 | 登录/账号 | `flutter/lib/models/user_model.dart`, `src/common.rs`, `src/hbbs_http/account.rs` |
 | 终端 | `src/server/terminal_service.rs`, `src/server/connection.rs`, `flutter/lib/models/terminal_model.dart` |
+| ZEGO 语音 | `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, `flutter/lib/models/zego_voice_call_model.dart` |
 | 插件 | `src/plugin/`, `flutter/lib/plugin/` |
 | 隐私模式/虚拟显示 | `src/privacy_mode.rs`, `src/privacy_mode/win_*`, `src/virtual_display_manager.rs` |
 | 构建/命名 | `build.sh`, `Cargo.toml`, `config.rs`, `native_model.dart`, `main.cpp` |
+| 文档整理 | `docs/ENGINEERING_INDEX.md`, `docs/DOCUMENT_AUDIT.md`, `docs/TASK_ENTRYPOINTS.md`, `docs/REPO_TRUE_STRUCTURE_MAP.md` |
 
 ---
 

@@ -1,7 +1,7 @@
 # 工程总索引 / Engineering Index
 
 最后一次基于全仓源码核验：2026-05-18
-最近一次文档一致性复核：2026-05-18
+最近一次文档一致性复核：2026-06-01
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -46,14 +46,16 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 6. `docs/DOCUMENT_AUDIT.md`
 7. `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`
 8. `docs/ADB_LADB_INTEGRATION_MEMORY.md` (only for ADB/LADB integration tasks)
-9. `CLAUDE.md`
-10. `terminal.md`
+9. `AGENTS.md`
+10. `CLAUDE.md`
+11. `terminal.md`
 
 说明：
 
-- `terminal.md` 和 `CLAUDE.md` 仍有参考价值，但都存在**局部漂移**，不能高于源码与工程文档。
+- `AGENTS.md` 和 `CLAUDE.md` 是 agent 入口速查；它们有参考价值，但不能高于源码与工程文档。
+- `terminal.md` 仍有参考价值，但存在**局部漂移**，不能高于源码与工程文档。
 - 当工程文档与源码冲突时，**以源码为准**，并同步更新工程文档。
-- 本仓库当前**没有 `AGENTS.md`**。如未来新增 `AGENTS.md`，应只做导航入口，并显式指向本文件，不得另起一套相互竞争的项目记忆。
+- `AGENTS.md` 必须只做 Codex 补充入口，并显式指向本文件，不得另起一套相互竞争的项目记忆。
 
 ### 0.2 文档写法约定（Canonical Writing Contract）
 
@@ -125,6 +127,45 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 1. `docs/DOCUMENT_AUDIT.md`
 2. 回到对应源码核验
 
+### 1.5 第三方 ZEGO 语音通话
+
+1. `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`
+2. `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
+3. `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+4. `docs/TASK_ENTRYPOINTS.md` 的 `ZEGO Voice Call Entrypoints`
+5. 对应源码入口文件
+
+### 1.6 ADB / LADB 专题
+
+1. `docs/ADB_LADB_INTEGRATION_MEMORY.md`
+2. `docs/TASK_ENTRYPOINTS.md`
+3. 对应源码入口文件
+
+---
+
+## 1A. 文档分层目录（Document Catalog）
+
+本仓库文档按用途分层。不要把历史说明、上游社区文档或专题记录当成当前工程真相。
+
+| 分类 | 文档 | 用途 | 可信边界 |
+|---|---|---|---|
+| 工程入口 | `docs/ENGINEERING_INDEX.md` | 全仓文档入口、阅读顺序、写法规则 | 第一入口，但不承载全部实现细节 |
+| 工程真相 | `docs/ENGINEERING_BASELINE.md` | 项目身份、架构、关键链路、构建/品牌现实 | 高可信；仍以源码为最终真相 |
+| Android 运行时 | `docs/ENGINEERING_ANDROID_RUNTIME.md` | Android service/frame/waiting/runtime 不变量 | Android 任务必须阅读 |
+| 任务导航 | `docs/TASK_ENTRYPOINTS.md` | 按任务类型给出第一批源码入口 | 入口地图，不是设计文档 |
+| 结构地图 | `docs/REPO_TRUE_STRUCTURE_MAP.md` | 全仓目录职责和跨层关系 | 快速定位；细节仍回源码 |
+| 可信审计 | `docs/DOCUMENT_AUDIT.md` | 文档可信等级和漂移边界 | 判断文档能不能直接信 |
+| 源码审计 | `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` | 2026-05-18 命名/源码事实审计记录 | 固定日期审计，不自动代表未来 |
+| ZEGO 专题 | `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md` | ZEGO 语音工程链路、图、官方 Demo 对齐 | ZEGO 方案主设计文档 |
+| ZEGO 专题 | `docs/ZEGO_VOICE_CALL_INTEGRATION.md` | ZEGO 接入边界、协议、运行时规则 | ZEGO 实现维护文档 |
+| ZEGO 专题 | `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` | 宝塔/Nginx/Go Token 服务部署 | 部署操作文档，不能写真实密钥 |
+| ADB 专题 | `docs/ADB_LADB_INTEGRATION_MEMORY.md` | ADB/LADB 集成上下文和后续方案 | 仅 ADB/LADB 任务使用 |
+| Agent 入口 | `AGENTS.md`, `CLAUDE.md` | Codex / Claude Code 快速入口和常用锚点 | 补充导航，不高于工程主套件 |
+| 构建背景 | `PC-Build.md` | Windows Server 构建环境背景和旧上游流程 | 环境参考；当前命令以 `new-build.cmd` 为准 |
+| 历史设计 | `terminal.md` | terminal 子系统历史设计背景 | 等级 C；必须回源码核验 |
+| 历史记录 | `docs/CHANGELOG.md` | 已发生变更记录 | 历史参考，不作为当前实现入口 |
+| 上游/社区 | `README.md`, `docs/README-ZH.md`, `docs/CONTRIBUTING*.md`, `docs/CODE_OF_CONDUCT*.md`, `docs/SECURITY.md`, `docs/DEVCONTAINER.md` | 上游说明、贡献、行为、安全、开发容器 | 参考/社区文档，不高于工程主套件 |
+
 ---
 
 ## 2. 文档用途（What Each Doc Is For）
@@ -164,9 +205,9 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 - 哪些已经过时
 - 哪些只能当历史背景
 
-### `CLAUDE.md`
+### `AGENTS.md` / `CLAUDE.md`
 
-现有的 Claude Code 仓库说明。它是有用的入口，但应服从 `docs/ENGINEERING_INDEX.md` 与基线文档，不应与本套工程文档冲突。
+现有的 Codex / Claude Code 仓库说明。它们是有用的入口，但应服从 `docs/ENGINEERING_INDEX.md` 与基线文档，不应与本套工程文档冲突。
 
 ---
 
@@ -198,8 +239,8 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 
 ```bash
 git -c safe.directory="$PWD" status --short
-rg --files docs src libs flutter CLAUDE.md terminal.md
-rg -n "<keyword>" src libs flutter docs CLAUDE.md terminal.md
+rg --files docs src libs flutter AGENTS.md CLAUDE.md PC-Build.md terminal.md README.md
+rg -n "<keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md terminal.md README.md
 ```
 
 根据任务主题继续追：
@@ -247,7 +288,7 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 
 - 不要把中文概念自由改写成多个不同说法。
 - 不要新增新的“记忆型 markdown”与本套文档竞争。
-- 不要假设 `terminal.md` 或 `CLAUDE.md` 一定是最新。
+- 不要假设 `AGENTS.md`、`CLAUDE.md`、`PC-Build.md` 或 `terminal.md` 一定是最新。
 - 不要把 `ffi.rs` 当成 `pkg2230.rs` 的精确镜像。
 - 不要只看 Flutter 而忽略 `src/ui/`、`src/hbbs_http/`、`src/privacy_mode.rs`、`build.sh`。
 - 不要在未核代码前，把“上游 RustDesk 的行为”直接套用到本项目。

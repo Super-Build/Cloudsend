@@ -1,7 +1,7 @@
 > [!IMPORTANT]
 > Current source-truth overlay (verified 2026-05-18): this map is an inherited structure map and may contain older wording in lower historical sections. Current project identity is CloudSend runtime + Android visible label `云计划`; Android package is `com.cloudsend.app`; Android SO is `libcloudsend.so`; Windows DLL is `cloudsend.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
 >
-> For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, and `docs/TASK_ENTRYPOINTS.md`.
+> Documentation classification was refreshed on 2026-06-01. For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, and `docs/DOCUMENT_AUDIT.md`.
 
 # 全仓真实结构图 / Repo True Structure Map
 
@@ -36,16 +36,25 @@
 ### 1.2 工程文档 / 辅助文档
 
 - `docs/`
+- `AGENTS.md`
 - `CLAUDE.md`
+- `PC-Build.md`
 - `terminal.md`
 - `README.md` / `docs/README-ZH.md` (only English and Chinese README variants are retained)
 
 职责：
 
 - 工程记忆层
-- Claude Code 入口说明
+- Codex / Claude Code 入口说明
+- Windows 构建环境背景
 - terminal 历史设计说明
 - 产品说明与贡献文档
+
+可信边界：
+
+- `docs/ENGINEERING_*`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md` 是工程主套件。
+- `AGENTS.md` / `CLAUDE.md` 是 agent 补充入口。
+- `PC-Build.md` / `terminal.md` / README / 贡献文档是背景或历史参考，不作为当前实现真相。
 
 ### 1.3 平台打包与资源
 
@@ -332,18 +341,28 @@ Kotlin / Java 文件：
 
 ## 5. docs 目录：`docs/`
 
-这个目录只保留英文/中文 README 与工程记忆层：
+这个目录按用途分层保留工程记忆、专题文档、审计记录与社区参考：
 
 - `ENGINEERING_INDEX.md`
 - `ENGINEERING_BASELINE.md`
 - `ENGINEERING_ANDROID_RUNTIME.md`
 - `TASK_ENTRYPOINTS.md`
+- `REPO_TRUE_STRUCTURE_MAP.md`
+- `DOCUMENT_AUDIT.md`
+- `SOURCE_TRUTH_AUDIT_2026_05_18.md`
+- `ZEGO_VOICE_CALL_ARCHITECTURE.md`
+- `ZEGO_VOICE_CALL_INTEGRATION.md`
+- `ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+- `ADB_LADB_INTEGRATION_MEMORY.md`
+- `CHANGELOG.md`
 
-以及英文/中文贡献、行为准则、README 文档。
+以及英文/中文贡献、行为准则、README、安全和开发容器文档。
 
 说明：
 
-- 工程记忆应集中在上述工程文档中，而不是扩散到更多“竞争性 memory docs”。
+- 工程记忆应集中在工程主套件中，而不是扩散到更多“竞争性 memory docs”。
+- 专题文档只承载对应专题，例如 ZEGO 语音或 ADB/LADB，不替代全仓工程主套件。
+- 上游/社区文档不高于源码和工程主套件。
 
 ---
 
@@ -415,7 +434,7 @@ UI / option
 - `src/ui/`（Sciter）
 - `libs/scrap/src/android/ffi.rs`
 - `terminal.md` 中的部分旧 terminal 叙述
-- `CLAUDE.md` 中的部分被简化的品牌/URI 说明
+- `AGENTS.md` / `CLAUDE.md` 中的部分被简化的品牌/URI 说明
 
 ---
 
@@ -424,9 +443,9 @@ UI / option
 读取仓库时的稳定顺序应是：
 
 1. `docs/ENGINEERING_INDEX.md`
-2. `docs/REPO_TRUE_STRUCTURE_MAP.md`
-3. `docs/ENGINEERING_BASELINE.md`
-4. 任务对应的 `docs/TASK_ENTRYPOINTS.md`
+2. `docs/ENGINEERING_BASELINE.md`
+3. `docs/TASK_ENTRYPOINTS.md`
+4. 任务需要时再读 `docs/ENGINEERING_ANDROID_RUNTIME.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md`
 5. 然后再进入代码
 
 这样可以避免以下结构性误判：

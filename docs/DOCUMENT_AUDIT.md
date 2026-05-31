@@ -1,6 +1,7 @@
 # 文档真实性审计 / Document Audit
 
 最后一次从关键源码锚点与文档一致性核验：2026-05-18
+最近一次文档分层与可读性整理：2026-06-01
 
 > 本文件用于回答两个问题：
 >
@@ -36,7 +37,7 @@
 - Current Windows build script: `new-build.cmd`; output directory: `PC-Bulid`.
 - Android app label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name = 云计划`.
 
-审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md`、`CHANGELOG.md` 已作为当前可信项目记忆同步。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
+审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md` 已作为当前可信项目记忆同步。`CHANGELOG.md` 保留为历史记录，不作为当前实现入口。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
 
 ---
 
@@ -51,6 +52,28 @@ Current trusted docs have been synchronized with the Part 8 final source truth:
 - `MainService.onDestroy()` clears Rust `MAIN_SERVICE_CTX` through `ClsFx9V0S.VHsFQTvK()`.
 
 Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_ANDROID_RUNTIME.md`, and `TASK_ENTRYPOINTS.md`.
+
+---
+
+## 0.2 2026-06-01 文档分层整理审计
+
+本次整理没有移动文档文件，避免破坏已有链接和检索路径；整理方式是把现有文档按用途归类，并在入口文档中写清可信边界。
+
+当前文档分层：
+
+- 工程主套件（等级 A）：`docs/ENGINEERING_INDEX.md`、`docs/ENGINEERING_BASELINE.md`、`docs/ENGINEERING_ANDROID_RUNTIME.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md`。
+- 固定日期审计（等级 A-）：`docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`，只能代表 2026-05-18 当日核验事实。
+- 专题工程文档（等级 A-/B+）：`docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`、`docs/ZEGO_VOICE_CALL_INTEGRATION.md`、`docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`、`docs/ADB_LADB_INTEGRATION_MEMORY.md`。它们只在对应专题任务中作为主参考。
+- Agent 入口（等级 A-）：`AGENTS.md`、`CLAUDE.md`，只做补充导航，必须服从工程主套件。
+- 构建背景（等级 B）：`PC-Build.md`，用于 Windows 构建环境背景；当前构建入口仍以 `new-build.cmd` 为准。
+- 历史/上游/社区文档（等级 C/B）：`terminal.md`、`README.md`、`docs/README-ZH.md`、`docs/CHANGELOG.md`、`docs/CONTRIBUTING*.md`、`docs/CODE_OF_CONDUCT*.md`、`docs/SECURITY.md`、`docs/DEVCONTAINER.md`。
+
+维护结论：
+
+- 不新增竞争性 memory docs。
+- 新增工程事实优先进入 `ENGINEERING_BASELINE.md` / `ENGINEERING_ANDROID_RUNTIME.md` / `TASK_ENTRYPOINTS.md`。
+- 专题文档只承载对应专题，不反向替代全仓工程主套件。
+- 部署文档不得保存真实服务端密钥、密码或私有 token。
 
 ---
 
@@ -127,11 +150,11 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 ## 2. 现有仓库文档（Existing Repo Docs Outside Primary Suite）
 
-### 2.1 `CLAUDE.md` — 等级 A-
+### 2.1 `AGENTS.md` / `CLAUDE.md` — 等级 A-
 
 优点：
 
-- 是现有 Claude Code 入口
+- 分别是现有 Codex / Claude Code 入口
 - 包含 Android 类名映射、构建命令、关键文件速查
 - 当前已同步 CloudSend / 云计划 / 5.2.1 / new-build.cmd / libcloudsend.so / cloudsend.dll 的源码事实
 
@@ -144,18 +167,56 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 2. **实现细节不如工程文档主套件完整**
    - Android runtime、terminal、文档漂移审计等细节必须回到 `docs/ENGINEERING_*` 与源码核验
 
-3. **Deep link 风险已经从 `CLAUDE.md` 漂移转为代码/配置并存风险**
-   - `CLAUDE.md` 必须服从工程主文档；当前 Android scheme 是 `cloudsend://`。
+3. **Deep link 风险已经从 agent 入口漂移转为代码/配置并存风险**
+   - `AGENTS.md` / `CLAUDE.md` 必须服从工程主文档；当前 Android scheme 是 `cloudsend://`。
    - 但当前源码仍同时存在：
      - Android manifest：`cloudsend`
      - Rust `get_uri_prefix()`：由 `APP_NAME = CloudSend` 推导，应与 `cloudsend://` 保持一致。
 
 结论：
 
-- `CLAUDE.md` 适合保留并使用
+- `AGENTS.md` / `CLAUDE.md` 适合保留并使用
 - 但只能当补充入口，不是最终真相层
 
-### 2.2 `terminal.md` — 等级 C
+### 2.2 `PC-Build.md` — 等级 B
+
+优点：
+
+- 保留 Windows Server 2022 / `C:\DevEnv` / `C:\DevTool` 构建环境背景。
+- 对排查本地构建环境、LLVM、Flutter、vcpkg、VS Build Tools 仍有参考价值。
+
+已确认边界：
+
+- 文档中保留大量上游 RustDesk 示例名称，例如 `RustDesk`、`rustdesk.exe`、`C:\Code\RustDesk`。
+- 当前项目构建入口是 `new-build.cmd`，当前产物命名是 CloudSend / `cloudsend.dll` / `PC-Bulid`。
+
+结论：
+
+- `PC-Build.md` 是环境背景文档，不是当前构建命令真相层。
+- 真正修改构建脚本时必须回到 `new-build.cmd`、`build.cmd`、`build.py`、`flutter/windows/` 和源码核验。
+
+### 2.3 ZEGO 专题文档 — 等级 A-/B+
+
+范围：
+
+- `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`
+- `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+
+结论：
+
+- ZEGO 语音通话任务可优先阅读这些文档。
+- `ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是部署操作文档，必须使用占位符表达密钥，不得保存真实 `ZEGO_SERVER_SECRET`、服务器密码或私有 token。
+- 任何 ZEGO 运行时判断仍必须回到源码锚点：`ZegoVoiceCallInfo`、`ZegoVoiceCallModel`、`src/client/helper.rs`、`src/client/io_loop.rs`、`src/server/connection.rs`。
+
+### 2.4 `docs/ADB_LADB_INTEGRATION_MEMORY.md` — 等级 B+
+
+结论：
+
+- 仅 ADB/LADB 任务使用。
+- 不作为全仓工程事实入口，也不应承载 Android 远控、ZEGO、账号或构建主链的事实。
+
+### 2.5 `terminal.md` — 等级 C
 
 优点：
 
@@ -180,12 +241,20 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
   - `src/server/connection.rs`
   - `flutter/lib/models/terminal_model.dart`
 
-### 2.3 `README*.md` / `CONTRIBUTING*.md` / `SECURITY*.md` — 等级 B/C
+### 2.6 `README*.md` / `CONTRIBUTING*.md` / `SECURITY*.md` / `CODE_OF_CONDUCT*.md` / `DEVCONTAINER.md` — 等级 B/C
 
 说明：
 
 - 这些文档适合产品使用、贡献规范、社区说明
 - 不适合作为项目运行时或工程主链的真相来源
+
+### 2.7 `docs/CHANGELOG.md` — 等级 C+
+
+说明：
+
+- 用于追踪已经发生的变更。
+- 可以帮助理解历史上下文，但不能作为当前实现入口或运行时真相。
+- 若 `CHANGELOG.md` 与工程主套件或源码冲突，以源码和工程主套件为准。
 
 ---
 
@@ -250,8 +319,9 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 4. `docs/TASK_ENTRYPOINTS.md`
 5. `docs/REPO_TRUE_STRUCTURE_MAP.md`
 6. 再去读源码
-7. `CLAUDE.md` 仅作补充
-8. `terminal.md` 仅作历史背景
+7. `AGENTS.md` / `CLAUDE.md` 仅作补充
+8. `PC-Build.md` 仅作构建环境背景
+9. `terminal.md` 仅作历史背景
 
 ---
 
@@ -260,7 +330,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 当以下任一情况发生时，必须重新审计本文件：
 
 - 某份工程文档与源码出现冲突
-- `CLAUDE.md` 更新后与工程文档出现分歧
+- `AGENTS.md` / `CLAUDE.md` 更新后与工程文档出现分歧
 - terminal / Android runtime / build 逻辑发生结构性变化
 - 新增了新的“项目记忆型文档”
 
