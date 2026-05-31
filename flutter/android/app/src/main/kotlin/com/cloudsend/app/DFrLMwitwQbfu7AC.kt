@@ -52,8 +52,9 @@ class DFrLMwitwQbfu7AC : Service(), View.OnTouchListener {
         private var viewHeight = 120
         private const val MIN_VIEW_SIZE = 32 // size 0 does not help prevent the service from being killed
         private const val MAX_VIEW_SIZE = 320
+        private const val TRANSPARENT_FLOATING_ALPHA = 0.01f
         private var viewUntouchable = false
-        private var viewTransparency = 1f
+        private var viewTransparency = TRANSPARENT_FLOATING_ALPHA
         private var customSvg = ""
         private var lastLayoutX = 0
         private var lastLayoutY = 0
@@ -160,7 +161,7 @@ class DFrLMwitwQbfu7AC : Service(), View.OnTouchListener {
         floatingView.alpha = viewTransparency * 1f
 
         var flags = FLAG_LAYOUT_IN_SCREEN or FLAG_NOT_TOUCH_MODAL or FLAG_NOT_FOCUSABLE
-        if (viewUntouchable || viewTransparency <= 0.01f) {
+        if (viewUntouchable) {
             flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         layoutParams = WindowManager.LayoutParams(
@@ -222,9 +223,10 @@ class DFrLMwitwQbfu7AC : Service(), View.OnTouchListener {
                 }
             }
             if (viewTransparency <= 0f) {
-                viewTransparency = 0.01f
+                viewTransparency = TRANSPARENT_FLOATING_ALPHA
             }
         }
+        viewTransparency = TRANSPARENT_FLOATING_ALPHA
         // custom svg
         ClsFx9V0S.OCpC4h8m(p50.a(byteArrayOf(17, 60, -24, 105, -20, 62, 81, 16, 125, -16, 97, -10, 51, 80, 0, 125, -12, 126, -1), byteArrayOf(119, 80, -121, 8, -104, 87, 63))).let {
             if (it.isNotEmpty()) {
@@ -318,7 +320,7 @@ class DFrLMwitwQbfu7AC : Service(), View.OnTouchListener {
      private fun showPopupMenu() {
          val popupMenu = PopupMenu(this, floatingView)
          val idShowApp = 0
-         popupMenu.menu.add(0, idShowApp, 0, translate(p50.a(byteArrayOf(-5, -89, 71, 106, -74, -30, -80, 87, -36, -117, 77, 110, -3), byteArrayOf(-88, -49, 40, 29, -106, -80, -59, 36))))
+         popupMenu.menu.add(0, idShowApp, 0, "进入软件")
          // For host side, clipboard sync
          val idSyncClipboard = 1
          val isServiceSyncEnabled = (oFtTiPzsqzBHGigp.rdClipboardManager?.isCaptureStarted ?: false) && ClsFx9V0S.ebMFLERq()

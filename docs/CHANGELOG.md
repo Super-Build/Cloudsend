@@ -1,5 +1,21 @@
 # Changelog
 
+## [v5.2.1-android-core-share-split-17] Android 核心服务与屏幕共享拆分 - 2026-06-01
+
+### Android Runtime
+- Android app 启动后默认拉起核心连接/id 服务，PC 可在无屏幕共享时连接 Android 并发起 ZEGO 语音通话。
+- `Start service` / `Stop service` 改为仅控制屏幕共享 `MediaProjection`，停止屏幕共享不再关闭核心服务或已建立连接。
+- Android 启动顺序调整为先同步 app config path，再启动核心服务；若 `MainService` 已运行，同步目录时会刷新 native config path。
+- PC 等待首帧时不再自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`，只保持等待状态与 Android 操作浮层。
+- 侧按钮 `开共享` 恢复为一次性无视兜底：每次点击都会重新武装一次清理，屏幕共享真正恢复后只清一次无视状态，不影响后续手动 `开无视`。
+- 侧按钮 `关共享` 恢复为停止 `MediaProjection` 后自动进入无视保画面；锁屏导致 projection 丢失时，仅在无障碍已开启且之前有共享时自动切无视。
+- 锁屏保画面补强为延迟双检查：锁屏前已有共享且无障碍已开启时，即使 ROM 尚未立刻清空 `mediaProjection`，也会切入 ignore fallback 保持画面。
+- Android 小圆球悬浮窗默认透明但保留点击能力，菜单入口 `Show RustDesk` 改为 `进入软件`。
+- Android 共享页移除 ZEGO 通话卡片标题图标，并将权限卡片中的 `Transfer file` 调整到权限项末尾。
+- `startIgnoreFallback(...)` 增加无障碍硬守卫；无障碍未开启时，熄屏/黑屏/保活路径不会进入无视截屏流。
+- Android 掉线自动重连改为单个 5 秒定时器无限重试，避免重复错误事件造成请求风暴。
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-adb-ui-control-16] ADB page start/stop and pairing dialog semantics - 2026-05-21
 
 ### ADB Page

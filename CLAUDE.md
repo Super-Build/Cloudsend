@@ -1,6 +1,6 @@
 # CLAUDE.md — CloudSend / 云计划 v5.2.1
 
-最后一次与全仓源码对齐：2026-05-18
+最后一次与全仓源码对齐：2026-06-01
 最近一次文档分层整理：2026-06-01
 
 > 本文件是 **Claude Code** 的项目入口说明。
@@ -110,6 +110,10 @@ PC 侧关键状态在：
 要点：
 
 - 服务活着 != 已经有首帧
+- Android core connection/id service != Android screen sharing；`Start service` / `Stop service` 只控制 `MediaProjection` 屏幕共享。
+- PC waiting-for-image 不得自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；只能等待真实帧或用户手动点击"开无视"。
+- 侧按钮 `开共享`/`关共享` 是 Android runtime 的主动操作：`开共享` 可临时无视兜底并在共享恢复后一次性清无视，`关共享` 可在无障碍存在时自动切无视保画面。
+- Android 掉线自动重连是 5s 单 timer、无限重试、不可堆叠。
 - 任何真实 RGBA 帧到达 UI 时都应清理 waiting
 
 ### 4.4 登录逻辑要分两层看

@@ -139,7 +139,11 @@ void runMainApp(bool startService) async {
   // trigger connection status updater
   await bind.mainCheckConnectStatus();
   if (startService) {
-    gFFI.serverModel.startService();
+    if (isAndroid) {
+      await gFFI.serverModel.ensureCoreService();
+    } else {
+      gFFI.serverModel.startService();
+    }
     bind.pluginSyncUi(syncTo: kAppTypeMain);
     bind.pluginListReload();
   }
@@ -176,6 +180,7 @@ void runMobileApp() async {
   checkUpdate();
   if (isAndroid) androidChannelInit();
   if (isAndroid) platformFFI.syncAndroidServiceAppDirConfigPath();
+  if (isAndroid) await gFFI.serverModel.ensureCoreService();
   draggablePositions.load();
   await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
   gFFI.userModel.refreshCurrentUser();

@@ -67,19 +67,21 @@
 
 当前基线：
 
-- 任意路径进入 `startCapture()`，都必须先清 `shouldRun/SKL/PIXEL_SIZEBack8`，保证视频流入口幂等。
+- `startCapture()` 不得无条件清 `shouldRun/SKL/PIXEL_SIZEBack8`；只有侧按钮 `开共享` 通过 `restoreMediaProjection()` 武装的 `clearIgnoreOnceAfterShareStart` 可以在 screen sharing 真正恢复后消费一次并清 ignore fallback。
+- 侧按钮 `开共享` 可临时进入 ignore fallback 兜住授权/恢复期间的画面；如果 ignore 已存在则保持现状，恢复 screen sharing 后只清一次。
 - `destroy()` 是停服务全清入口，必须清 `savedMediaProjectionIntent`、黑屏、防触、无视/穿透残留状态。
 - 授权取消回调为 `on_media_projection_canceled`，Flutter 端必须调用 `ServerModel.onMediaProjectionDenied()`。
-- PC 首帧 fallback 首次自动开无视延迟为 3000ms，不再是 500ms。
+- PC 首帧等待不再自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；等待期间只显示 waiting dialog 与 Android 操作浮层。
 
 ### 0.5 2026-04-22 无障碍感知双通道基线
 
 当前基线：
 
 - Android 状态推送必须包含 `accessibility` 字段。
-- PC 端自动"开无视"只能通过 `_canRequestAndroidBackupFrame` 判断。
-- `accessibility == null` 或 `false` 时，PC 只刷新视频流，不发送"开无视"。
-- `accessibility == true` 时，PC 才允许视频丢失 fallback 到截屏流。
+- PC 端不再存在自动"开无视"首帧 fallback；"开无视"只来自用户手动点击 Android 操作按钮。
+- `accessibility == null` 或 `false` 时，Android native `startIgnoreFallback(...)` 必须直接跳过，不能进入截屏流。
+- `accessibility == true` 时，用户手动"开无视"、侧按钮 `开共享` 的临时兜底、侧按钮 `关共享` 的保画面、以及锁屏后 projection 丢失的保画面路径才允许进入截屏流。
+- 锁屏保画面的触发不只依赖 `mediaProjection == null`；部分 ROM 锁屏后会先断帧，因此延迟检查以“锁屏前有 screen sharing + 无障碍开启 + 当前未在 ignore”为兜底条件。
 - 安卓状态监测面板的"加密状态"显示此字段。
 
 ---
@@ -166,6 +168,21 @@ Current source truth:
 - `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` may rebind the current `VirtualDisplay` surface to force a fresh MediaProjection frame when normal composition is static.
 - Combination rule: `开无视 -> 开穿透 -> 关穿透` must preserve ignore mode. Closing penetrate must not call `stopIgnoreCaptureLoop()`, must not clear `shouldRun`, and must not restore `PIXEL_SIZEBack8` to 255 while `shouldRun == true`.
 - The one-shot clean-frame gate may temporarily set `PIXEL_SIZEBack8 = 0` only when ignore is not running, and must restore `PIXEL_SIZEBack8 = 255` immediately after the one-shot frame write.
+
+### 0.10 2026-06-01 Android core service and screen-share split baseline
+
+Current source truth:
+
+- Android app startup (`runMobileApp`) calls `ServerModel.ensureCoreService()` after `androidChannelInit()`, so the core connection/id service is online while the app process is alive.
+- `runMobileApp` must call `platformFFI.syncAndroidServiceAppDirConfigPath()` before `ensureCoreService()`, and the Android `SYNC_APP_DIR_CONFIG_PATH` handler must refresh `ClsFx9V0S.xt4P9mWE(...)` if `MainService` is already running.
+- `ServerModel.ensureCoreService()` binds the Rust event listener, invokes Android `"ensure_core_service"`, and calls `bind.mainStartService()` only once per app process.
+- Android `"ensure_core_service"` / `"init_service"` only start and bind `DFm8Y8iMScvB2YDw`; they do not request `MediaProjection`.
+- Android `"start_screen_share"` / `"start_capture"` request or reuse `MediaProjection` and call `DFm8Y8iMScvB2YDw.startCapture()`.
+- Android `"stop_screen_share"` / Flutter `"stop_service"` now call `DFm8Y8iMScvB2YDw.stopScreenShareOnly(...)`; this stops screen sharing and ignore fallback state but keeps the core service online.
+- Flutter mobile server page always shows `ServerInfo()`; the visible `Start service` / `Stop service` button in the permission card controls screen sharing only.
+- Accepting a PC connection no longer calls Android `"start_capture"` automatically; PC can connect and start ZEGO voice while Android has no screen-sharing permission active.
+- `DFm8Y8iMScvB2YDw.checkMediaPermission()` reports `media = isStart`, meaning the Android permission card reflects active screen sharing, not core service readiness.
+- Android recoverable reconnect uses one 5s periodic timer with no retry limit. Repeated connection-error events must not create additional reconnect timers or rapid request loops.
 
 ## 1. 项目身份（Project Identity）
 
@@ -495,9 +512,8 @@ Feature gate：
 源码事实：
 
 - Android 会话连接成功但首帧未到时，PC 会进入 waiting 状态。
-- 第一次 fallback 请求会快速发出：
-  - 支持 ignore capture 时走 ignore fallback
-  - 否则请求 video refresh
+- waiting 状态不会自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；PC 只保持等待并把 Android 操作按钮提升到 waiting dialog 上层。
+- 如果需要截屏/无视备用流，必须由用户手动点击"开无视"，且 Android 无障碍服务必须已开启。
 - 收到**任何真实 RGBA 帧**时，`onEvent2UIRgba()` 会清除等待状态。
 - Android 控制按钮会被提升到 waiting dialog 上层，防止被遮挡。
 
@@ -613,8 +629,9 @@ Current source truth:
 以下内容已经在代码中核验，详细解释见 `docs/ENGINEERING_ANDROID_RUNTIME.md`：
 
 - 服务状态 != 帧源状态 != PC waiting 状态
+- Android core connection/id service != Android screen sharing. Stopping screen sharing must not stop the core service.
 - `killMediaProjection()` / projection stop 不会等同于整个服务终止
-- `restoreMediaProjection()` 在恢复成功前不会先撤掉 ignore fallback
+- `restoreMediaProjection()` 是侧按钮 `开共享` 的唯一恢复入口；它会武装一次性清 ignore，并可在等待授权/恢复期间临时开启 ignore fallback。
 - Android 10 不会假装支持 screenshot fallback
 - `FrameRaw.force_next` 用于避免恢复后的第一帧因重复而被吞掉
 - `PIXEL_SIZEBack8 = 255` 表示阻断 ignore frame；`0` 表示允许通过

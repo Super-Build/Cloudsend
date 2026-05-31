@@ -1,6 +1,6 @@
 # Android 运行时工程文档 / Android Runtime Engineering Notes
 
-最后一次从全仓源码核验：2026-05-18
+最后一次从全仓源码核验：2026-06-01
 
 > 本文件记录的是**当前代码真正体现出来的 Android 运行时模型**。
 > 中文用于解释状态和风险；English symbol / path 用于把结论牢牢钉回源码。
@@ -83,6 +83,27 @@ Regression guard:
 - Treat ZEGO voice call as a Flutter RTC side path attached to existing call invitation states, not as an Android capture/runtime path.
 - Do not change ADB/LADB, side-button commands, screenshot fallback, penetrate, blank screen, or touch-block runtime for voice-call tasks.
 
+### 2026-06-01 Android core service / screen sharing split
+
+Current source truth:
+
+- Android app startup (`runMobileApp`) calls `ServerModel.ensureCoreService()` after `androidChannelInit()`.
+- `runMobileApp` must sync `platformFFI.syncAndroidServiceAppDirConfigPath()` before `ensureCoreService()` so `MainService.onCreate()` reads the same app config path as Flutter/Rust.
+- The Android `SYNC_APP_DIR_CONFIG_PATH` channel handler must also call `ClsFx9V0S.xt4P9mWE(appDir, "")` when `MainService` is already running, covering service-before-UI and sticky-restart cases.
+- The core connection/id service is expected to stay online while the app process is alive; users do not manually stop this core service from the UI.
+- `ensure_core_service` / `init_service` only start and bind `DFm8Y8iMScvB2YDw`; they must not request `MediaProjection`.
+- `start_screen_share` / `start_capture` are the only Flutter-to-Android entrypoints that request or reuse `MediaProjection` for screen sharing.
+- `stop_screen_share` / Flutter `stop_service` stop only screen sharing through `stopScreenShareOnly(...)`; they do not call `bind.mainStopService()` on Android and do not close active PC connections.
+- Accepting a PC connection must not automatically call `start_capture`; PC can stay connected and use ZEGO voice while Android has not granted screen sharing.
+- `checkMediaPermission()` reports the Android permission-card `media` state from `isStart`, meaning active screen sharing, not core service readiness.
+- PC waiting-for-first-frame must not automatically send `"开无视"`, screenshot fallback, or `sessionRefreshVideo(...)`. It only keeps the waiting dialog and Android operation overlay visible.
+- Side-button `开共享` is the intentional exception to PC waiting behavior: it arms `clearIgnoreOnceAfterShareStart`, may temporarily start ignore fallback while `MediaProjection` is being requested/reused, and clears ignore exactly once when screen sharing becomes active.
+- Side-button `关共享` stops only `MediaProjection` and then calls `startIgnoreFallback(...)` when AccessibilityService is available, preserving picture through the ignore stream.
+- Native `startIgnoreFallback(...)` must require `nZW99cdXQ0COhB2o.isOpen`; without AccessibilityService, screen-off/black-screen paths must not enter ignore/screenshot mode.
+- Screen-off/projection-loss fallback may start ignore only when AccessibilityService is open and a screen share was active/lost; it is not a general screen-off command.
+- Screen-off fallback uses delayed checks after `ACTION_SCREEN_OFF`; some ROMs stop delivering frames before `mediaProjection` is nulled, so the guard is previous screen-share activity plus AccessibilityService, not only `mediaProjection == null`.
+- Recoverable Android reconnect uses one 5s periodic timer with no retry limit; repeated connection errors must not create stacked timers or rapid reconnect loops.
+
 ## 0. 最近运行时修复（Recent Runtime Fix）
 
 ### 0.1 黑屏 overlay 不再动态切换触摸 flag
@@ -138,16 +159,17 @@ Regression guard:
 - `DFm8Y8iMScvB2YDw.startCapture()` 在创建 ImageReader/VirtualDisplay 前必须调用 `resetCaptureStates("before-start-capture")` 与 `ClsFx9V0S.rEqMB3nD(255)`。
 - `DFm8Y8iMScvB2YDw.destroy()` 必须清理 `savedMediaProjectionIntent`、`PIXEL_SIZEBack8`、黑屏 `gohome/BIS`、防触 `touchBlockEnabled` 与 VIDEO_RAW enable。
 - `XerQvgpGBzr8FDFr` 授权取消必须发 `on_media_projection_canceled`，Flutter 侧由 `ServerModel.onMediaProjectionDenied()` 回滚 `_isStart`。
-- PC 首帧 fallback 第一次自动开无视延迟为 3000ms，降低 Android 授权/启动期间的竞争窗口。
+- PC 首帧等待不再自动开无视、不再自动请求截屏 fallback，也不再自动调用 `sessionRefreshVideo(...)`。
 
 ### 0.5 双通道受无障碍状态守卫
 
-2026-04-22 已新增无障碍权限感知的自动 fallback 守卫：
+2026-06-01 后无障碍权限是手动/Native fallback 的硬守卫：
 
 - Android `cloudsend_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
 - Flutter `CloudSendStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
-- `_canRequestAndroidBackupFrame` 是 PC 自动发送"开无视"前的唯一守卫。
-- 无障碍未开/未知时，首帧 fallback 只调用 `sessionRefreshVideo(...)`。
+- PC 不再保留 `_canRequestAndroidBackupFrame` 自动首帧 fallback。
+- 无障碍未开/未知时，Android `startIgnoreFallback(...)` 必须跳过，不得进入截屏流。
+- 无障碍已开时，只有用户手动"开无视"、侧按钮 `开共享` 的临时兜底、侧按钮 `关共享` 的保画面、锁屏后 projection 丢失的保画面、或已处于 ignore 模式的保活路径才允许进入截屏流。
 - 监测面板"加密状态"即无障碍服务连接状态，不是网络连接状态。
 
 
@@ -189,15 +211,17 @@ Current runtime truth:
 
 ## 1. 核心原则（Core Runtime Principles）
 
-这个项目的 Android 运行时至少有三层状态，不能压成一个“开/关”：
+这个项目的 Android 运行时至少有四层状态，不能压成一个“开/关”：
 
-1. Android 服务状态（`service lifecycle state`）
-2. Android 帧源状态（`frame source state`）
-3. PC 端首帧等待状态（`waiting-for-first-frame state`）
+1. Android core connection/id service state
+2. Android screen sharing / `MediaProjection` state
+3. Android frame source state
+4. PC 端首帧等待状态（`waiting-for-first-frame state`）
 
 必须记住：
 
 - 服务存活 != `MediaProjection` 存活
+- 核心连接服务在线 != 屏幕共享已开启
 - `MediaProjection` 丢失 != 应用停止
 - PC 端 waiting 状态必须在收到**任何真实首帧**时清除，而不只是正常视频路径的首帧
 
@@ -222,6 +246,7 @@ Current runtime truth:
 - 作为 Android 入口 Activity
 - 权限检查 / channel 入口
 - overlay 权限相关辅助
+- `ensure_core_service` / `start_screen_share` / `stop_screen_share` 方法入口
 
 ### 2.2 `DFm8Y8iMScvB2YDw.kt`
 
@@ -235,6 +260,7 @@ Current runtime truth:
 - projection stop / restore / keep-alive
 - 前台通知
 - overlay keep-alive 刷新
+- 核心服务保活与屏幕共享停止解耦
 
 ### 2.3 `nZW99cdXQ0COhB2o.kt`
 
@@ -287,11 +313,12 @@ Current runtime truth:
 
 可用如下脑内模型：
 
-- `A0 service stopped`
-  - `MainService` 未运行
+- `A0 app process stopped`
+  - app 进程未运行，核心连接服务不存在
 - `A1 service alive, no active MediaProjection stream`
-  - 服务活着
-  - projection 未产出正常视频
+  - 核心连接/id 服务活着
+  - PC 可连接，ZEGO 语音可工作
+  - screen sharing / projection 未产出正常视频
 - `A2 service alive, MediaProjection stream active`
   - 正常共享路径在工作
 - `A3 service alive, ignore fallback active or being requested`
@@ -303,6 +330,7 @@ Current runtime truth:
 - `DFm8Y8iMScvB2YDw.kt`
   - `_isReady`
   - `_isStart`
+  - `stopScreenShareOnly()`
   - `mediaProjection`
   - `savedMediaProjectionIntent`
   - `killMediaProjection()`
@@ -312,8 +340,8 @@ Current runtime truth:
 
 源码事实：
 
-- `killMediaProjection()` 释放 projection / virtualDisplay / imageReader 等资源，但并不会把整个服务视为已完全退出。
-- `handleProjectionStoppedKeepService()` 的含义是**保持服务存活，切换到 fallback/保活语义**。
+- `stopScreenShareOnly()` / `killMediaProjection()` 释放 projection / virtualDisplay / imageReader 等资源，但并不会把整个核心服务视为已完全退出。
+- `handleProjectionStoppedKeepService()` 的含义是**保持服务存活**；只有 `shouldRun && accessibility` 同时成立时才延续 ignore fallback。
 - `ACT_KEEP_ALIVE_SERVICE` 是一个真实存在的 service action。
 - `onStartCommand()` 在多个分支会返回 `START_STICKY`，目的是尽量维持服务。
 
@@ -392,6 +420,8 @@ PC 不应与 Android 服务状态混为一谈：
 
 - waiting 状态是 Flutter/PC 自己的显示状态机。
 - 即使 Android 服务活着，PC 仍可能处于 `P1 waiting`。
+- `P1 waiting` 不会自动发 `"开无视"`、截屏 fallback 或 `sessionRefreshVideo(...)`。
+- 如果需要无视/截屏备用画面，必须由用户手动点击 Android 操作按钮，且 Android 无障碍已开启。
 - 一旦任何真实 RGBA 帧到 UI，`onEvent2UIRgba()` 会清除 waiting。
 
 ---
@@ -403,44 +433,56 @@ PC 不应与 Android 服务状态混为一谈：
 当前行为：
 
 1. `restoreMediaProjection()` 启动恢复流程
-2. 在恢复成功前，不会先把 ignore fallback 关掉
-3. 如果 `savedMediaProjectionIntent` 仍有效，则尝试直接恢复 projection
-4. 真正恢复成功后，才会：
-   - 停止 ignore capture
+2. 每次点击都会重新武装一次 `clearIgnoreOnceAfterShareStart`
+3. 如果当前没有 ignore fallback，则临时调用 `startIgnoreFallback(...)` 兜住授权/恢复期间的画面
+4. 如果已有 ignore fallback，则保持现有 ignore 状态，不重复启动
+5. 如果 `savedMediaProjectionIntent` 仍有效，则尝试直接恢复 projection
+6. 真正恢复成功后，只消费本次开共享的一次性清理：
+   - 停止 ignore capture 一次
    - `PIXEL_SIZEBack8 = 255`
    - 恢复正常共享路径
 
 不得回归：
 
 - 不要在 `MediaProjection` 真恢复前提前禁用 ignore fallback
+- 不要把 PC waiting timer 改回自动切到 ignore/screenshot
+- 不要把 `startCapture()` 改回无条件清 `shouldRun/SKL/PIXEL_SIZEBack8`
+- 不要让已有视频帧持续清除后续用户手动"开无视"
 - 不要把“尝试恢复”误当成“已恢复”
 
 ### 6.2 关闭分享 / projection stopped
 
 当前行为：
 
-1. 释放 projection 资源
+1. 释放 projection / virtualDisplay / imageReader / encoder 资源
 2. 服务语义保持“活着 / ready”
-3. 调用 `startIgnoreFallback()`
-4. 刷新前台通知
-5. 重新确保 overlay keep-alive
+3. Flutter `stop_screen_share` / 本机停止按钮只停 screen sharing、ignore fallback、`SKL` 与 `PIXEL_SIZEBack8` 放行状态
+4. 远端侧按钮 `关共享` 通过 `stopScreenShareAndStartIgnore(...)` 停止 screen sharing 后，在无障碍已开启时自动进入 ignore fallback
+5. 刷新前台通知
+6. 重新确保 overlay keep-alive
 
 不得回归：
 
 - 不要把 close-share 重新改成 service destroy
 - 不要把 projection stop 解释为整个 Android 端彻底停止
+- 不要让 Flutter 本机停止按钮自动开启 ignore/screenshot fallback
+- 不要移除远端侧按钮 `关共享` 的自动 ignore fallback
 
 ### 6.3 熄屏（Screen Off）
 
 当前行为：
 
 - 项目不会因为熄屏就主动停止服务
-- 若系统后续真的停止 projection，则从 projection-stopped 路径进入 fallback 语义
+- 熄屏/网络变化只做核心服务保活
+- 当熄屏前存在 screen sharing，且熄屏后 projection 丢失，且无障碍已开启时，允许自动进入 ignore fallback 保持画面
+- 由于部分 ROM 锁屏后不会立刻把 `mediaProjection` 置空，熄屏后的延迟检查以“熄屏前存在 screen sharing + 无障碍已开启 + 当前未在 ignore”为兜底条件
+- 普通保活路径只有在无障碍已开启且 `shouldRun == true` 时，才允许延续已有 ignore fallback
 
 不得回归：
 
 - 不要重新引入“熄屏必停服务”的逻辑
 - 不要把系统行为与项目主动策略混为一谈
+- 不要在无障碍未开启时由熄屏触发 ignore/screenshot
 
 ### 6.4 waiting-for-first-frame
 
@@ -448,16 +490,15 @@ PC 不应与 Android 服务状态混为一谈：
 
 1. 显示 waiting dialog
 2. 将 Android 操作 overlay 提到对话框上方
-3. 立即请求备用帧路径：
-   - 支持 ignore capture 时请求 ignore fallback
-   - 否则请求 video refresh
-4. 若仍无首帧，定时器继续补发 fallback 请求
+3. 不自动发送 `"开无视"`、截屏 fallback 或 `sessionRefreshVideo(...)`
+4. 若仍无首帧，定时器只重新提升 Android 操作 overlay，不补发帧源指令
 5. 任何真实 RGBA 帧到达 `onEvent2UIRgba()` 时清理等待状态
 
 不得回归：
 
 - 不要只等待“正常视频首帧”
 - 不要让 waiting dialog 遮住 Android 操作按钮
+- 不要把 waiting timer 改回自动切无视/自动截屏/自动刷新视频
 
 ---
 
@@ -480,6 +521,7 @@ PC 不应与 Android 服务状态混为一谈：
 
 - `sdk_int >= 30`：认为具备 ignore-capture fallback 能力
 - `sdk_int < 30`：Android 10 仅保持服务存活，不伪装为支持 screenshot fallback
+- ignore-capture 能力只代表用户手动"开无视"或已有 ignore 保活路径可用，不代表 PC waiting 可以自动触发。
 
 不得回归：
 
@@ -607,15 +649,17 @@ PC 不应与 Android 服务状态混为一谈：
 在提交任何 Android 运行时改动前，至少重新确认：
 
 1. 是否把服务状态和 projection / frame 状态重新绑死了？
-2. 是否把 PC waiting 状态错误地只绑定到正常视频帧？
-3. waiting dialog 是否又遮住了 Android 操作按钮？
-4. Android 10 是否被错误宣传为支持 screenshot fallback？
-5. projection 丢失后是否还会刷新 notification / overlay keep-alive？
-6. `force_next` / `VIDEO_RAW` / `PIXEL_SIZEBack8` 是否仍符合当前恢复语义？
-7. 是否忘了 `pkg2230.rs` 与 `ffi.rs` 的同步风险？
-8. 是否改坏了 `savedMediaProjectionIntent` 的使用与清理？
-9. 是否把 “close-share” 错写回 “stop service”？
-10. 是否只改了 Kotlin 而没同步检查 Flutter / Rust / server 侧？
+2. 是否把核心连接服务和屏幕共享按钮重新混成一个“服务开关”？
+3. 是否把 PC waiting 状态错误地只绑定到正常视频帧？
+4. waiting dialog 是否又遮住了 Android 操作按钮？
+5. waiting timer 是否又自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`？
+6. Android 10 是否被错误宣传为支持 screenshot fallback？
+7. projection 丢失后是否还会刷新 notification / overlay keep-alive？
+8. `force_next` / `VIDEO_RAW` / `PIXEL_SIZEBack8` 是否仍符合当前恢复语义？
+9. 是否忘了 `pkg2230.rs` 与 `ffi.rs` 的同步风险？
+10. 是否改坏了 `savedMediaProjectionIntent` 的使用与清理？
+11. 是否把 “close-share” 错写回 “stop service”？
+12. 是否只改了 Kotlin 而没同步检查 Flutter / Rust / server 侧？
 
 ---
 

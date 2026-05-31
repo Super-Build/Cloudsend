@@ -229,10 +229,17 @@ Current document categories:
 
 - `resetCaptureStates`
 - `before-start-capture`
+- `clearIgnoreOnceAfterShareStart`
+- `armOpenShareIgnoreBridge`
+- `clearIgnoreOnceForOpenShare`
 - `on_media_projection_canceled`
 - `onMediaProjectionDenied`
 - `savedMediaProjectionIntent = null`
-- `Duration(milliseconds: 3000)`
+- `ensureCoreService`
+- `syncAndroidServiceAppDirConfigPath`
+- `start_screen_share`
+- `stop_screen_share`
+- `stopScreenShareOnly`
 
 无障碍感知双通道相关任务，第一入口固定为：
 
@@ -243,8 +250,8 @@ Current document categories:
 排查关键词：
 
 - `accessibility`
-- `_canRequestAndroidBackupFrame`
-- `_requestAndroidBackupFrame`
+- `startIgnoreFallback`
+- `shouldRun`
 - `sessionRefreshVideo`
 - `加密状态`
 
@@ -353,6 +360,12 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - `handleProjectionStoppedKeepService()`
 - `restoreMediaProjection()`
 - `startIgnoreFallback()`
+- `stopScreenShareAndStartIgnore()`
+- `stopScreenShareOnly()`
+- `screenOffActive`
+- `ensure_core_service`
+- `start_screen_share`
+- `stop_screen_share`
 
 若涉及 waiting / reconnect，再补看：
 
@@ -386,7 +399,8 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 不要遗漏：
 
 - waiting dialog 与 Android overlay 的层级关系
-- fallback request 的触发时机
+- waiting timer 不得自动发送 fallback request / `sessionRefreshVideo(...)`
+- Android auto reconnect 必须是 5s 单 timer、无限重试、不可堆叠
 - “任何真实首帧都能清理 waiting”的不变量
 
 ---

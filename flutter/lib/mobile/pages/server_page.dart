@@ -222,9 +222,7 @@ class _ServerPageState extends State<ServerPage> {
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
                         buildPresetPasswordWarningMobile(),
-                        gFFI.serverModel.isStart
-                            ? ServerInfo()
-                            : ServiceNotRunningNotification(),
+                        ServerInfo(),
                         const ConnectionManager(),
                         const PermissionChecker(),
                         const ZegoVoiceCallStatusCard(),
@@ -237,7 +235,6 @@ class _ServerPageState extends State<ServerPage> {
 }
 
 void checkService() async {
-  gFFI.invokeMethod("check_service");
   // for Android 10/11, request MANAGE_EXTERNAL_STORAGE permission from system setting page
   if (AndroidPermissionManager.isWaitingFile() && !gFFI.serverModel.fileOk) {
     AndroidPermissionManager.complete(kManageExternalStorage,
@@ -642,13 +639,18 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                     label: Text(translate("Stop service")),
                   ),
                 ).marginOnly(bottom: 8)
-              : SizedBox.shrink(),
+              : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.play_arrow),
+                    onPressed: serverModel.toggleService,
+                    label: Text(translate("Start service")),
+                  ),
+                ).marginOnly(bottom: 8),
           PermissionRow(translate("Screen Capture"), serverModel.mediaOk,
               serverModel.toggleService),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
-          PermissionRow(translate("Transfer file"), serverModel.fileOk,
-              serverModel.toggleFile),
           hasAudioPermission
               ? PermissionRow(translate("Audio Capture"), serverModel.audioOk,
                   serverModel.toggleAudio)
@@ -660,6 +662,8 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                     style: const TextStyle(color: MyTheme.darkGray),
                   ))
                 ]),
+          PermissionRow(translate("Transfer file"), serverModel.fileOk,
+              serverModel.toggleFile),
           SizedBox(height: 8),
           SwitchListTile(
             visualDensity: VisualDensity.compact,
@@ -750,7 +754,6 @@ class ZegoVoiceCallStatusCard extends StatelessWidget {
 
         return PaddingCard(
           title: '\u8bed\u97f3\u901a\u8bdd',
-          titleIcon: const Icon(Icons.call),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

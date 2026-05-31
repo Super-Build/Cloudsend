@@ -157,15 +157,6 @@ class FfiModel with ChangeNotifier {
 
   bool get isPeerAndroid => _pi.platform == kPeerPlatformAndroid;
   bool get isPeerMobile => isPeerAndroid;
-  bool get _supportsAndroidIgnoreCapture =>
-      isPeerAndroid && _pi.supportsAndroidIgnoreCapture;
-
-  bool get _canRequestAndroidBackupFrame {
-    if (!_supportsAndroidIgnoreCapture) return false;
-    final model = parent.target?.cloudSendStatusModel;
-    if (model == null) return false;
-    return model.data.accessibility == true;
-  }
 
   bool _isRecoverableAndroidConnectionError(
       String type, String title, String text) {
@@ -207,29 +198,11 @@ class FfiModel with ChangeNotifier {
     });
   }
 
-  void _requestAndroidBackupFrame() {
-    if (!isPeerAndroid ||
-        !_supportsAndroidIgnoreCapture ||
-        waitForFirstImage.isFalse) {
-      return;
-    }
-    if (!_canRequestAndroidBackupFrame) {
-      debugPrint(
-          '_requestAndroidBackupFrame: skipped, accessibility not ready');
-      return;
-    }
-    final target = parent.target;
-    if (target == null ||
-        target.closed ||
-        target.connType != ConnType.defaultConn) {
-      return;
-    }
-    debugPrint('_requestAndroidBackupFrame: sending open-ignore command');
-    target.inputModel.onScreenKitsch('\u5f00');
-  }
-
   void _startAndroidAutoReconnect(
       OverlayDialogManager dialogManager, SessionID sessionId) {
+    if (_androidAutoReconnectTimer != null) {
+      return;
+    }
     _stopAndroidAutoReconnect();
     _reconnects = 1;
     waitForFirstImage.value = true;
@@ -252,7 +225,6 @@ class FfiModel with ChangeNotifier {
       parent.target?.cloudSendStatusModel.reset();
     }
 
-    tryReconnect();
     _androidAutoReconnectTimer =
         Timer.periodic(_androidAutoReconnectInterval, (_) => tryReconnect());
   }
@@ -1115,22 +1087,9 @@ class FfiModel with ChangeNotifier {
       waitForImageDialogShow.value = true;
       waitForImageTimer?.cancel();
       _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
-      Timer(const Duration(milliseconds: 3000), () {
-        if (waitForFirstImage.isFalse || !isPeerAndroid) return;
-        if (_canRequestAndroidBackupFrame) {
-          _requestAndroidBackupFrame();
-        } else {
-          sessionRefreshVideo(sessionId, _pi);
-        }
-      });
       waitForImageTimer = Timer(_androidFirstFrameFallbackDelay, () {
         if (waitForFirstImage.isTrue && isPeerAndroid) {
           _showAndroidActionsOverlayAboveDialogs(delayMSecs: 10);
-          if (_canRequestAndroidBackupFrame) {
-            _requestAndroidBackupFrame();
-          } else {
-            sessionRefreshVideo(sessionId, _pi);
-          }
         }
       });
       bind.sessionOnWaitingForImageDialogShow(sessionId: sessionId);

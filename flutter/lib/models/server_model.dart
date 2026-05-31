@@ -26,7 +26,8 @@ const kUsePermanentPassword = "use-permanent-password";
 const kUseBothPasswords = "use-both-passwords";
 
 class ServerModel with ChangeNotifier {
-  bool _isStart = false; // Android MainService status
+  bool _isStart = false; // Android screen sharing status
+  bool _coreServiceStarted = false; // Android connection/id service status
   bool _mediaOk = false;
   bool _inputOk = false;
   bool _audioOk = false;
@@ -390,9 +391,23 @@ class ServerModel with ChangeNotifier {
     return res;
   }
 
-  /// Toggle the screen sharing service.
+  Future<void> ensureCoreService() async {
+    if (!isAndroid) return;
+    final ffi = parent.target;
+    ffi?.ffiModel.updateEventListener(ffi.sessionId, "");
+    await ffi?.invokeMethod("ensure_core_service");
+    if (_coreServiceStarted) {
+      return;
+    }
+    await bind.mainStartService();
+    _coreServiceStarted = true;
+    updateClientState();
+    notifyListeners();
+  }
+
+  /// Toggle Android screen sharing. The core connection/id service stays alive.
   toggleService() async {
-    if (_isStart) {
+    if (_isStart || _mediaOk) {
       final res = await parent.target?.dialogManager
           .show<bool>((setState, close, context) {
         submit() => close(true);
@@ -417,77 +432,56 @@ class ServerModel with ChangeNotifier {
       }
     } else {
       startService();
-      // if(true)return;
-
-      // await checkRequestNotificationPermission();
-      // if (bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) != 'Y') {
-      //   await checkFloatingWindowPermission();
-      // }
-      // if (!await AndroidPermissionManager.check(kManageExternalStorage)) {
-      //   await AndroidPermissionManager.request(kManageExternalStorage);
-      // }
-      // final res = await parent.target?.dialogManager
-      //     .show<bool>((setState, close, context) {
-      //   submit() => close(true);
-      //   return CustomAlertDialog(
-      //     title: Row(children: [
-      //       const Icon(Icons.warning_amber_sharp,
-      //           color: Colors.redAccent, size: 28),
-      //       const SizedBox(width: 10),
-      //       Text(translate("Warning")),
-      //     ]),
-      //     content: Text(translate("android_service_will_start_tip")),
-      //     actions: [
-      //       dialogButton("Cancel", onPressed: close, isOutline: true),
-      //       dialogButton("OK", onPressed: submit),
-      //     ],
-      //     onSubmit: submit,
-      //     onCancel: close,
-      //   );
-      // });
-      // if (res == true) {
-      //   startService();
-      // }
     }
   }
 
-  /// Start the screen sharing service.
+  /// Start screen sharing only. Core service is started separately and kept alive.
   Future<void> startService() async {
-    _isStart = true;
-    notifyListeners();
-    parent.target?.ffiModel.updateEventListener(parent.target!.sessionId, "");
-    await parent.target?.invokeMethod("init_service");
-    // ugly is here, because for desktop, below is useless
-    await bind.mainStartService();
-    updateClientState();
-    if (isAndroid) {
-      androidUpdatekeepScreenOn();
+    if (!isAndroid) {
+      _isStart = true;
+      notifyListeners();
+      parent.target?.ffiModel.updateEventListener(parent.target!.sessionId, "");
+      await bind.mainStartService();
+      updateClientState();
+      return;
     }
+    await ensureCoreService();
+    await parent.target?.invokeMethod("start_screen_share");
+    updateClientState();
   }
 
   void onMediaProjectionDenied() {
-    if (_isStart) {
-      debugPrint("MediaProjection denied by user, rollback _isStart");
-      _isStart = false;
-      notifyListeners();
+    if (_isStart || _mediaOk) {
+      debugPrint("MediaProjection denied by user, rollback screen sharing");
     }
+    _isStart = false;
+    _mediaOk = false;
+    notifyListeners();
     updateClientState();
     if (isAndroid) {
       androidUpdatekeepScreenOn();
     }
   }
 
-  /// Stop the screen sharing service.
+  /// Stop screen sharing only. Do not stop the core connection/id service.
   Future<void> stopService() async {
-    _isStart = false;
-    closeAll();
-    await parent.target?.invokeMethod("stop_service");
-    await bind.mainStopService();
-    notifyListeners();
-    if (!isLinux) {
-      // current linux is not supported
-      WakelockPlus.disable();
+    if (!isAndroid) {
+      _isStart = false;
+      closeAll();
+      await parent.target?.invokeMethod("stop_service");
+      await bind.mainStopService();
+      notifyListeners();
+      if (!isLinux) {
+        WakelockPlus.disable();
+      }
+      return;
     }
+    _isStart = false;
+    _mediaOk = false;
+    await parent.target?.invokeMethod("stop_screen_share");
+    notifyListeners();
+    updateClientState();
+    androidUpdatekeepScreenOn();
   }
 
   Future<bool> setPermanentPassword(String newPW) async {
@@ -514,9 +508,7 @@ class ServerModel with ChangeNotifier {
     switch (name) {
       case "media":
         _mediaOk = value;
-        if (value && !_isStart) {
-          startService();
-        }
+        _isStart = value;
         break;
       case "input":
         if (_inputOk != value) {
@@ -746,9 +738,6 @@ class ServerModel with ChangeNotifier {
   void sendLoginResponse(Client client, bool res) async {
     if (res) {
       bind.cmLoginRes(connId: client.id, res: res);
-      if (!client.isFileTransfer && !client.isTerminal) {
-        parent.target?.invokeMethod("start_capture");
-      }
       parent.target?.invokeMethod("cancel_notification", client.id);
       client.authorized = true;
       notifyListeners();

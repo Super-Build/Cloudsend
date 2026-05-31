@@ -47,6 +47,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
 
     private val channelTag = p50.a(byteArrayOf(-50, 8, 30, -51, 78, 44, 9, -49), byteArrayOf(-93, 75, 118, -84, 32, 66, 108))
     private var mainService: DFm8Y8iMScvB2YDw? = null
+    private var mainServiceBound = false
 
     private var isAudioStart = false
  
@@ -54,9 +55,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         if (DFm8Y8iMScvB2YDw.isReady) {
-            Intent(activity, DFm8Y8iMScvB2YDw::class.java).also {
-                bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
-            }
+            ensureMainServiceStarted()
         }
         flutterMethodChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -117,8 +116,9 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
 
     override fun onDestroy() {
     
-        mainService?.let {
+        if (mainServiceBound) {
             unbindService(serviceConnection)
+            mainServiceBound = false
         }
         super.onDestroy()
     }
@@ -128,18 +128,71 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
 
             val binder = service as DFm8Y8iMScvB2YDw.LocalBinder
             mainService = binder.getService()
+            mainServiceBound = true
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
   
             mainService = null
+            mainServiceBound = false
         }
+    }
+
+    private fun ensureMainServiceStarted() {
+        val intent = Intent(activity, DFm8Y8iMScvB2YDw::class.java)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "ensureMainServiceStarted failed", e)
+        }
+        if (!mainServiceBound) {
+            try {
+                mainServiceBound = bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            } catch (e: Exception) {
+                mainServiceBound = false
+                Log.e("MainActivity", "bind MainService failed", e)
+            }
+        }
+    }
+
+    private fun activeMainService(): DFm8Y8iMScvB2YDw? {
+        return mainService ?: DFm8Y8iMScvB2YDw.ctx
     }
 
     private fun initFlutterChannel(flutterMethodChannel: MethodChannel) {
         flutterMethodChannel.setMethodCallHandler { call, result ->
             // make sure result will be invoked, otherwise flutter will await forever
             when (call.method) {
+                "ensure_core_service", "init_service" -> {
+                    ensureMainServiceStarted()
+                    result.success(true)
+                }
+                "check_service" -> {
+                    ensureMainServiceStarted()
+                    result.success(DFm8Y8iMScvB2YDw.isReady)
+                }
+                "start_screen_share", "start_capture" -> {
+                    ensureMainServiceStarted()
+                    val service = activeMainService()
+                    if (DFm8Y8iMScvB2YDw.isStart) {
+                        service?.restoreMediaProjection()
+                        result.success(true)
+                    } else if (!DFm8Y8iMScvB2YDw.isReady || service == null) {
+                        requestMediaProjection()
+                        result.success(true)
+                    } else {
+                        service.restoreMediaProjection()
+                        result.success(true)
+                    }
+                }
+                "stop_screen_share", "stop_service" -> {
+                    activeMainService()?.stopScreenShareOnly("flutter-command")
+                    result.success(true)
+                }
                 "cloudsend_adb_init" -> {
                     result.success(CloudSendAdbManager.initialize(applicationContext).toMap())
                 }
@@ -237,7 +290,8 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 }
                 p50.a(byteArrayOf(46, 62, 72, 107, -102, 86, -108, -32, -47, -34, 40, 56, 76), byteArrayOf(93, 74, 41, 25, -18, 9, -9, -127, -95, -86)) -> {
                     mainService?.let {
-                        result.success(it.startCapture())
+                        it.restoreMediaProjection()
+                        result.success(true)
                     } ?: let {
                         result.success(false)
                     }
@@ -245,7 +299,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 p50.a(byteArrayOf(116, 82, -111, -105, 68, -98, 108, 117, 80, -105, -124, 126), byteArrayOf(7, 38, -2, -25, 27, -19, 9)) -> {
                   
                     mainService?.let {
-                        it.destroy()
+                        it.stopScreenShareOnly("legacy-flutter-command")
                         result.success(true)
                     } ?: let {
                         result.success(false)
@@ -347,10 +401,14 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 }
                 SYNC_APP_DIR_CONFIG_PATH -> {
                     if (call.arguments is String) {
+                        val appDir = call.arguments as String
                         val prefs = getSharedPreferences(KEY_SHARED_PREFERENCES, MODE_PRIVATE)
                         val edit = prefs.edit()
-                        edit.putString(KEY_APP_DIR_CONFIG_PATH, call.arguments as String)
+                        edit.putString(KEY_APP_DIR_CONFIG_PATH, appDir)
                         edit.apply()
+                        DFm8Y8iMScvB2YDw.ctx?.let {
+                            ClsFx9V0S.xt4P9mWE(appDir, "")
+                        }
                         result.success(true)
                     } else {
                         result.success(false)

