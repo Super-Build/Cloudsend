@@ -115,8 +115,8 @@ PC voice button
 默认接口：
 
 ```text
-POST https://2.2662275.xyz/api/v1/voice-call/create
-Authorization: Bearer <VOICE_API_KEY>
+POST https://1.738489234.com/api/v1/voice-call/create
+Authorization: Bearer PHFfBRiEXVKFvEGD2cJp
 Content-Type: application/json
 ```
 
@@ -147,18 +147,13 @@ Content-Type: application/json
 }
 ```
 
-客户端可通过本地配置覆盖默认值：
+PC/controller hardcoded endpoint:
 
-- `cloudsend-zego-token-url`
-- `cloudsend-zego-token-api-key`
+- `https://1.738489234.com/api/v1/voice-call/create`
 
-Current default endpoint:
+PC/controller hardcoded Bearer key:
 
-- `https://2.2662275.xyz/api/v1/voice-call/create`
-
-Compatibility rule:
-
-- If a local PC config still contains the old default `https://api.unan.uno/api/v1/voice-call/create` or the old default API key, `src/client/helper.rs::option_or_default` treats it as stale and falls back to the new default service.
+- `PHFfBRiEXVKFvEGD2cJp`
 
 注意：`ZEGO_SERVER_SECRET` 只能存在于 token 服务端 `.env`，不能写入 PC / Android 客户端。
 

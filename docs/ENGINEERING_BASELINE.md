@@ -735,7 +735,7 @@ Current source truth:
   - `CloseVoiceCall`
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
-- PC/controller default ZEGO Token endpoint is `https://2.2662275.xyz/api/v1/voice-call/create`; `src/client/helper.rs::option_or_default` treats the old `api.unan.uno` endpoint and old default API key as stale local configuration and falls back to the new default service.
+- PC/controller hardcodes the ZEGO Token endpoint `https://1.738489234.com/api/v1/voice-call/create` and Bearer key `PHFfBRiEXVKFvEGD2cJp` in `src/client/helper.rs`; local override and legacy fallback are intentionally not used.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
 - `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp` when requesting the token service. The token service must include this value in room/stream derivation so each established PC-Android control connection gets an isolated 1v1 ZEGO room.
 - PC/controller sends ZEGO metadata from `src/client/io_loop.rs::Data::NewVoiceCall`.

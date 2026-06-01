@@ -5,17 +5,17 @@
 本文是 CloudSend 1v1 ZEGO 语音通话 Token 服务的完整部署文档。新域名：
 
 ```text
-https://2.2662275.xyz
+https://1.738489234.com
 ```
 
 最终接口：
 
 ```text
-GET  https://2.2662275.xyz/api/v1/health
-POST https://2.2662275.xyz/api/v1/voice-call/create
+GET  https://1.738489234.com/api/v1/health
+POST https://1.738489234.com/api/v1/voice-call/create
 ```
 
-> 安全约定：`ZEGO_SERVER_SECRET` 和 `VOICE_API_KEY` 只能写入服务器 `.env`，不要写入 Git 跟踪文档、PC 客户端、Android 客户端或日志。
+> 当前文档按本项目私有部署要求写入固定部署值，可直接复制到服务器执行。不要公开仓库、截图或日志。
 
 ---
 
@@ -23,7 +23,7 @@ POST https://2.2662275.xyz/api/v1/voice-call/create
 
 ```mermaid
 flowchart LR
-    PC["PC 客户端"] --> Domain["https://2.2662275.xyz"]
+    PC["PC 客户端"] --> Domain["https://1.738489234.com"]
     Domain --> Nginx["宝塔 Nginx 反向代理"]
     Nginx --> Go["cloudsend-zego-token<br/>127.0.0.1:8787"]
     Go --> Token["生成 ZEGO Token04"]
@@ -65,12 +65,14 @@ rm -rf /www/wwwroot/cloudsend-zego-token
 宝塔面板操作：
 
 ```text
-宝塔面板 -> 网站 -> 找到旧域名 api.unan.uno -> 删除站点
+宝塔面板 -> 网站 -> 找到旧域名 738489234.com / 2.2662275.xyz / api.unan.uno -> 删除站点
 ```
 
 如果命令行里仍有旧 Nginx 配置：
 
 ```bash
+rm -f /www/server/panel/vhost/nginx/738489234.com.conf
+rm -f /www/server/panel/vhost/nginx/2.2662275.xyz.conf
 rm -f /www/server/panel/vhost/nginx/api.unan.uno.conf
 nginx -t && systemctl reload nginx
 ```
@@ -82,21 +84,21 @@ nginx -t && systemctl reload nginx
 新域名：
 
 ```text
-2.2662275.xyz
+1.738489234.com
 ```
 
 域名 DNS 后台添加：
 
 ```text
 类型：A
-主机记录：2
+主机记录：1
 记录值：服务器公网 IP
 ```
 
 验证解析：
 
 ```bash
-ping 2.2662275.xyz
+ping 1.738489234.com
 ```
 
 解析到服务器公网 IP 后继续。
@@ -109,15 +111,15 @@ ping 2.2662275.xyz
 
 ```text
 网站 -> 添加站点
-域名：2.2662275.xyz
+域名：1.738489234.com
 PHP版本：纯静态
-根目录：/www/wwwroot/2.2662275.xyz
+根目录：/www/wwwroot/1.738489234.com
 ```
 
 申请 SSL：
 
 ```text
-网站 -> 2.2662275.xyz -> SSL -> Let's Encrypt -> 申请证书
+网站 -> 1.738489234.com -> SSL -> Let's Encrypt -> 申请证书
 强制 HTTPS：开启
 ```
 
@@ -132,17 +134,33 @@ cd /www/wwwroot/cloudsend-zego-token
 
 ---
 
-## 6. 创建 `.env`
+## 6. 安装 Go 构建环境
 
-> 下面是完整结构。部署时把 `<ZEGO_SERVER_SECRET>` 和 `<VOICE_API_KEY>` 替换成实际值；不要把真实密钥提交到仓库。
+如果执行 `go mod tidy` 或 `go build` 时提示 `Command 'go' not found`，说明服务器尚未安装 Go。
+
+Ubuntu 22.04 可直接执行：
+
+```bash
+apt update
+apt install -y golang-go
+go version
+```
+
+能看到 `go version` 后再继续后续步骤。
+
+---
+
+## 7. 创建 `.env`
+
+> 下面是完整结构，四个部署值已同步为当前项目使用值，可直接复制。
 
 ```bash
 cat > .env <<'EOF'
 PORT=8787
 ZEGO_APP_ID=726162948
-ZEGO_SERVER_SECRET=<ZEGO_SERVER_SECRET>
+ZEGO_SERVER_SECRET=360a56369441ee640841cb4c82144186
 VOICE_TOKEN_TTL_SECONDS=3600
-VOICE_API_KEY=<VOICE_API_KEY>
+VOICE_API_KEY=PHFfBRiEXVKFvEGD2cJp
 EOF
 
 chmod 600 .env
@@ -153,14 +171,14 @@ chmod 600 .env
 | 字段 | 说明 |
 |---|---|
 | `PORT` | 本机监听端口，固定 `8787` |
-| `ZEGO_APP_ID` | ZEGO 控制台 AppID |
-| `ZEGO_SERVER_SECRET` | ZEGO ServerSecret，只允许放服务器 `.env` |
-| `VOICE_TOKEN_TTL_SECONDS` | Token 有效期，当前建议 `3600` 秒 |
-| `VOICE_API_KEY` | PC 请求 Token 服务时使用的 Bearer 鉴权 key |
+| `ZEGO_APP_ID` | `726162948` |
+| `ZEGO_SERVER_SECRET` | `360a56369441ee640841cb4c82144186` |
+| `VOICE_TOKEN_TTL_SECONDS` | `3600` |
+| `VOICE_API_KEY` | PC 请求 Token 服务时使用的 Bearer 鉴权 key；当前项目默认值为 `PHFfBRiEXVKFvEGD2cJp` |
 
 ---
 
-## 7. 创建 `go.mod`
+## 8. 创建 `go.mod`
 
 ```bash
 cat > go.mod <<'EOF'
@@ -174,7 +192,7 @@ EOF
 
 ---
 
-## 8. 创建完整 `main.go`
+## 9. 创建完整 `main.go`
 
 ```bash
 cat > main.go <<'EOF'
@@ -379,7 +397,11 @@ EOF
 
 ---
 
-## 9. 构建服务
+> 注意：`main.go` 必须完整复制到最后一个 `EOF`。如果粘贴后终端出现 `EOF return ...` 这类混乱内容，说明文件已粘坏，需要重新执行本节整段命令覆盖 `main.go`。
+
+---
+
+## 10. 构建服务
 
 ```bash
 cd /www/wwwroot/cloudsend-zego-token
@@ -390,7 +412,7 @@ chmod +x cloudsend-zego-token
 
 ---
 
-## 10. 创建 systemd 服务
+## 11. 创建 systemd 服务
 
 ```bash
 cat > /etc/systemd/system/cloudsend-zego-token.service <<'EOF'
@@ -419,7 +441,7 @@ systemctl status cloudsend-zego-token --no-pager
 
 ---
 
-## 11. 本机测试
+## 12. 本机测试
 
 健康检查：
 
@@ -437,7 +459,7 @@ Token 创建测试：
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/v1/voice-call/create \
-  -H "Authorization: Bearer <VOICE_API_KEY>" \
+  -H "Authorization: Bearer PHFfBRiEXVKFvEGD2cJp" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
 ```
@@ -461,12 +483,12 @@ curl -X POST http://127.0.0.1:8787/api/v1/voice-call/create \
 
 ---
 
-## 12. 宝塔反向代理
+## 13. 宝塔反向代理
 
 宝塔面板操作：
 
 ```text
-网站 -> 2.2662275.xyz -> 反向代理 -> 添加反向代理
+网站 -> 1.738489234.com -> 反向代理 -> 添加反向代理
 ```
 
 填写：
@@ -480,7 +502,7 @@ curl -X POST http://127.0.0.1:8787/api/v1/voice-call/create \
 保存后测试：
 
 ```bash
-curl https://2.2662275.xyz/api/v1/health
+curl https://1.738489234.com/api/v1/health
 ```
 
 正常返回：
@@ -492,23 +514,23 @@ curl https://2.2662275.xyz/api/v1/health
 公网 Token 测试：
 
 ```bash
-curl -X POST https://2.2662275.xyz/api/v1/voice-call/create \
-  -H "Authorization: Bearer <VOICE_API_KEY>" \
+curl -X POST https://1.738489234.com/api/v1/voice-call/create \
+  -H "Authorization: Bearer PHFfBRiEXVKFvEGD2cJp" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
 ```
 
 ---
 
-## 13. 手动 Nginx 配置备选
+## 14. 手动 Nginx 配置备选
 
 如果不用宝塔反向代理，可手动创建 HTTP 反向代理配置：
 
 ```bash
-cat > /www/server/panel/vhost/nginx/2.2662275.xyz.conf <<'EOF'
+cat > /www/server/panel/vhost/nginx/1.738489234.com.conf <<'EOF'
 server {
     listen 80;
-    server_name 2.2662275.xyz;
+    server_name 1.738489234.com;
 
     location / {
         proxy_pass http://127.0.0.1:8787;
@@ -528,7 +550,7 @@ nginx -t && systemctl reload nginx
 
 ---
 
-## 14. 日志与运维
+## 15. 日志与运维
 
 查看服务状态：
 
@@ -569,30 +591,52 @@ systemctl reload nginx
 
 ---
 
-## 15. PC 客户端配置
+## 16. PC 客户端配置
 
 PC 客户端请求地址应配置为：
 
 ```text
-https://2.2662275.xyz/api/v1/voice-call/create
+https://1.738489234.com/api/v1/voice-call/create
 ```
 
 鉴权：
 
 ```text
-Authorization: Bearer <VOICE_API_KEY>
+Authorization: Bearer PHFfBRiEXVKFvEGD2cJp
 ```
 
 当前 Rust 配置锚点：
 
 - `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`
 - `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`
-- 本地可覆盖配置 key：`cloudsend-zego-token-url`
-- 本地可覆盖配置 key：`cloudsend-zego-token-api-key`
+- PC 端固定使用上述两个常量；不再读取本地覆盖配置，也不保留旧域名 fallback。
 
 ---
 
-## 16. 常见问题
+## 17. 常见问题
+
+### `Command 'go' not found`
+
+说明 Go 构建环境未安装：
+
+```bash
+apt update
+apt install -y golang-go
+go version
+```
+
+安装完成后回到服务目录重新执行构建：
+
+```bash
+cd /www/wwwroot/cloudsend-zego-token
+GOPROXY=https://goproxy.cn,direct go mod tidy
+GOPROXY=https://goproxy.cn,direct go build -o cloudsend-zego-token main.go
+chmod +x cloudsend-zego-token
+```
+
+### `main.go` 粘贴后出现乱码或 `EOF return ...`
+
+说明 heredoc 没完整粘贴或中途被截断。重新执行 `创建完整 main.go` 那一整段命令覆盖文件，再构建。
 
 ### Android 显示 `ZEGO Token 鉴权失败` 或 `1002033`
 
@@ -610,6 +654,25 @@ return token04.GenerateToken04(appId, userId, secret, ttl, "")
 
 - 服务端时间是否正常。
 - 修改 `.env` 或 `main.go` 后是否重新构建并重启服务。
+
+### `POST /api/v1/voice-call/create` 返回 `caller_token_failed`
+
+含义：HTTP 请求已经进入 Token 服务，`Authorization` 也已通过，但服务端调用 ZEGO `GenerateToken04(...)` 失败。
+
+优先检查：
+
+- `.env` 中 `ZEGO_SERVER_SECRET` 是否是 `360a56369441ee640841cb4c82144186`。
+- `.env` 中 `ZEGO_SERVER_SECRET` 是否属于 `ZEGO_APP_ID=726162948` 对应的同一个 ZEGO 项目。
+- `.env` 修改后是否执行了 `systemctl restart cloudsend-zego-token`。
+- 日志里是否有 `caller token error:` 详细错误。
+
+检查命令：
+
+```bash
+cd /www/wwwroot/cloudsend-zego-token
+grep -E '^(ZEGO_APP_ID|ZEGO_SERVER_SECRET|VOICE_TOKEN_TTL_SECONDS|VOICE_API_KEY)=' .env
+journalctl -u cloudsend-zego-token -n 50 --no-pager
+```
 
 ### `curl 127.0.0.1:8787/api/v1/health` 连接失败
 
@@ -631,7 +694,7 @@ chmod +x cloudsend-zego-token
 systemctl restart cloudsend-zego-token
 ```
 
-### 公网 `https://2.2662275.xyz/api/v1/health` 不通
+### 公网 `https://1.738489234.com/api/v1/health` 不通
 
 检查：
 
@@ -644,12 +707,12 @@ systemctl restart cloudsend-zego-token
 
 ---
 
-## 17. 最终验收清单
+## 18. 最终验收清单
 
 - `systemctl status cloudsend-zego-token --no-pager` 显示 `active (running)`。
 - `curl http://127.0.0.1:8787/api/v1/health` 返回 `{"ok":true}`。
-- `curl https://2.2662275.xyz/api/v1/health` 返回 `{"ok":true}`。
+- `curl https://1.738489234.com/api/v1/health` 返回 `{"ok":true}`。
 - `POST /api/v1/voice-call/create` 返回 `callerToken` 和 `calleeToken`。
-- PC 客户端 Token URL 使用 `https://2.2662275.xyz/api/v1/voice-call/create`。
+- PC 客户端 Token URL 使用 `https://1.738489234.com/api/v1/voice-call/create`。
 - PC 客户端 Bearer key 与服务器 `.env` 中 `VOICE_API_KEY` 一致。
 - Android 接听后不再出现 `1002033`。

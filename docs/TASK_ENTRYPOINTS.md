@@ -99,8 +99,8 @@ Current canonical keywords:
 - `zego_voice_call_ready`
 - `zego_voice_call_closed`
 - `Data::ZegoVoiceCallReady`
-- `cloudsend-zego-token-url`
-- `cloudsend-zego-token-api-key`
+- `DEFAULT_ZEGO_TOKEN_URL`
+- `DEFAULT_ZEGO_TOKEN_API_KEY`
 
 Boundary:
 

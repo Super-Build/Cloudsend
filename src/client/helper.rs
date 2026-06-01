@@ -1,6 +1,5 @@
 use hbb_common::{
     anyhow::{anyhow, bail, Context, Result},
-    config::Config,
     get_time,
     message_proto::{Message, VoiceCallRequest, VoiceCallResponse},
 };
@@ -9,12 +8,8 @@ use serde_json::json;
 use scrap::CodecFormat;
 use std::collections::HashMap;
 
-const DEFAULT_ZEGO_TOKEN_URL: &str = "https://2.2662275.xyz/api/v1/voice-call/create";
+const DEFAULT_ZEGO_TOKEN_URL: &str = "https://1.738489234.com/api/v1/voice-call/create";
 const DEFAULT_ZEGO_TOKEN_API_KEY: &str = "PHFfBRiEXVKFvEGD2cJp";
-const LEGACY_ZEGO_TOKEN_URL: &str = "https://api.unan.uno/api/v1/voice-call/create";
-const LEGACY_ZEGO_TOKEN_API_KEY: &str = "H44txkbboBGmEThQp2VK";
-const ZEGO_TOKEN_URL_OPTION: &str = "cloudsend-zego-token-url";
-const ZEGO_TOKEN_API_KEY_OPTION: &str = "cloudsend-zego-token-api-key";
 
 #[derive(Debug, Default)]
 pub struct QualityStatus {
@@ -89,16 +84,8 @@ pub fn request_zego_voice_call_info(
     android_peer_id: &str,
     cloudsend_session_id: &str,
 ) -> Result<ZegoVoiceCallInfo> {
-    let token_url = option_or_default(
-        ZEGO_TOKEN_URL_OPTION,
-        DEFAULT_ZEGO_TOKEN_URL,
-        LEGACY_ZEGO_TOKEN_URL,
-    );
-    let api_key = option_or_default(
-        ZEGO_TOKEN_API_KEY_OPTION,
-        DEFAULT_ZEGO_TOKEN_API_KEY,
-        LEGACY_ZEGO_TOKEN_API_KEY,
-    );
+    let token_url = DEFAULT_ZEGO_TOKEN_URL;
+    let api_key = DEFAULT_ZEGO_TOKEN_API_KEY;
     if token_url.is_empty() || api_key.is_empty() {
         bail!("ZEGO token service is not configured");
     }
@@ -131,16 +118,6 @@ pub fn request_zego_voice_call_info(
         bail!("ZEGO token service returned an incomplete voice-call payload");
     }
     Ok(info)
-}
-
-fn option_or_default(key: &str, default_value: &str, legacy_value: &str) -> String {
-    let value = Config::get_option(key);
-    let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed == legacy_value {
-        default_value.to_owned()
-    } else {
-        value
-    }
 }
 
 #[inline]
