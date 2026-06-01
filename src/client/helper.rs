@@ -95,7 +95,7 @@ pub fn request_zego_voice_call_info(
         .build()
         .context("create ZEGO token HTTP client")?;
     let resp = client
-        .post(&token_url)
+        .post(token_url)
         .bearer_auth(api_key)
         .json(&json!({
             "pcPeerId": pc_peer_id,
