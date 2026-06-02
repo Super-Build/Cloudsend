@@ -885,7 +885,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handler.msgbox(
                         "warning",
                         "语音通话",
-                        "ZEGO 语音通话仅支持连接 Android 后使用。",
+                        "语音通话仅支持连接 Android 后使用",
                         "",
                     );
                     self.handler.on_voice_call_closed("");
@@ -899,7 +899,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handler.msgbox(
                         "warning",
                         "语音通话",
-                        "已有 ZEGO 语音通话正在等待或进行中。",
+                        "已有语音通话正在等待或进行中",
                         "",
                     );
                     return true;
@@ -913,7 +913,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handler.msgbox(
                         "warning",
                         "语音通话",
-                        "当前 PC 已有 ZEGO 语音通话，请先挂断后再发起新的通话。",
+                        "当前 PC 已存在其他语音通话 请先挂断后再发起新的通话",
                         "",
                     );
                     self.handler.on_voice_call_closed("");
@@ -938,7 +938,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.handler.msgbox(
                             "error",
                             "语音通话",
-                            "创建 ZEGO 通话失败，请检查 Token 服务和网络。",
+                            "创建通话失败 请检查 Token 服务和网络",
                             "",
                         );
                         self.handler.on_voice_call_closed("");
@@ -950,7 +950,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.handler.msgbox(
                             "error",
                             "语音通话",
-                            "创建 ZEGO 通话失败，请检查 Token 服务和网络。",
+                            "创建通话失败 请检查 Token 服务和网络",
                             "",
                         );
                         self.handler.on_voice_call_closed("");
