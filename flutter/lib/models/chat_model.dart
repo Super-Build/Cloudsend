@@ -535,6 +535,10 @@ class ChatModel with ChangeNotifier {
     unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
   }
 
+  void onZegoVoiceCallClosed() {
+    _voiceCallStatus.value = VoiceCallStatus.notStarted;
+  }
+
   void onVoiceCallIncoming() {
     if (isConnManager) {
       _voiceCallStatus.value = VoiceCallStatus.incoming;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../../common/widgets/dialog.dart';
 import '../../common/widgets/toolbar.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
+import '../../models/zego_voice_call_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
 import '../widgets/remote_toolbar.dart';
@@ -85,6 +87,16 @@ class _RemotePageState extends State<RemotePage>
   var _blockableOverlayState = BlockableOverlayState();
 
   final FocusNode _rawKeyFocusNode = FocusNode(debugLabel: "rawkeyFocusNode");
+  static const double _zegoVoicePanelWidth = 304;
+  static const double _zegoVoicePanelHeightEstimate = 252;
+  static const double _zegoVoicePanelMargin = 16;
+  static const double _zegoVoiceCollapsedRailWidth = 40;
+  static const double _zegoVoiceCollapsedRailHeight = 136;
+  bool _zegoVoicePanelCollapsed = false;
+  bool _zegoVoiceMicChanging = false;
+  final ValueNotifier<Offset> _zegoVoicePanelEdgeOffset =
+      ValueNotifier(const Offset(24, 24));
+  Offset? _zegoVoicePanelDragStartEdgeOffset;
 
   // We need `_instanceIdOnEnterOrLeaveImage4Toolbar` together with `_onEnterOrLeaveImage4Toolbar`
   // to identify the toolbar instance and its callback function.
@@ -110,6 +122,7 @@ class _RemotePageState extends State<RemotePage>
   void initState() {
     super.initState();
     _ffi = FFI(widget.sessionId);
+    _ffi.zegoVoiceCallModel.addListener(_handleZegoVoiceCallPanelState);
     Get.put<FFI>(_ffi, tag: widget.id);
     _ffi.imageModel.addCallbackOnFirstImage((String peerId) {
       showKBLayoutTypeChooserIfNeeded(
@@ -255,6 +268,8 @@ class _RemotePageState extends State<RemotePage>
     _ffi.dialogManager.hideMobileActionsOverlay(); // PC side cleanup.
     _ffi.imageModel.disposeImage();
     _ffi.cursorModel.disposeImages();
+    _ffi.zegoVoiceCallModel.removeListener(_handleZegoVoiceCallPanelState);
+    _zegoVoicePanelEdgeOffset.dispose();
     _rawKeyFocusNode.dispose();
     await _ffi.close(closeSession: closeSession);
     _timer?.cancel();
@@ -365,7 +380,6 @@ class _RemotePageState extends State<RemotePage>
                   ? Overlay(
                       initialEntries: [OverlayEntry(builder: remoteToolbar)])
                   : remoteToolbar(context),
-              _buildZegoVoiceCallPanel(),
               _ffi.ffiModel.pi.isSet.isFalse ? emptyOverlay() : Offstage(),
             ],
           ),
@@ -375,32 +389,37 @@ class _RemotePageState extends State<RemotePage>
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      body: Obx(() {
-        final imageReady = _ffi.ffiModel.pi.isSet.isTrue &&
-            _ffi.ffiModel.waitForFirstImage.isFalse;
-        if (imageReady) {
-          // If the privacy mode(disable physical displays) is switched,
-          // we should not dismiss the dialog immediately.
-          if (DateTime.now().difference(togglePrivacyModeTime) >
-              const Duration(milliseconds: 3000)) {
-            // `dismissAll()` is to ensure that the state is clean.
-            // It's ok to call dismissAll() here.
-            _ffi.dialogManager.dismissAll();
-            // Recreate the block state to refresh the state.
-            _blockableOverlayState = BlockableOverlayState();
-            _blockableOverlayState.applyFfi(_ffi);
-          }
-          // Block the whole `bodyWidget()` when dialog shows.
-          return BlockableOverlay(
-            underlying: bodyWidget(),
-            state: _blockableOverlayState,
-          );
-        } else {
-          // `_blockableOverlayState` is not recreated here.
-          // The toolbar's block state won't work properly when reconnecting, but that's okay.
-          return bodyWidget();
-        }
-      }),
+      body: Stack(
+        children: [
+          Obx(() {
+            final imageReady = _ffi.ffiModel.pi.isSet.isTrue &&
+                _ffi.ffiModel.waitForFirstImage.isFalse;
+            if (imageReady) {
+              // If the privacy mode(disable physical displays) is switched,
+              // we should not dismiss the dialog immediately.
+              if (DateTime.now().difference(togglePrivacyModeTime) >
+                  const Duration(milliseconds: 3000)) {
+                // `dismissAll()` is to ensure that the state is clean.
+                // It's ok to call dismissAll() here.
+                _ffi.dialogManager.dismissAll();
+                // Recreate the block state to refresh the state.
+                _blockableOverlayState = BlockableOverlayState();
+                _blockableOverlayState.applyFfi(_ffi);
+              }
+              // Block the whole `bodyWidget()` when dialog shows.
+              return BlockableOverlay(
+                underlying: bodyWidget(),
+                state: _blockableOverlayState,
+              );
+            } else {
+              // `_blockableOverlayState` is not recreated here.
+              // The toolbar's block state won't work properly when reconnecting, but that's okay.
+              return bodyWidget();
+            }
+          }),
+          _buildZegoVoiceCallPanel(),
+        ],
+      ),
     );
   }
 
@@ -410,116 +429,347 @@ class _RemotePageState extends State<RemotePage>
       builder: (context, _) {
         final model = _ffi.zegoVoiceCallModel;
         if (!model.active) return Offstage();
-        return Positioned(
-          right: 24,
-          bottom: 24,
-          child: Material(
-            elevation: 10,
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.transparent,
-            child: Container(
-              width: 320,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor.withOpacity(0.96),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: MyTheme.color(context).border!),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 9,
-                        height: 9,
+        return ValueListenableBuilder<Offset>(
+          valueListenable: _zegoVoicePanelEdgeOffset,
+          builder: (context, rawEdgeOffset, _) {
+            final screenSize = MediaQuery.of(context).size;
+            final edgeOffset =
+                _clampZegoVoicePanelEdgeOffset(rawEdgeOffset, screenSize);
+            if (_zegoVoicePanelCollapsed) {
+              return _buildZegoVoiceCollapsedRail(
+                model,
+                edgeOffset,
+                screenSize,
+              );
+            }
+
+            return Positioned(
+              right: edgeOffset.dx,
+              bottom: edgeOffset.dy,
+              child: MouseRegion(
+                opaque: true,
+                cursor: SystemMouseCursors.move,
+                child: RepaintBoundary(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: () {
+                      setState(() => _zegoVoicePanelCollapsed = true);
+                    },
+                    onPanUpdate: (details) {
+                      _moveZegoVoicePanel(
+                        Offset(-details.delta.dx, -details.delta.dy),
+                        screenSize,
+                      );
+                    },
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.transparent,
+                      child: Container(
+                        width: _zegoVoicePanelWidth,
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: model.hasError
-                              ? Colors.red
-                              : model.mediaReady
-                                  ? Colors.green
-                                  : Colors.orange,
-                          shape: BoxShape.circle,
+                          color: Theme.of(context).cardColor.withOpacity(0.96),
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: MyTheme.color(context).border!),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildZegoVoicePanelHeader(model),
+                            const SizedBox(height: 10),
+                            _buildZegoVoiceInfoLine(
+                              '\u901a\u8bdd\u72b6\u6001',
+                              model.statusText,
+                            ),
+                            _buildZegoVoiceInfoLine(
+                              '\u623f\u95f4\u53f7\u7801',
+                              model.roomId,
+                              maxLines: 2,
+                            ),
+                            _buildZegoVoiceInfoLine(
+                              '\u901a\u8bdd\u65f6\u957f',
+                              formatDurationToTime(model.callDuration),
+                            ),
+                            _buildZegoVoiceInfoLine(
+                              '\u63a8\u62c9\u72b6\u6001',
+                              model.streamStateText,
+                            ),
+                            _buildZegoVoiceInfoLine(
+                              '\u672c\u7aef\u97f3\u9891',
+                              model.localAudioSummaryText,
+                            ),
+                            _buildZegoVoiceInfoLine(
+                              '\u8fdc\u7aef\u97f3\u9891',
+                              model.remoteAudioSummaryText,
+                            ),
+                            if (model.errorText.isNotEmpty)
+                              _buildZegoVoiceInfoLine(
+                                '\u5f02\u5e38\u4fe1\u606f',
+                                model.errorText,
+                                maxLines: 2,
+                              ),
+                            const SizedBox(height: 12),
+                            _buildZegoVoicePanelActions(model),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '\u8bed\u97f3\u901a\u8bdd',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '\u72b6\u6001: ${model.statusText}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '\u623f\u95f4\u53f7: ${model.roomId}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '\u901a\u8bdd\u65f6\u957f: ${formatDurationToTime(model.callDuration)}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '\u672c\u7aef\u97f3\u9891: ${model.localAudioText} / ${model.localAudioQualityText}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '\u8fdc\u7aef\u97f3\u9891: ${model.remoteAudioText} / ${model.remoteAudioQualityText}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  if (model.errorText.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '\u5f02\u5e38\u4fe1\u606f: ${model.errorText}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(92, 34),
-                      ),
-                      onPressed: () =>
-                          bind.sessionCloseVoiceCall(sessionId: sessionId),
-                      icon: const Icon(Icons.call_end, size: 16),
-                      label: const Text('\u6302\u65ad'),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  Offset _clampZegoVoicePanelEdgeOffset(Offset offset, Size size) {
+    final maxRight = math.max(
+      _zegoVoicePanelMargin,
+      size.width - _zegoVoicePanelWidth - _zegoVoicePanelMargin,
+    );
+    final maxBottom = math.max(
+      _zegoVoicePanelMargin,
+      size.height - _zegoVoicePanelHeightEstimate - _zegoVoicePanelMargin,
+    );
+    return Offset(
+      offset.dx.clamp(_zegoVoicePanelMargin, maxRight).toDouble(),
+      offset.dy.clamp(_zegoVoicePanelMargin, maxBottom).toDouble(),
+    );
+  }
+
+  Offset _clampZegoVoiceCollapsedEdgeOffset(Offset offset, Size size) {
+    final maxBottom = math.max(
+      _zegoVoicePanelMargin,
+      size.height - _zegoVoiceCollapsedRailHeight - _zegoVoicePanelMargin,
+    );
+    return Offset(
+      offset.dx,
+      offset.dy.clamp(_zegoVoicePanelMargin, maxBottom).toDouble(),
+    );
+  }
+
+  void _moveZegoVoicePanel(Offset delta, Size size) {
+    final current = _zegoVoicePanelEdgeOffset.value;
+    _zegoVoicePanelEdgeOffset.value = _clampZegoVoicePanelEdgeOffset(
+      current + delta,
+      size,
+    );
+  }
+
+  Widget _buildZegoVoiceCollapsedRail(
+    ZegoVoiceCallModel model,
+    Offset edgeOffset,
+    Size screenSize,
+  ) {
+    final collapsedOffset =
+        _clampZegoVoiceCollapsedEdgeOffset(edgeOffset, screenSize);
+    return Positioned(
+      right: 0,
+      bottom: collapsedOffset.dy,
+      child: Tooltip(
+        message: '\u5c55\u5f00\u8bed\u97f3\u5361\u7247',
+        child: MouseRegion(
+          opaque: true,
+          cursor: SystemMouseCursors.move,
+          child: RepaintBoundary(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() => _zegoVoicePanelCollapsed = false);
+              },
+              onLongPressStart: (_) {
+                _zegoVoicePanelDragStartEdgeOffset =
+                    _zegoVoicePanelEdgeOffset.value;
+              },
+              onLongPressMoveUpdate: (details) {
+                final start = _zegoVoicePanelDragStartEdgeOffset ??
+                    _zegoVoicePanelEdgeOffset.value;
+                final nextOffset = Offset(
+                  start.dx,
+                  start.dy - details.offsetFromOrigin.dy,
+                );
+                _zegoVoicePanelEdgeOffset.value =
+                    _clampZegoVoiceCollapsedEdgeOffset(
+                  nextOffset,
+                  screenSize,
+                );
+              },
+              onLongPressEnd: (_) {
+                _zegoVoicePanelDragStartEdgeOffset = null;
+              },
+              child: Material(
+                elevation: 4,
+                color: Theme.of(context).cardColor.withOpacity(0.96),
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(8),
+                ),
+                child: Container(
+                  width: _zegoVoiceCollapsedRailWidth,
+                  height: _zegoVoiceCollapsedRailHeight,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(8),
+                    ),
+                    border: Border.all(color: MyTheme.color(context).border!),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.call, size: 17),
+                      const SizedBox(height: 8),
+                      for (final char in const [
+                        '\u8bed',
+                        '\u97f3',
+                        '\u901a',
+                        '\u8bdd'
+                      ])
+                        Text(
+                          char,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.05,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZegoVoicePanelHeader(ZegoVoiceCallModel model) {
+    final color = model.hasError
+        ? Colors.red
+        : model.mediaReady
+            ? Colors.green
+            : Colors.orange;
+    return Row(
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '\u8bed\u97f3\u901a\u8bdd',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildZegoVoiceInfoLine(
+    String label,
+    String value, {
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(
+              '$label:',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '--' : value,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildZegoVoicePanelActions(ZegoVoiceCallModel model) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(112, 34),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            onPressed: _zegoVoiceMicChanging
+                ? null
+                : () => _toggleZegoMicrophone(model),
+            icon: Icon(model.muted ? Icons.mic : Icons.mic_off, size: 16),
+            label: Text(
+              model.muted
+                  ? '\u6253\u5f00\u9ea6\u514b\u98ce'
+                  : '\u5173\u95ed\u9ea6\u514b\u98ce',
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(84, 34),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            onPressed: () => bind.sessionCloseVoiceCall(sessionId: sessionId),
+            icon: const Icon(Icons.call_end, size: 16),
+            label: const Text('\u6302\u65ad'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleZegoMicrophone(ZegoVoiceCallModel model) async {
+    if (_zegoVoiceMicChanging) return;
+    setState(() => _zegoVoiceMicChanging = true);
+    try {
+      await model.setMuted(!model.muted);
+    } finally {
+      if (mounted) {
+        setState(() => _zegoVoiceMicChanging = false);
+      }
+    }
+  }
+
+  void _handleZegoVoiceCallPanelState() {
+    if (!mounted) return;
+    final model = _ffi.zegoVoiceCallModel;
+    if (model.active) return;
+    if (!_zegoVoicePanelCollapsed && !_zegoVoiceMicChanging) return;
+    setState(() {
+      _zegoVoicePanelCollapsed = false;
+      _zegoVoiceMicChanging = false;
+    });
   }
 
   @override

@@ -757,47 +757,26 @@ class ZegoVoiceCallStatusCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _StatusLine(
-                label: '\u72b6\u6001',
+              _InfoLine(
+                label: '\u901a\u8bdd\u72b6\u6001',
                 value: model.statusText,
-                color: model.hasError
-                    ? Colors.red
-                    : model.mediaReady
-                        ? Colors.green
-                        : Colors.orange,
               ),
-              _InfoLine(label: '\u623f\u95f4\u53f7', value: model.roomId),
+              _InfoLine(label: '\u623f\u95f4\u53f7\u7801', value: model.roomId),
               _InfoLine(
                 label: '\u901a\u8bdd\u65f6\u957f',
                 value: formatDurationToTime(model.callDuration),
               ),
               _InfoLine(
-                label: '\u63a8\u6d41\u72b6\u6001',
-                value: model.publisherStateText,
-              ),
-              _InfoLine(
-                label: '\u62c9\u6d41\u72b6\u6001',
-                value: model.playerStateText,
+                label: '\u63a8\u62c9\u72b6\u6001',
+                value: model.streamStateText,
               ),
               _InfoLine(
                 label: '\u672c\u7aef\u97f3\u9891',
-                value: model.localAudioText,
-              ),
-              _InfoLine(
-                label: '\u672c\u7aef\u8d28\u91cf',
-                value: model.localAudioQualityText,
+                value: model.localAudioSummaryText,
               ),
               _InfoLine(
                 label: '\u8fdc\u7aef\u97f3\u9891',
-                value: model.remoteAudioText,
-              ),
-              _InfoLine(
-                label: '\u8fdc\u7aef\u8d28\u91cf',
-                value: model.remoteAudioQualityText,
-              ),
-              _InfoLine(
-                label: '\u5bf9\u7aef\u6d41',
-                value: model.peerStreamText,
+                value: model.remoteAudioSummaryText,
               ),
               if (model.errorText.isNotEmpty)
                 _InfoLine(
@@ -826,7 +805,7 @@ class _InfoLine extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 88,
+            width: 96,
             child: Text(
               '$label:',
               style: Theme.of(context).textTheme.bodySmall,
@@ -839,35 +818,6 @@ class _InfoLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusLine extends StatelessWidget {
-  const _StatusLine({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ).marginOnly(right: 8),
-          Expanded(child: _InfoLine(label: label, value: value)),
         ],
       ),
     );
@@ -1144,7 +1094,15 @@ void androidChannelInit() {
             final args = arguments as Map?;
             final payload = args?["payload"]?.toString() ?? "";
             if (payload.isNotEmpty) {
-              unawaited(gFFI.zegoVoiceCallModel.joinFromJson(payload));
+              unawaited(() async {
+                await gFFI.zegoVoiceCallModel.joinFromJson(payload);
+                if (gFFI.zegoVoiceCallModel.hasError) {
+                  showToast(gFFI.zegoVoiceCallModel.errorText.isEmpty
+                      ? '\u8bed\u97f3\u901a\u8bdd\u521b\u5efa\u5931\u8d25'
+                      : gFFI.zegoVoiceCallModel.errorText);
+                  gFFI.serverModel.closeVoiceCallAfterZegoFailure();
+                }
+              }());
             }
             break;
           }

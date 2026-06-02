@@ -15,7 +15,7 @@ use crate::platform::WallPaperRemover;
 use crate::portable_service::client as portable_client;
 use crate::{
     client::{
-        new_voice_call_request, new_voice_call_response, start_audio_thread, MediaData,
+        new_voice_call_close_request, new_voice_call_response, start_audio_thread, MediaData,
         MediaSender, ZegoVoiceCallInfo,
     },
     display_service, ipc, privacy_mode, video_service, VERSION,
@@ -712,9 +712,10 @@ impl Connection {
                         }
                         ipc::Data::CloseVoiceCall(_reason) => {
                             log::debug!("Close the voice call from the ipc.");
-                            conn.close_voice_call().await;
+                            let close_timestamp =
+                                conn.close_voice_call().await.unwrap_or_else(get_time);
                             // Notify the peer that we closed the voice call.
-                            let msg = new_voice_call_request(false);
+                            let msg = new_voice_call_close_request(close_timestamp);
                             conn.send(msg).await;
                         }
                         _ => {}
@@ -860,6 +861,7 @@ impl Connection {
                 _ = second_timer.tick() => {
                     #[cfg(windows)]
                     conn.portable_check();
+                    conn.clear_expired_pending_zego_voice_call().await;
                     if let Some((instant, minute)) = conn.auto_disconnect_timer.as_ref() {
                         if instant.elapsed().as_secs() > minute * 60 {
                             conn.send_close_reason_no_retry("Connection failed due to inactivity").await;
@@ -2957,6 +2959,7 @@ impl Connection {
                 }
                 Some(message::Union::VoiceCallRequest(request)) => {
                     if request.is_connect {
+                        self.clear_expired_pending_zego_voice_call().await;
                         if self.zego_voice_call_active
                             || self.voice_call_request_timestamp.is_some()
                             || self.pending_zego_voice_call.is_some()
@@ -2999,7 +3002,8 @@ impl Connection {
                         // Notify the connection manager.
                         self.send_to_cm(Data::VoiceCallIncoming);
                     } else {
-                        self.close_voice_call().await;
+                        self.handle_zego_voice_call_close_request(request.req_timestamp)
+                            .await;
                     }
                 }
                 Some(message::Union::VoiceCallResponse(_response)) => {
@@ -3319,7 +3323,7 @@ impl Connection {
     pub async fn handle_voice_call(&mut self, accepted: bool) {
         if let Some(ts) = self.voice_call_request_timestamp.take() {
             if accepted {
-                if let Some(info) = self.pending_zego_voice_call.clone() {
+                if let Some(info) = self.pending_zego_voice_call.take() {
                     self.send_to_cm(Data::StartVoiceCall);
                     self.zego_voice_call_active = true;
                     self.send_to_cm(Data::ZegoVoiceCallReady(info.callee_payload_json()));
@@ -3345,13 +3349,55 @@ impl Connection {
         }
     }
 
-    pub async fn close_voice_call(&mut self) {
+    pub async fn close_voice_call(&mut self) -> Option<i64> {
+        let close_timestamp = self.voice_call_request_timestamp.map(|ts| ts.get());
         // Notify the connection manager that the voice call has been closed.
         self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
         self.voice_calling = false;
         self.zego_voice_call_active = false;
         self.voice_call_request_timestamp = None;
         self.pending_zego_voice_call = None;
+        close_timestamp
+    }
+
+    async fn clear_expired_pending_zego_voice_call(&mut self) {
+        if self.zego_voice_call_active {
+            return;
+        }
+        if let Some(ts) = self.voice_call_request_timestamp {
+            if get_time().saturating_sub(ts.get()) > 60_000 {
+                log::warn!("Clearing stale controlled-side ZEGO voice-call pending request");
+                self.voice_call_request_timestamp = None;
+                self.pending_zego_voice_call = None;
+                self.zego_voice_call_active = false;
+                self.voice_calling = false;
+                self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
+                self.send(new_voice_call_response(ts.get(), false)).await;
+            }
+        }
+    }
+
+    async fn handle_zego_voice_call_close_request(&mut self, req_timestamp: i64) {
+        if self.zego_voice_call_active {
+            self.close_voice_call().await;
+            return;
+        }
+        if let Some(ts) = self.voice_call_request_timestamp {
+            if req_timestamp == ts.get() {
+                self.close_voice_call().await;
+            } else {
+                log::debug!(
+                    "Ignoring stale controlled-side ZEGO voice-call close request: current={}, request={}",
+                    ts.get(),
+                    req_timestamp
+                );
+            }
+            return;
+        }
+        if self.pending_zego_voice_call.is_some() {
+            log::warn!("Clearing controlled-side ZEGO pending payload without timestamp");
+            self.close_voice_call().await;
+        }
     }
 
     async fn update_options(&mut self, o: &OptionMessage) {

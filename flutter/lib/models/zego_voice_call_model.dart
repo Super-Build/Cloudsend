@@ -69,7 +69,14 @@ enum ZegoVoiceCallPhase {
 class ZegoVoiceCallModel extends ChangeNotifier {
   static bool _engineCreated = false;
   static int? _engineAppId;
+  static String? _engineUserId;
+  static String? _engineUserName;
   static ZegoVoiceCallModel? _activeModel;
+  static final Map<String, DateTime> _recentlyClosedCallKeys =
+      <String, DateTime>{};
+
+  static const int _commonUserNotSameErrorCode = 1000020;
+  static const Duration _stalePayloadIgnoreWindow = Duration(seconds: 10);
 
   ZegoVoiceCallPayload? _payload;
   ZegoVoiceCallPhase _phase = ZegoVoiceCallPhase.idle;
@@ -96,6 +103,7 @@ class ZegoVoiceCallModel extends ChangeNotifier {
   Timer? _durationTimer;
   Timer? _playRetryTimer;
   Timer? _publishWatchdogTimer;
+  Future<void>? _leaveFuture;
   int _playAttempt = 0;
 
   bool get joined => _joined;
@@ -115,9 +123,11 @@ class ZegoVoiceCallModel extends ChangeNotifier {
   String get roomStateText => _zegoStateText(_roomState);
   String get publisherStateText => _zegoStateText(_publisherState);
   String get playerStateText => _zegoStateText(_playerState);
+  String get streamStateText => '$publisherStateText / $playerStateText';
   String get peerStreamText =>
       _peerStreamOnline ? '\u5df2\u5728\u7ebf' : '\u7b49\u5f85\u5bf9\u7aef';
   String get localAudioText {
+    if (_muted) return '\u9ea6\u514b\u98ce\u5df2\u5173\u95ed';
     if (_publisherAudioFirstFrameSent) return '\u5df2\u63a8\u9001';
     if (_publisherAudioFirstFrameCaptured) return '\u5df2\u91c7\u96c6';
     return '\u7b49\u5f85\u9ea6\u514b\u98ce';
@@ -126,6 +136,10 @@ class ZegoVoiceCallModel extends ChangeNotifier {
   String get remoteAudioText => _playerAudioFirstFrameReceived
       ? '\u5df2\u63a5\u6536'
       : '\u7b49\u5f85\u8fdc\u7aef';
+  String get localAudioSummaryText =>
+      '$localAudioText / $localAudioQualityText';
+  String get remoteAudioSummaryText =>
+      '$remoteAudioText / $remoteAudioQualityText';
   String get localAudioQualityText =>
       _formatAudioQuality(_publishAudioFps, _publishAudioKbps);
   String get remoteAudioQualityText =>
@@ -201,6 +215,24 @@ class ZegoVoiceCallModel extends ChangeNotifier {
   }
 
   Future<void> join(ZegoVoiceCallPayload payload) async {
+    if (_wasRecentlyClosed(payload)) {
+      _log('recently closed payload ignored room=${payload.roomId}');
+      return;
+    }
+    final leaving = _leaveFuture;
+    if (leaving != null) {
+      final leavingPayload = _payload;
+      if (leavingPayload != null && _payloadMatches(leavingPayload, payload)) {
+        _log('payload ignored while leaving room=${payload.roomId}');
+        return;
+      }
+      await leaving;
+      if (_wasRecentlyClosed(payload)) {
+        _log(
+            'recently closed payload ignored after leave room=${payload.roomId}');
+        return;
+      }
+    }
     if ((_joined || _joining) && _isSameCall(payload)) {
       _log('duplicate payload ignored room=${payload.roomId}');
       return;
@@ -220,21 +252,17 @@ class ZegoVoiceCallModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _ensureEngine(payload.appId);
+      await _ensureEngine(
+        payload.appId,
+        userId: payload.userId,
+        userName: payload.userName,
+      );
       _installCallbacks();
       await _configureAudioOnlyEngine();
 
-      final config = ZegoRoomConfig.defaultConfig();
-      config.isUserStatusNotify = true;
-      config.token = payload.token;
-
       _phase = ZegoVoiceCallPhase.joiningRoom;
       notifyListeners();
-      final result = await ZegoExpressEngine.instance.loginRoom(
-        payload.roomId,
-        ZegoUser(payload.userId, payload.userName),
-        config: config,
-      );
+      final result = await _loginRoomWithIdentityRepair(payload);
       _roomErrorCode = result.errorCode;
       if (result.errorCode != 0) {
         throw StateError('loginRoom ${result.errorCode}');
@@ -267,6 +295,23 @@ class ZegoVoiceCallModel extends ChangeNotifier {
   }
 
   Future<void> leave() async {
+    final inFlight = _leaveFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _leaveInternal();
+    _leaveFuture = future;
+    try {
+      await future;
+    } finally {
+      if (_leaveFuture == future) {
+        _leaveFuture = null;
+      }
+    }
+  }
+
+  Future<void> _leaveInternal() async {
     final payload = _payload;
     if (payload == null && !_joined && _lastErrorText.isEmpty) return;
 
@@ -284,6 +329,9 @@ class ZegoVoiceCallModel extends ChangeNotifier {
     } catch (e) {
       _log('leave failed: $e');
     } finally {
+      if (payload != null) {
+        _rememberClosedPayload(payload);
+      }
       _clearRuntimeState();
       if (_activeModel == this) {
         _activeModel = null;
@@ -294,8 +342,9 @@ class ZegoVoiceCallModel extends ChangeNotifier {
 
   Future<void> setMuted(bool muted) async {
     if (!_joined) return;
-    _muted = muted;
     await ZegoExpressEngine.instance.muteMicrophone(muted);
+    await ZegoExpressEngine.instance.mutePublishStreamAudio(muted);
+    _muted = muted;
     notifyListeners();
   }
 
@@ -303,11 +352,42 @@ class ZegoVoiceCallModel extends ChangeNotifier {
 
   bool _isSameCall(ZegoVoiceCallPayload payload) {
     final current = _payload;
-    return current != null &&
-        current.roomId == payload.roomId &&
-        current.userId == payload.userId &&
-        current.publishStreamId == payload.publishStreamId &&
-        current.playStreamId == payload.playStreamId;
+    return current != null && _payloadMatches(current, payload);
+  }
+
+  bool _payloadMatches(ZegoVoiceCallPayload left, ZegoVoiceCallPayload right) {
+    return left.appId == right.appId &&
+        left.roomId == right.roomId &&
+        left.userId == right.userId &&
+        left.publishStreamId == right.publishStreamId &&
+        left.playStreamId == right.playStreamId;
+  }
+
+  String _callKey(ZegoVoiceCallPayload payload) {
+    return [
+      payload.appId,
+      payload.roomId,
+      payload.userId,
+      payload.publishStreamId,
+      payload.playStreamId,
+    ].join('|');
+  }
+
+  void _rememberClosedPayload(ZegoVoiceCallPayload payload) {
+    _pruneRecentlyClosedPayloads();
+    _recentlyClosedCallKeys[_callKey(payload)] = DateTime.now();
+  }
+
+  bool _wasRecentlyClosed(ZegoVoiceCallPayload payload) {
+    _pruneRecentlyClosedPayloads();
+    return _recentlyClosedCallKeys.containsKey(_callKey(payload));
+  }
+
+  void _pruneRecentlyClosedPayloads() {
+    final now = DateTime.now();
+    _recentlyClosedCallKeys.removeWhere(
+      (_, closedAt) => now.difference(closedAt) > _stalePayloadIgnoreWindow,
+    );
   }
 
   void _resetForPayload(ZegoVoiceCallPayload payload) {
@@ -373,12 +453,45 @@ class ZegoVoiceCallModel extends ChangeNotifier {
     _playAttempt = 0;
   }
 
-  Future<void> _ensureEngine(int appId) async {
-    if (_engineCreated && _engineAppId == appId) return;
+  Future<ZegoRoomLoginResult> _loginRoomWithIdentityRepair(
+      ZegoVoiceCallPayload payload) async {
+    final firstResult = await _loginRoom(payload);
+    if (firstResult.errorCode != _commonUserNotSameErrorCode) {
+      return firstResult;
+    }
+
+    _log('loginRoom 1000020, recreating engine with current user identity');
+    await _destroyEngine();
+    await _ensureEngine(
+      payload.appId,
+      userId: payload.userId,
+      userName: payload.userName,
+    );
+    _installCallbacks();
+    await _configureAudioOnlyEngine();
+    return _loginRoom(payload);
+  }
+
+  Future<ZegoRoomLoginResult> _loginRoom(ZegoVoiceCallPayload payload) {
+    final config = ZegoRoomConfig.defaultConfig();
+    config.isUserStatusNotify = true;
+    config.token = payload.token;
+    return ZegoExpressEngine.instance.loginRoom(
+      payload.roomId,
+      ZegoUser(payload.userId, payload.userName),
+      config: config,
+    );
+  }
+
+  Future<void> _ensureEngine(
+    int appId, {
+    required String userId,
+    required String userName,
+  }) async {
+    final userChanged = _engineUserId != userId || _engineUserName != userName;
+    if (_engineCreated && _engineAppId == appId && !userChanged) return;
     if (_engineCreated) {
-      await ZegoExpressEngine.destroyEngine();
-      _engineCreated = false;
-      _engineAppId = null;
+      await _destroyEngine();
     }
 
     final profile = ZegoEngineProfile(
@@ -389,6 +502,17 @@ class ZegoVoiceCallModel extends ChangeNotifier {
     await ZegoExpressEngine.createEngineWithProfile(profile);
     _engineCreated = true;
     _engineAppId = appId;
+    _engineUserId = userId;
+    _engineUserName = userName;
+  }
+
+  Future<void> _destroyEngine() async {
+    if (!_engineCreated) return;
+    await ZegoExpressEngine.destroyEngine();
+    _engineCreated = false;
+    _engineAppId = null;
+    _engineUserId = null;
+    _engineUserName = null;
   }
 
   Future<void> _configureAudioOnlyEngine() async {
@@ -643,6 +767,9 @@ class ZegoVoiceCallModel extends ChangeNotifier {
     final code = RegExp(r'(\d{5,})').firstMatch(text)?.group(1);
     if (code == '1002033') {
       return 'ZEGO Token \u9274\u6743\u5931\u8d25';
+    }
+    if (code == _commonUserNotSameErrorCode.toString()) {
+      return 'ZEGO \u7528\u6237\u8eab\u4efd\u4e0d\u4e00\u81f4';
     }
     if (code != null) return 'ZEGO \u9519\u8bef\u7801 $code';
     if (text.contains('MissingPluginException')) {

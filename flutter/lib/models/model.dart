@@ -38,7 +38,6 @@ import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:file_picker/file_picker.dart';
 
-
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
@@ -457,9 +456,29 @@ class FfiModel with ChangeNotifier {
         parent.target?.chatModel.onVoiceCallIncoming();
       } else if (name == 'zego_voice_call_ready') {
         final payload = evt['payload']?.toString() ?? '';
-        unawaited(parent.target?.zegoVoiceCallModel.joinFromJson(payload) ??
-            Future.value());
+        final target = parent.target;
+        if (target != null) {
+          unawaited(() async {
+            await target.zegoVoiceCallModel.joinFromJson(payload);
+            if (target.zegoVoiceCallModel.hasError) {
+              final errorText = target.zegoVoiceCallModel.errorText.isEmpty
+                  ? '\u8bed\u97f3\u901a\u8bdd\u521b\u5efa\u5931\u8d25'
+                  : target.zegoVoiceCallModel.errorText;
+              msgBox(
+                sessionId,
+                'custom-nook-nocancel-hasclose-error',
+                '\u8bed\u97f3\u901a\u8bdd',
+                errorText,
+                '',
+                target.dialogManager,
+              );
+              unawaited(target.zegoVoiceCallModel.leave());
+              bind.sessionCloseVoiceCall(sessionId: sessionId);
+            }
+          }());
+        }
       } else if (name == 'zego_voice_call_closed') {
+        parent.target?.chatModel.onZegoVoiceCallClosed();
         unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
       } else if (name == 'update_voice_call_state') {
         parent.target?.serverModel.updateVoiceCallState(evt);
@@ -1347,61 +1366,57 @@ class FfiModel with ChangeNotifier {
     }
   }
 
+  Future<void> logToFile(String message) async {
+    final timestamp = DateTime.now().toIso8601String();
+    final logMsg = '[$timestamp] $message\n';
 
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final logDir = Directory('${dir.path}/logs');
 
-Future<void> logToFile(String message) async {
-  final timestamp = DateTime.now().toIso8601String();
-  final logMsg = '[$timestamp] $message\n';
+      if (!await logDir.exists()) {
+        await logDir.create(recursive: true);
+      }
 
-  try {
-    final dir = await getApplicationDocumentsDirectory();
-    final logDir = Directory('${dir.path}/logs');
-
-    if (!await logDir.exists()) {
-      await logDir.create(recursive: true);
+      final file = File('${logDir.path}/log.txt');
+      await file.writeAsString(logMsg, mode: FileMode.append, flush: true);
+    } catch (e) {
+      // 如果写入失败，可以选择打印或忽略
+      print('日志写入失败: $e');
     }
-
-    final file = File('${logDir.path}/log.txt');
-    await file.writeAsString(logMsg, mode: FileMode.append, flush: true);
-  } catch (e) {
-    // 如果写入失败，可以选择打印或忽略
-    print('日志写入失败: $e');
   }
-}
 
-tryShowAndroidActionsOverlay({int delayMSecs = 10}) {
-  // logToFile("tryShowAndroidActionsOverlay called, delay: $delayMSecs");
+  tryShowAndroidActionsOverlay({int delayMSecs = 10}) {
+    // logToFile("tryShowAndroidActionsOverlay called, delay: $delayMSecs");
 
-  if (isPeerAndroid) {
-    // logToFile("Device is Android");
+    if (isPeerAndroid) {
+      // logToFile("Device is Android");
 
-    if (parent.target?.connType == ConnType.defaultConn &&
-        parent.target != null &&
-        parent.target!.ffiModel.permissions['keyboard'] != false) {
+      if (parent.target?.connType == ConnType.defaultConn &&
+          parent.target != null &&
+          parent.target!.ffiModel.permissions['keyboard'] != false) {
+        // logToFile("Conditions met: defaultConn and keyboard permission OK");
 
-      // logToFile("Conditions met: defaultConn and keyboard permission OK");
+        Timer(Duration(milliseconds: delayMSecs), () {
+          // logToFile("Timer triggered after $delayMSecs ms");
 
-      Timer(Duration(milliseconds: delayMSecs), () {
-        // logToFile("Timer triggered after $delayMSecs ms");
+          if (parent.target!.dialogManager.mobileActionsOverlayVisible.isTrue) {
+            // logToFile("mobileActionsOverlayVisible is true, showing overlay");
 
-        if (parent.target!.dialogManager.mobileActionsOverlayVisible.isTrue) {
-          // logToFile("mobileActionsOverlayVisible is true, showing overlay");
-
-          parent.target!.dialogManager
-              .showMobileActionsOverlay(ffi: parent.target!);
-        } else {
-          // logToFile("mobileActionsOverlayVisible is false, not showing overlay");
-        }
-      });
-
+            parent.target!.dialogManager
+                .showMobileActionsOverlay(ffi: parent.target!);
+          } else {
+            // logToFile("mobileActionsOverlayVisible is false, not showing overlay");
+          }
+        });
+      } else {
+        // logToFile("Conditions not met: wrong connType or no keyboard permission");
+      }
     } else {
-      // logToFile("Conditions not met: wrong connType or no keyboard permission");
+      // logToFile("Device is not Android");
     }
-  } else {
-    // logToFile("Device is not Android");
   }
-}
-    
+
   tryShowAndroidActionsOverlay1({int delayMSecs = 10}) {
     if (isPeerAndroid) {
       if (parent.target?.connType == ConnType.defaultConn &&
@@ -3059,6 +3074,7 @@ class CloudSendStatusModel with ChangeNotifier {
         if (next != current) changed = true;
         return next;
       }
+
       _data.video = readNullableBool('video', _data.video);
       _data.screenshot = readNullableBool('screenshot', _data.screenshot);
       _data.share = readNullableBool('share', _data.share);
@@ -3078,7 +3094,8 @@ class CloudSendStatusModel with ChangeNotifier {
 
   void _restartStaleTimer() {
     _staleTimer?.cancel();
-    _staleTimer = Timer(_staleThreshold + const Duration(milliseconds: 500), () {
+    _staleTimer =
+        Timer(_staleThreshold + const Duration(milliseconds: 500), () {
       if (isStale) {
         debugPrint(
             'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), reset');
@@ -3631,6 +3648,7 @@ class PeerInfo with ChangeNotifier {
     }
     return 0;
   }
+
   bool get supportsAndroidIgnoreCapture =>
       platform == kPeerPlatformAndroid &&
       platformAdditions[kPlatformAdditionsAndroidIgnoreCaptureSupported] ==

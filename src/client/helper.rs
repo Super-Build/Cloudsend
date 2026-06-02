@@ -3,9 +3,9 @@ use hbb_common::{
     get_time,
     message_proto::{Message, VoiceCallRequest, VoiceCallResponse},
 };
+use scrap::CodecFormat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
-use scrap::CodecFormat;
 use std::collections::HashMap;
 
 const DEFAULT_ZEGO_TOKEN_URL: &str = "https://1.738489234.com/api/v1/voice-call/create";
@@ -122,9 +122,19 @@ pub fn request_zego_voice_call_info(
 
 #[inline]
 pub fn new_voice_call_request(is_connect: bool) -> Message {
+    new_voice_call_request_with_timestamp(is_connect, get_time())
+}
+
+#[inline]
+pub fn new_voice_call_close_request(request_timestamp: i64) -> Message {
+    new_voice_call_request_with_timestamp(false, request_timestamp)
+}
+
+#[inline]
+pub fn new_voice_call_request_with_timestamp(is_connect: bool, request_timestamp: i64) -> Message {
     let mut req = VoiceCallRequest::new();
     req.is_connect = is_connect;
-    req.req_timestamp = get_time();
+    req.req_timestamp = request_timestamp;
     let mut msg = Message::new();
     msg.set_voice_call_request(req);
     msg

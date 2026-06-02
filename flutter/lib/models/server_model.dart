@@ -647,17 +647,72 @@ class ServerModel with ChangeNotifier {
 
   showVoiceCallDialog(Client client) {
     parent.target?.dialogManager.dismissByTag(getVoiceCallDialogTag(client.id));
-    showClientDialog(
-      client,
-      '\u8bed\u97f3\u901a\u8bdd',
-      'Do you accept?',
-      'android_new_voice_call_tip',
-      () => handleVoiceCall(client, false),
-      () => unawaited(_acceptZegoVoiceCall(client)),
-      tag: getVoiceCallDialogTag(client.id),
-      showSubmit: true,
-      closeAsCancel: true,
-    );
+    showAutoAcceptVoiceCallDialog(client);
+  }
+
+  showAutoAcceptVoiceCallDialog(Client client) {
+    Timer? countdownTimer;
+    var remainingSeconds = 10;
+    var submitted = false;
+
+    bool isStillIncoming() {
+      return _clients.any((item) =>
+          item.id == client.id && item.incomingVoiceCall && !item.inVoiceCall);
+    }
+
+    parent.target?.dialogManager.show((setState, close, context) {
+      void submit() {
+        if (submitted) return;
+        submitted = true;
+        countdownTimer?.cancel();
+        close();
+        if (isStillIncoming()) {
+          unawaited(_acceptZegoVoiceCall(client));
+        }
+      }
+
+      countdownTimer ??= Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!isStillIncoming()) {
+          timer.cancel();
+          return;
+        }
+        remainingSeconds -= 1;
+        if (remainingSeconds <= 0) {
+          timer.cancel();
+          submit();
+          return;
+        }
+        setState(() {});
+      });
+
+      return CustomAlertDialog(
+        title: Text(translate('\u8bed\u97f3\u901a\u8bdd')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                '\u662f\u5426\u63a5\u53d7\u8bed\u97f3\u901a\u8bdd\uff1f'),
+            ClientInfo(client),
+            Text(
+              translate('android_new_voice_call_tip'),
+              style: Theme.of(globalKey.currentContext!).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$remainingSeconds \u79d2\u540e\u81ea\u52a8\u63a5\u53d7\u901a\u8bdd',
+              style: Theme.of(globalKey.currentContext!).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          dialogButton('\u63a5\u53d7', onPressed: submit),
+        ],
+        onSubmit: submit,
+        onCancel: submit,
+      );
+    }, tag: getVoiceCallDialogTag(client.id));
   }
 
   Future<void> _acceptZegoVoiceCall(Client client) async {
@@ -846,6 +901,25 @@ class ServerModel with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint("updateVoiceCallState failed: $e");
+    }
+  }
+
+  void closeVoiceCallAfterZegoFailure() {
+    var changed = false;
+    unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+    for (final client in _clients) {
+      if (client.inVoiceCall || client.incomingVoiceCall) {
+        bind.cmCloseVoiceCall(id: client.id);
+        client.inVoiceCall = false;
+        client.incomingVoiceCall = false;
+        parent.target?.dialogManager
+            .dismissByTag(getVoiceCallDialogTag(client.id));
+        parent.target?.invokeMethod("cancel_notification", client.id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      notifyListeners();
     }
   }
 
