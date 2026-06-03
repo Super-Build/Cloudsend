@@ -1,6 +1,6 @@
 # ZEGO Token Service Deployment / 宝塔可视化部署方案
 
-最后同步：2026-06-01
+最后同步：2026-06-03
 
 本文是 CloudSend 1v1 ZEGO 语音通话 Token 服务的完整部署文档。新域名：
 
@@ -15,7 +15,7 @@ GET  https://1.738489234.com/api/v1/health
 POST https://1.738489234.com/api/v1/voice-call/create
 ```
 
-> 当前文档按本项目私有部署要求写入固定部署值，可直接复制到服务器执行。不要公开仓库、截图或日志。
+> 当前文档是可落地部署模板。Git-tracked docs 不保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或宝塔面板密码；部署时从私有运维记录补齐，或轮换后同步更新 token 服务 `.env` 与 PC 客户端 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`。
 
 ---
 
@@ -152,15 +152,15 @@ go version
 
 ## 7. 创建 `.env`
 
-> 下面是完整结构，四个部署值已同步为当前项目使用值，可直接复制。
+> 下面是完整结构。`ZEGO_APP_ID` 可以公开；`ZEGO_SERVER_SECRET` 和 `VOICE_API_KEY` 必须从私有运维记录获取，不要写回 Git 文档。
 
 ```bash
 cat > .env <<'EOF'
 PORT=8787
 ZEGO_APP_ID=726162948
-ZEGO_SERVER_SECRET=360a56369441ee640841cb4c82144186
+ZEGO_SERVER_SECRET=<ZEGO_SERVER_SECRET>
 VOICE_TOKEN_TTL_SECONDS=3600
-VOICE_API_KEY=PHFfBRiEXVKFvEGD2cJp
+VOICE_API_KEY=<VOICE_API_KEY>
 EOF
 
 chmod 600 .env
@@ -172,9 +172,9 @@ chmod 600 .env
 |---|---|
 | `PORT` | 本机监听端口，固定 `8787` |
 | `ZEGO_APP_ID` | `726162948` |
-| `ZEGO_SERVER_SECRET` | `360a56369441ee640841cb4c82144186` |
+| `ZEGO_SERVER_SECRET` | ZEGO 控制台 ServerSecret，必须只保存在服务器 `.env` 和私有运维记录中 |
 | `VOICE_TOKEN_TTL_SECONDS` | `3600` |
-| `VOICE_API_KEY` | PC 请求 Token 服务时使用的 Bearer 鉴权 key；当前项目默认值为 `PHFfBRiEXVKFvEGD2cJp` |
+| `VOICE_API_KEY` | PC 请求 Token 服务时使用的 Bearer 鉴权 key；必须与 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY` 同步 |
 
 ---
 
@@ -459,7 +459,7 @@ Token 创建测试：
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/v1/voice-call/create \
-  -H "Authorization: Bearer PHFfBRiEXVKFvEGD2cJp" \
+  -H "Authorization: Bearer <VOICE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
 ```
@@ -515,7 +515,7 @@ curl https://1.738489234.com/api/v1/health
 
 ```bash
 curl -X POST https://1.738489234.com/api/v1/voice-call/create \
-  -H "Authorization: Bearer PHFfBRiEXVKFvEGD2cJp" \
+  -H "Authorization: Bearer <VOICE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
 ```
@@ -602,7 +602,7 @@ https://1.738489234.com/api/v1/voice-call/create
 鉴权：
 
 ```text
-Authorization: Bearer PHFfBRiEXVKFvEGD2cJp
+Authorization: Bearer <VOICE_API_KEY>
 ```
 
 当前 Rust 配置锚点：
@@ -661,7 +661,7 @@ return token04.GenerateToken04(appId, userId, secret, ttl, "")
 
 优先检查：
 
-- `.env` 中 `ZEGO_SERVER_SECRET` 是否是 `360a56369441ee640841cb4c82144186`。
+- `.env` 中 `ZEGO_SERVER_SECRET` 是否是私有运维记录中的当前 ZEGO ServerSecret。
 - `.env` 中 `ZEGO_SERVER_SECRET` 是否属于 `ZEGO_APP_ID=726162948` 对应的同一个 ZEGO 项目。
 - `.env` 修改后是否执行了 `systemctl restart cloudsend-zego-token`。
 - 日志里是否有 `caller token error:` 详细错误。

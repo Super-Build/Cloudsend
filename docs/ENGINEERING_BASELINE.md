@@ -1,7 +1,7 @@
 # 工程基线 / Engineering Baseline
 
-最后一次从全仓源码核验：2026-05-18
-最近一次文档一致性复核：2026-05-18
+最后一次从全仓源码核验：2026-06-03
+最近一次文档一致性复核：2026-06-03
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -183,6 +183,25 @@ Current source truth:
 - Accepting a PC connection no longer calls Android `"start_capture"` automatically; PC can connect and start ZEGO voice while Android has no screen-sharing permission active.
 - `DFm8Y8iMScvB2YDw.checkMediaPermission()` reports `media = isStart`, meaning the Android permission card reflects active screen sharing, not core service readiness.
 - Android recoverable reconnect uses one 5s periodic timer with no retry limit. Repeated connection-error events must not create additional reconnect timers or rapid request loops.
+
+### 0.11 2026-06-03 documentation handoff baseline
+
+Current handoff truth:
+
+- The engineering memory layer is intentionally concentrated in:
+  - `docs/ENGINEERING_INDEX.md`
+  - `docs/ENGINEERING_BASELINE.md`
+  - `docs/ENGINEERING_ANDROID_RUNTIME.md`
+  - `docs/TASK_ENTRYPOINTS.md`
+  - `docs/REPO_TRUE_STRUCTURE_MAP.md`
+  - `docs/DOCUMENT_AUDIT.md`
+- Topic docs are narrow by design:
+  - ZEGO: `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+  - ADB/LADB: `docs/ADB_LADB_INTEGRATION_MEMORY.md`
+- `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` is a fixed-date audit. It must not override the 2026-06-03 engineering doc set.
+- `PC-Build.md`, `terminal.md`, `README.md`, and `docs/README-ZH.md` are useful background, but any implementation claim in them must be checked against source and the engineering main docs.
+- Git-tracked deployment docs must not contain server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials. If a deploy step needs a secret, use a placeholder and obtain the real value from private ops records.
+- PowerShell readers must use UTF-8 when inspecting Chinese docs, for example `Get-Content -Encoding UTF8`, otherwise Chinese text may appear as mojibake.
 
 ## 1. 项目身份（Project Identity）
 
@@ -403,6 +422,28 @@ Feature gate：
 结论：
 
 - 插件代码存在，但**默认不能假设在普通构建里活跃**。
+
+### 2.9 Android local ADB/LADB subsystem
+
+当前 Android 本地 ADB/LADB 能力是独立模块：
+
+- Native/Kotlin runtime:
+  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`
+  - `flutter/android/app/src/main/jniLibs/*/libadb.so`
+  - `flutter/android/app/src/main/jniLibs/LIBADB_LICENSE`
+- Flutter UI:
+  - `flutter/lib/mobile/pages/adb_page.dart`
+- Reference source trees:
+  - `ADB-CODE/`
+  - `LADB/`
+- Engineering memory:
+  - `docs/ADB_LADB_INTEGRATION_MEMORY.md`
+
+当前边界：
+
+- Android 本地 ADB/LADB 不参与 screen sharing、ignore fallback、penetrate、blank screen、touch-block、video stream、screenshot stream 或 monitor-panel 状态。
+- ADB 页面直接通过 `MethodChannel('mChannel')` 调用 `cloudsend_adb_*` 方法，不应改走 `gFFI.invokeMethod()`，因为 ADB 方法返回 Map/String。
+- PC remote ADB command protocol 仍不是已落地能力；未来必须显式设计 request/response、授权、超时、白名单、输出截断和审计日志。
 
 ---
 
@@ -735,7 +776,8 @@ Current source truth:
   - `CloseVoiceCall`
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
-- PC/controller hardcodes the ZEGO Token endpoint `https://1.738489234.com/api/v1/voice-call/create` and Bearer key `PHFfBRiEXVKFvEGD2cJp` in `src/client/helper.rs`; local override and legacy fallback are intentionally not used.
+- PC/controller hardcodes the ZEGO Token endpoint in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`; local override and legacy fallback are intentionally not used.
+- PC/controller also hardcodes a Bearer key in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`; treat it as a deployed client credential that must match the token service `.env`, but do not duplicate the real value in Git-tracked docs.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
 - `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp` when requesting the token service. The token service must include this value in room/stream derivation so each established PC-Android control connection gets an isolated 1v1 ZEGO room.
 - PC/controller sends ZEGO metadata from `src/client/io_loop.rs::Data::NewVoiceCall`.
@@ -790,7 +832,7 @@ Current source truth:
 - `flutter/lib/models/zego_voice_call_model.dart` serializes `leave()` through `_leaveFuture` and ignores the same recently closed payload for a short window. This prevents delayed `zego_voice_call_ready` events or rapid hangup/reinvite flows from logging back into the old room after logout has already started.
 - Current Android `ZegoVoiceCallStatusCard` displays `通话状态`, `房间号码`, duration, merged push/play state, merged local/remote audio readiness and `fps/kbps`, and concise error text; it no longer displays a separate peer-stream row.
 - PC shows the active ZEGO voice-call panel from `flutter/lib/desktop/pages/remote_page.dart`, including `roomId`, call duration, local/remote audio readiness, audio quality, and Chinese `挂断`.
-- Android shows `ZegoVoiceCallStatusCard` under the permission card in `flutter/lib/mobile/pages/server_page.dart`, including status, room id, duration, publish/play states, peer stream state, and concise error text. Android does not expose a hangup button; PC remains the hangup controller.
+- Android shows `ZegoVoiceCallStatusCard` under the permission card in `flutter/lib/mobile/pages/server_page.dart`, including `通话状态`, `房间号码`, duration, merged push/play state, merged local/remote audio readiness and audio `fps/kbps`, and concise error text. Android does not expose a hangup button; PC remains the hangup controller.
 - PC and Android voice-call status text is Chinese.
 - PC toolbar no longer shows old `AudioInput(isVoiceCall: true)` under `_VoiceCallMenu`.
 - Windows child Flutter engines created by `desktop_multi_window` must register ZEGO in `flutter/windows/runner/flutter_window.cpp`; otherwise the remote window raises `MissingPluginException` for `createEngineWithProfile`.

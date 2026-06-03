@@ -1,11 +1,11 @@
 > [!IMPORTANT]
-> Current source-truth overlay (verified 2026-05-18): this map is an inherited structure map and may contain older wording in lower historical sections. Current project identity is CloudSend runtime + Android visible label `云计划`; Android package is `com.cloudsend.app`; Android SO is `libcloudsend.so`; Windows DLL is `cloudsend.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
+> Current source-truth overlay (verified 2026-06-03): current project identity is CloudSend runtime + Android visible label `云计划`; Android package is `com.cloudsend.app`; Android SO is `libcloudsend.so`; Windows DLL is `cloudsend.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
 >
-> Documentation classification was refreshed on 2026-06-01. For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, and `docs/DOCUMENT_AUDIT.md`.
+> Documentation classification and handoff guidance were refreshed on 2026-06-03. For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, and `docs/DOCUMENT_AUDIT.md`.
 
 # 全仓真实结构图 / Repo True Structure Map
 
-最后一次从全仓源码核验：2026-04-14
+最后一次从全仓源码核验：2026-06-03
 
 > 本文件用于快速建立“仓库全景图”。
 > 目标不是逐文件解释所有实现，而是说明：**每个主要目录真正负责什么，它与哪条工程主链相关，哪些是兼容路径，哪些是平台专用路径。**
@@ -55,6 +55,7 @@
 - `docs/ENGINEERING_*`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md` 是工程主套件。
 - `AGENTS.md` / `CLAUDE.md` 是 agent 补充入口。
 - `PC-Build.md` / `terminal.md` / README / 贡献文档是背景或历史参考，不作为当前实现真相。
+- Git-tracked docs must not store server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials.
 
 ### 1.3 平台打包与资源
 
@@ -200,6 +201,25 @@
 - 主要针对 Windows
 - 与 `src/server/connection.rs` 紧密联动
 
+### 2.9 ZEGO voice-call Rust control anchors
+
+关键文件：
+
+- `libs/hbb_common/protos/message.proto`
+- `src/client/helper.rs`
+- `src/client/io_loop.rs`
+- `src/server/connection.rs`
+- `src/ipc.rs`
+- `src/flutter.rs`
+- `src/ui_session_interface.rs`
+- `src/ui_cm_interface.rs`
+
+说明：
+
+- Rust 只承载邀请、接受、挂断、Token metadata 分发和状态同步。
+- ZEGO media 不走 RustDesk `audio_service` 的旧语音帧链路。
+- PC Token endpoint / client key 的源码锚点是 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` / `DEFAULT_ZEGO_TOKEN_API_KEY`；真实服务端密钥不得写入 Git-tracked docs。
+
 ---
 
 ## 3. 共享库：`libs/`
@@ -283,6 +303,13 @@ Android 重点：
   - `pages/`
   - `widgets/`
 
+当前移动主页面重点：
+
+- `flutter/lib/mobile/pages/server_page.dart`
+  - Android screen sharing / permission card / ZEGO voice status card
+- `flutter/lib/mobile/pages/adb_page.dart`
+  - Android local ADB/LADB UI, pairing dialog, terminal output, wireless-debugging automation controls
+
 #### 4.2.5 native / utils / web / plugin
 
 - `flutter/lib/native/`
@@ -303,6 +330,7 @@ Android 重点：
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/src/main/jniLibs/`
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`
 
 Kotlin / Java 文件：
 
@@ -321,6 +349,15 @@ Kotlin / Java 文件：
 - `ffi.kt`
 - `p50.java`
 - `q50.java`
+
+ADB/LADB files:
+
+- `adb/CloudSendAdbState.kt`
+- `adb/CloudSendAdbRunner.kt`
+- `adb/CloudSendAdbManager.kt`
+- `adb/CloudSendAdbDnsDiscover.kt`
+- `flutter/android/app/src/main/jniLibs/<abi>/libadb.so`
+- `flutter/android/app/src/main/jniLibs/LIBADB_LICENSE`
 
 ### 4.4 其他平台 Runner
 
@@ -412,10 +449,95 @@ Flutter / plugin / UI
 
 ### 6.7 Windows 隐私模式链
 
-UI / option  
-→ `src/server/connection.rs`  
-→ `src/privacy_mode.rs`  
-→ `src/privacy_mode/win_*` / `src/virtual_display_manager.rs`
+```text
+UI / option
+→ src/server/connection.rs
+→ src/privacy_mode.rs
+→ src/privacy_mode/win_* / src/virtual_display_manager.rs
+```
+
+### 6.8 ZEGO 1v1 voice-call chain
+
+```text
+flutter/lib/desktop/widgets/remote_toolbar.dart / PC voice button
+→ src/ui_session_interface.rs::request_voice_call
+→ src/client/io_loop.rs::Data::NewVoiceCall
+→ src/client/helper.rs::request_zego_voice_call_info
+→ Token service POST /api/v1/voice-call/create
+→ libs/hbb_common/protos/message.proto::VoiceCallRequest
+→ src/server/connection.rs controlled-side pending/accept path
+→ src/flutter.rs::zego_voice_call_ready
+→ flutter/lib/models/zego_voice_call_model.dart::ZegoVoiceCallModel
+→ ZEGO SDK loginRoom / startPublishingStream / startPlayingStream
+```
+
+Boundary:
+
+- ZEGO media is Flutter RTC only.
+- Do not route ZEGO voice through `src/server/audio_service.rs` legacy RustDesk voice-call packets.
+
+### 6.9 Android local ADB/LADB chain
+
+```text
+flutter/lib/mobile/pages/adb_page.dart
+→ flutter/lib/common.dart::AndroidAdbManager
+→ MethodChannel('mChannel')
+→ oFtTiPzsqzBHGigp.kt cloudsend_adb_* handlers
+→ CloudSendAdbManager.kt
+→ CloudSendAdbRunner.kt / CloudSendAdbDnsDiscover.kt
+→ packaged libadb.so
+```
+
+Wireless-debugging automation branch:
+
+```text
+adb_page.dart
+→ AndroidAdbManager.wirelessDebugStatus/set/cancel
+→ cloudsend_adb_wireless_debug_*
+→ CloudSendAdbManager.kt
+→ nZW99cdXQ0COhB2o.wirelessDebugAutomation*
+```
+
+Boundary:
+
+- ADB/LADB does not drive screen sharing, side buttons, video stream, screenshot stream, or monitor-panel status.
+- PC remote ADB command protocol is not implemented yet.
+
+### 6.10 Developer login bypass chain
+
+```text
+Ctrl+Shift+H
+→ flutter/lib/desktop/pages/connection_page.dart::_handleDeveloperLoginBypassShortcut
+→ flutter/lib/models/developer_login_bypass_model.dart::developerLoginBypassEnabled
+→ product-login guard allows connection for the current PC process only
+```
+
+Boundary:
+
+- This does not log in a product account.
+- It resets when the PC app process exits.
+
+### 6.11 Build / artifact chain
+
+Android:
+
+```text
+build.sh
+→ Rust target/<triple>/release/libcloudsend.so
+→ flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so
+→ Kotlin System.loadLibrary("cloudsend")
+→ Dart DynamicLibrary.open('libcloudsend.so')
+```
+
+Windows:
+
+```text
+new-build.cmd
+→ Rust/Flutter output cloudsend.dll
+→ flutter/windows/CMakeLists.txt install/copy
+→ flutter/lib/models/native_model.dart DynamicLibrary.open('cloudsend.dll')
+→ portable/self-extract output under PC-Bulid
+```
 
 ---
 
@@ -428,6 +550,8 @@ UI / option
 - Android JNI 主路由：`libs/scrap/src/android/pkg2230.rs`
 - Android Kotlin 主服务：`DFm8Y8iMScvB2YDw.kt` / `nZW99cdXQ0COhB2o.kt`
 - 账号 / 下载 / 上传：`src/hbbs_http/`
+- ZEGO voice-call Flutter model/UI plus Rust control shell：`flutter/lib/models/zego_voice_call_model.dart`, `src/client/io_loop.rs`, `src/server/connection.rs`
+- Android local ADB/LADB module：`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`, `flutter/lib/mobile/pages/adb_page.dart`
 
 ### 兼容 / 历史路径
 

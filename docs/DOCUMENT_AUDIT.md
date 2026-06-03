@@ -1,7 +1,7 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-05-18
-最近一次文档分层与可读性整理：2026-06-01
+最后一次从关键源码锚点与文档一致性核验：2026-06-03
+最近一次文档分层与可读性整理：2026-06-03
 
 > 本文件用于回答两个问题：
 >
@@ -74,6 +74,28 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - 新增工程事实优先进入 `ENGINEERING_BASELINE.md` / `ENGINEERING_ANDROID_RUNTIME.md` / `TASK_ENTRYPOINTS.md`。
 - 专题文档只承载对应专题，不反向替代全仓工程主套件。
 - 部署文档不得保存真实服务端密钥、密码或私有 token。
+
+---
+
+## 0.3 2026-06-03 工程交接文档复核
+
+本次复核目标是让新工程师或新的 Codex 会话在没有历史对话上下文时，仍能快速建立项目认知。
+
+已同步的当前结论：
+
+- `docs/ENGINEERING_INDEX.md` 增加 `New Engineer Handoff Path`，明确无上下文接手阅读顺序。
+- `docs/REPO_TRUE_STRUCTURE_MAP.md` 正文刷新到 2026-06-03，并补齐 ZEGO、ADB/LADB、开发者免登录、构建产物跨层链。
+- `docs/TASK_ENTRYPOINTS.md` 增加 Android local ADB/LADB 入口和 Project Handoff 入口。
+- `docs/ENGINEERING_BASELINE.md` 增加 documentation handoff baseline 和 Android local ADB/LADB subsystem。
+- `docs/ENGINEERING_ANDROID_RUNTIME.md` 修正 ZEGO 来电弹窗事实：当前是 `showAutoAcceptVoiceCallDialog`，只有 `接受` 按钮，10 秒倒计时自动接听。
+- `docs/ADB_LADB_INTEGRATION_MEMORY.md` 修正无线调试自动化事实：当前已有 best-effort AccessibilityService 自动化链路，不再是纯 placeholder。
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 必须保持可落地模板，但不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
+
+可信度调整：
+
+- `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` 仍是固定日期源码审计，但它内部的 `Trusted Guidance Set` 已被 2026-06-03 主套件覆盖。
+- `docs/ADB_LADB_INTEGRATION_MEMORY.md` 从“实现记忆 + 未来方案”调整为“已落地 ADB/LADB 专题文档 + 后续风险边界”，但其 ADB-CODE/LADB review 章节仍属于参考背景。
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是部署模板，不是密钥仓库。真实部署值必须从私有运维记录获取。
 
 ---
 

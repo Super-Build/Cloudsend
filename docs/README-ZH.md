@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> 当前仓库的工程真相不是本 README 正文中的上游 RustDesk 语境。当前产品/runtime 名为 `CloudSend`，Android 显示名为 `云计划`，Android package 为 `com.cloudsend.app`，Rust crate/library 为 `cloudsend`，Android SO 为 `libcloudsend.so`，Windows DLL 为 `cloudsend.dll`。
+>
+> 新工程师接手、定位源码或修改功能时，请优先阅读 `docs/ENGINEERING_INDEX.md`、`docs/ENGINEERING_BASELINE.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md`。本 README-ZH 保留为上游/社区背景参考，不高于当前源码和工程主套件。
+
 <p align="center">
   <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#免费的公共服务器">服务器</a> •

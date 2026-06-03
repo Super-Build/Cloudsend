@@ -1,7 +1,7 @@
 # AGENTS.md — CloudSend / 云计划 v5.2.1
 
-最后一次与全仓源码对齐：2026-06-01
-最近一次文档分层整理：2026-06-01
+最后一次与全仓源码对齐：2026-06-03
+最近一次文档分层整理：2026-06-03
 
 > 本文件是 **Codex** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
@@ -44,12 +44,16 @@
 6. Legacy desktop UI：`src/ui/`
 7. Account / HTTP / sync / upload：`src/hbbs_http/`
 8. Windows privacy mode / virtual display：`src/privacy_mode.rs` + `src/virtual_display_manager.rs`
+9. Android local ADB/LADB：`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/` + `flutter/lib/mobile/pages/adb_page.dart`
+10. ZEGO voice call：Flutter RTC side path + Rust control-channel invitation state
 
 不要把项目误读成：
 
 - 只有 Flutter，没有旧 UI
 - 只有远控，没有账号/同步链
 - Android 只有 Kotlin，没有 Rust JNI 主链
+- ADB/LADB 只是外部研究目录；当前 Android 本地 ADB 已有落地模块
+- ZEGO 语音走 RustDesk 原 `audio_service`；当前媒体只走 ZEGO SDK
 - 品牌/运行名已经迁移到 CloudSend，但上游文档、翻译、兼容判断和第三方依赖中仍会有历史 RustDesk 字样
 
 ---
@@ -67,6 +71,10 @@
 - `common.kt` = Android 全局状态
 - `KeyboardKeyEventMapper.kt` = 键盘映射
 - `VolumeController.kt` = 音量控制
+- `adb/CloudSendAdbManager.kt` = Android local ADB/LADB facade
+- `adb/CloudSendAdbRunner.kt` = packaged `libadb.so` runner
+- `adb/CloudSendAdbDnsDiscover.kt` = wireless debugging mDNS discovery
+- `adb/CloudSendAdbState.kt` = ADB state snapshot
 - `pkg2230.kt` = 主 JNI bridge
 - `ffi.kt` = 兼容 JNI bridge
 - `p50.java` + `q50.java` = XOR / 混淆辅助

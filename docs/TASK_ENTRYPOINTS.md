@@ -1,7 +1,7 @@
 # 任务入口点 / Task Entrypoints
 
-最后一次从全仓源码核验：2026-05-18
-最近一次文档入口整理：2026-06-01
+最后一次从全仓源码核验：2026-06-03
+最近一次文档入口整理：2026-06-03
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -155,6 +155,67 @@ Current document categories:
 - Agent entry docs: `AGENTS.md`, `CLAUDE.md`.
 - Background/history docs: `PC-Build.md`, `terminal.md`, `docs/CHANGELOG.md`, `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`.
 - Community/reference docs: `README.md`, `docs/README-ZH.md`, `docs/CONTRIBUTING*.md`, `docs/CODE_OF_CONDUCT*.md`, `docs/SECURITY.md`, `docs/DEVCONTAINER.md`.
+
+## Project Handoff / Onboarding Entrypoints (2026-06-03)
+
+When a new engineer or a new Codex thread needs to understand the project without prior chat history, start here:
+
+- `AGENTS.md`
+- `docs/ENGINEERING_INDEX.md`
+- `docs/ENGINEERING_BASELINE.md`
+- `docs/REPO_TRUE_STRUCTURE_MAP.md`
+- `docs/TASK_ENTRYPOINTS.md`
+- `docs/DOCUMENT_AUDIT.md`
+
+Then choose the topic-specific entrypoint below.
+
+Do not start from `README.md`, `docs/README-ZH.md`, `terminal.md`, or `PC-Build.md` unless the task is explicitly about upstream/community background, terminal history, or Windows build-environment background.
+
+## Android Local ADB/LADB Entrypoints (2026-06-03)
+
+For Android local ADB/LADB page, pairing, mDNS discovery, shell, command input, or wireless-debugging automation tasks, start here:
+
+- `docs/ADB_LADB_INTEGRATION_MEMORY.md`
+- `flutter/lib/mobile/pages/adb_page.dart`
+- `flutter/lib/common.dart`
+- `flutter/lib/consts.dart`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbRunner.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbDnsDiscover.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbState.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/jniLibs/`
+- `flutter/android/app/src/main/AndroidManifest.xml`
+- `flutter/android/app/proguard-rules`
+
+Current canonical keywords:
+
+- `AndroidAdbManager`
+- `cloudsend_adb_init`
+- `cloudsend_adb_status`
+- `cloudsend_adb_output`
+- `cloudsend_adb_start`
+- `cloudsend_adb_stop`
+- `cloudsend_adb_pair`
+- `cloudsend_adb_command`
+- `cloudsend_adb_wireless_debug_status`
+- `cloudsend_adb_wireless_debug_set`
+- `cloudsend_adb_wireless_debug_cancel`
+- `CloudSendAdbManager`
+- `CloudSendAdbRunner`
+- `CloudSendAdbDnsDiscover`
+- `CloudSendAdbState`
+- `paired_before`
+- `_adb-tls-connect._tcp`
+- `adb_wifi_enabled`
+- `wirelessDebugAutomation`
+
+Boundary:
+
+- Android local ADB/LADB does not control screen sharing, side buttons, video stream, screenshot stream, ZEGO voice, or existing monitor-panel status.
+- PC remote ADB command protocol is not implemented yet. Future work must design an explicit authenticated request/response protocol with whitelist, timeout, output truncation, and audit logging.
+- Keep ADB calls on `MethodChannel('mChannel')`; do not route Map/String ADB responses through `gFFI.invokeMethod()`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Android 运行时工程文档 / Android Runtime Engineering Notes
 
-最后一次从全仓源码核验：2026-06-01
+最后一次从全仓源码核验：2026-06-03
 
 > 本文件记录的是**当前代码真正体现出来的 Android 运行时模型**。
 > 中文用于解释状态和风险；English symbol / path 用于把结论牢牢钉回源码。
@@ -50,13 +50,17 @@ Current Android-side source truth:
   - `Data::StartVoiceCall`
   - `Data::CloseVoiceCall`
 - When the user accepts, `src/server/connection.rs::handle_voice_call` emits `Data::ZegoVoiceCallReady` with the callee payload.
-- Android Flutter shows the existing accept/reject incoming-call dialog in `flutter/lib/models/server_model.dart::showVoiceCallDialog`; ZEGO calls must not auto-accept.
-- Android `showVoiceCallDialog` close (`X`) must reject the voice call, not only dismiss the dialog, so `voice_call_request_timestamp` does not remain pending while PC waits.
-- Android Flutter checks/requests `android.permission.RECORD_AUDIO` only after the user accepts; if the microphone permission is denied, it rejects the call.
+- Android Flutter shows incoming ZEGO calls through `flutter/lib/models/server_model.dart::showAutoAcceptVoiceCallDialog`.
+- The incoming ZEGO dialog has only an `接受` button, no reject button and no close (`X`). Cancel/back actions submit the accept flow instead of rejecting.
+- If the user does not tap `接受`, the dialog auto-accepts after a 10-second countdown.
+- Android Flutter checks/requests `android.permission.RECORD_AUDIO` only after the accept flow starts, either by tapping `接受` or by the countdown. If microphone permission is denied, it rejects the call because ZEGO cannot publish local audio.
 - `flutter/lib/models/server_model.dart::updateVoiceCallState` must preserve incoming voice-call events even if the local `_clients` list has not yet received the matching connection add event.
 - `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` must reject a second simultaneous incoming call only on the same Android endpoint while that Android already has a pending or active ZEGO call.
 - `src/server/connection.rs::zego_voice_call_active` prevents duplicate ZEGO invites on the same controlled connection.
 - `src/server/connection.rs::handle_voice_call` must reject instead of accepting if `pending_zego_voice_call` is missing when Android accepts, so PC cannot join a ZEGO room without Android joining.
+- ZEGO pending invites expire after 60 seconds on both PC and Android through `clear_expired_pending_zego_voice_call(...)`; timeout cleanup must notify the other side so a stuck pending call does not block future calls.
+- Pending close requests carry the original invite timestamp through `src/client/helper.rs::new_voice_call_close_request(...)`; stale close packets must not clear newer pending invites.
+- `src/server/connection.rs::handle_voice_call` moves pending ZEGO payload into active state with `take()` on accept. After accept, pending state must be empty and `zego_voice_call_active` represents the active call.
 - `flutter/lib/models/server_model.dart::onClientRemove` must leave `ZegoVoiceCallModel` when the removed client was in or receiving a ZEGO call, preventing stale busy state after abnormal disconnect.
 - Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, and `BLUETOOTH_CONNECT`; release minification keeps ZEGO classes through `flutter/android/app/proguard-rules`.
 - `flutter/lib/models/zego_voice_call_model.dart` must keep ZEGO join/play/audio-frame failures visible in the Android status card through Chinese error diagnostics; do not silently hide failed joins or show fake connected state.

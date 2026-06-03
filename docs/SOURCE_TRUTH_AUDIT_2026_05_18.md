@@ -2,6 +2,10 @@
 
 This document records the latest full Markdown and source-code verification pass.
 
+> [!IMPORTANT]
+> This is a fixed-date audit from 2026-05-18. For current handoff, task entrypoints, Android runtime, ZEGO voice call, ADB/LADB, and documentation trust boundaries, prefer the 2026-06-03 engineering main set: `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, `docs/REPO_TRUE_STRUCTURE_MAP.md`, and `docs/DOCUMENT_AUDIT.md`.
+> The `Trusted Guidance Set` below reflects the 2026-05-18 audit moment and is superseded by `docs/DOCUMENT_AUDIT.md`.
+
 ## Trusted Guidance Set
 
 Use these documents as the current project knowledge base:

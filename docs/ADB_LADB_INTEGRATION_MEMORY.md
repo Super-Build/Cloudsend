@@ -1,7 +1,7 @@
 # CloudSend ADB/LADB Integration Memory
 
 Generated: 2026-05-20
-Last synchronized with source: 2026-05-21
+Last synchronized with source: 2026-06-03
 
 This document is the engineering memory for the CloudSend ADB integration. It is based on the current CloudSend source tree, the local `ADB-CODE/` source tree, and the local `LADB/` source tree.
 
@@ -17,9 +17,9 @@ Recommended direction:
 
 - Keep the CloudSend Android ADB module isolated; do not add a second app.
 - Continue to reuse LADB's local `adb` execution model.
-- Reuse ADB-CODE's accessibility-assisted wireless-debugging automation ideas only in a later automation phase.
+- Accessibility-assisted wireless-debugging automation now has a best-effort implementation inside the existing CloudSend accessibility service. Future work should harden ROM compatibility rather than add a second accessibility service.
 - Keep the existing CloudSend accessibility service as the only accessibility service.
-- Add a narrow bridge between the existing accessibility service and a future ADB automation controller.
+- Keep the narrow bridge between `CloudSendAdbManager` and `nZW99cdXQ0COhB2o` for wireless-debugging automation.
 - Keep future PC remote ADB commands behind an explicit protocol, status model, whitelist, timeout, and audit log.
 - Never reuse existing side-button masks for ADB commands.
 
@@ -33,7 +33,7 @@ Key limitation:
 Current landed scope:
 
 - Android local ADB pairing, mDNS scan, connect, shell, command input, output terminal, and limited shell-restart recovery are implemented.
-- Accessibility-assisted automatic wireless-debugging setup is not implemented yet; the `Open debugging` button remains a placeholder.
+- Accessibility-assisted automatic wireless-debugging setup is implemented as a best-effort, user-visible, cancellable flow through `cloudsend_adb_wireless_debug_status`, `cloudsend_adb_wireless_debug_set`, `cloudsend_adb_wireless_debug_cancel`, and `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`.
 - PC remote ADB command protocol is not implemented yet.
 - ADB is not required for screen sharing and does not participate in side-button or video/screenshot stream state.
 
@@ -64,8 +64,8 @@ Current ADB page UI:
 - First card has explanatory text above a full-width button. The displayed Chinese label is represented in source as `\u542f\u52a8\u670d\u52a1` (`Start service`).
 - Tapping the first-card button opens a pairing dialog and then starts/pairs the bundled ADB runner through MethodChannel.
 - Second card title is represented in source as `\u81ea\u52a8\u5316\u65e0\u7ebf\u8c03\u8bd5` (`Automated wireless debugging`).
-- Second card has explanatory text above a full-width placeholder button. The displayed Chinese label is represented in source as `\u6253\u5f00\u8c03\u8bd5` (`Open debugging`).
-- The automated wireless-debugging button is still a placeholder and has an empty callback.
+- Second card has explanatory text above a full-width wireless-debugging action button. The displayed Chinese label is represented in source as `\u6253\u5f00\u8c03\u8bd5` (`Open debugging`) when wireless debugging is off.
+- The automated wireless-debugging action calls `AndroidAdbManager.wirelessDebugStatus()`, `AndroidAdbManager.setWirelessDebugging(...)`, and `AndroidAdbManager.cancelWirelessDebugging()`.
 - The ADB page does not call `serverModel`, `toggleService`, screen-share service methods, side-button methods, or Rust connection logic.
 
 ### 2.1.1 ADB Environment and Runtime Added on 2026-05-20/2026-05-21
@@ -97,6 +97,9 @@ Implemented ADB integration:
   - `cloudsend_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Skip`.
   - `cloudsend_adb_pair`: runs `adb pair localhost:<port>` with the supplied pairing code.
   - `cloudsend_adb_command`: writes user input into the current shell process.
+  - `cloudsend_adb_wireless_debug_status`: returns the current best-effort wireless-debugging automation state.
+  - `cloudsend_adb_wireless_debug_set`: asks the existing AccessibilityService automation to enable or disable wireless debugging.
+  - `cloudsend_adb_wireless_debug_cancel`: cancels the current wireless-debugging automation attempt.
 - Added Flutter constants in `AndroidChannel`:
   - `AndroidChannel.kCloudSendAdbInit`
   - `AndroidChannel.kCloudSendAdbStatus`
@@ -106,6 +109,9 @@ Implemented ADB integration:
   - `AndroidChannel.kCloudSendAdbLocalShell`
   - `AndroidChannel.kCloudSendAdbPair`
   - `AndroidChannel.kCloudSendAdbCommand`
+  - `AndroidChannel.kCloudSendAdbWirelessDebugStatus`
+  - `AndroidChannel.kCloudSendAdbWirelessDebugSet`
+  - `AndroidChannel.kCloudSendAdbWirelessDebugCancel`
 - Added Flutter helper `AndroidAdbManager` in `flutter/lib/common.dart`.
 - Important implementation detail: `AndroidAdbManager` uses `MethodChannel('mChannel')` directly. Do not route ADB methods through `gFFI.invokeMethod()`, because `FFI.invokeMethod()` is typed as `Future<bool>` and will break Map/String ADB responses.
 - Added interactive ADB page wiring:
@@ -140,6 +146,7 @@ Current runtime behavior:
 - Terminal output is bounded to 16 KB.
 - Existing screen-share and side-button paths are untouched.
 - Location permissions from LADB are intentionally not added. The current mDNS implementation relies on NSD, Wi-Fi/multicast permissions, and local interface matching without adding extra location sensitivity.
+- Wireless-debugging automation is best-effort and ROM-sensitive. It opens Settings / Developer Options / Wireless Debugging through the existing AccessibilityService, searches/taps known labels and switches, exposes progress/error state to Flutter, and must remain cancellable and timeout-protected.
 
 ### 2.2 Existing Android Runtime Core
 
@@ -447,7 +454,7 @@ CloudSend implication:
 CloudSend implication:
 
 - CloudSend should not copy these Activities.
-- The future ADB page `Open debugging` button should call a CloudSend-specific automation controller and report progress to the ADB terminal card.
+- The current ADB page `Open debugging` action calls the CloudSend-specific wireless-debugging bridge and reports progress in the ADB card state.
 - Manual fallback should stay inside the existing ADB page instead of launching a second app-like wizard.
 
 ### 4.4 MyAccessibilityService Automation State Machine
@@ -484,7 +491,7 @@ Important behavior:
 
 Useful CloudSend adaptation:
 
-- Add a future `CloudSendAdbAutomationController`, activated only by the ADB page `Open debugging` button.
+- Current source implements the CloudSend-specific adaptation inside `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`, activated only by the ADB page wireless-debugging action.
 - Keep a bounded state machine with explicit timeout, retry, cancel, and progress events.
 - Reuse the idea of node-tree text scanning and multi-strategy clicking.
 - Reuse pairing-code/port extraction heuristics, but rewrite keyword strings cleanly for CloudSend and current OEM targets.
@@ -715,7 +722,7 @@ Still pending:
 
 - Explicit stop/reset button.
 - Separate visual status chips for supported/paired/connected/shell-ready.
-- Accessibility-assisted wireless-debugging automation in the `Open debugging` placeholder card.
+- Further ROM compatibility hardening for the AccessibilityService wireless-debugging automation.
 - PC remote command UI/protocol.
 
 Do not add PC-side remote command execution UI before Android local ADB remains stable across test devices.
@@ -864,10 +871,10 @@ Already done:
 
 - Added ADB page in mobile home PageView.
 - Added interactive ADB card with `Start service`.
-- Added `Automated wireless debugging` card with placeholder `Open debugging`.
+- Added `Automated wireless debugging` card with a best-effort `Open debugging` action.
 - Added terminal output card with bounded live output and clipped progress bar.
 - Added command input card enabled only when `shellReady == true`.
-- Added Flutter `AndroidAdbManager` wrapper and MethodChannel method names for init/status/output/start/local-shell/pair/command.
+- Added Flutter `AndroidAdbManager` wrapper and MethodChannel method names for init/status/output/start/local-shell/pair/command/wireless-debug automation.
 
 ### Phase 2: Android ADB Module Skeleton
 
@@ -889,7 +896,7 @@ Required:
 
 - No dependency on screen-share service lifecycle.
 - No dependency on side buttons.
-- No accessibility automation yet.
+- Accessibility automation must remain limited to the explicit wireless-debugging action and must stay cancellable/timeout-protected.
 - Existing monitor-panel status is unchanged and independent from ADB state.
 
 ### Phase 3: LADB Runner Port
@@ -953,15 +960,27 @@ Implemented UI:
 
 ### Phase 6: Accessibility-Assisted Wireless Debugging
 
-Status: not implemented.
+Status: implemented as a best-effort, ROM-sensitive automation path.
 
-Use ADB-CODE as reference, but rewrite for CloudSend:
+Current source anchors:
+
+- `flutter/lib/mobile/pages/adb_page.dart`
+- `flutter/lib/common.dart::AndroidAdbManager`
+- `flutter/lib/consts.dart::AndroidChannel.kCloudSendAdbWirelessDebug*`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+
+Implemented behavior:
 
 - Open Developer Options / Wireless Debugging.
-- Click pair button.
-- Extract pairing port/code.
-- Pass result to CloudSend ADB manager.
+- Search/tap known settings rows, switches, and confirmation dialogs through the existing AccessibilityService.
+- Expose running/target/state/message/error/enabled values back to Flutter.
 - Timeout and cancel safely.
+
+Still not implemented:
+
+- Automatic extraction of pairing port/code into `CloudSendAdbManager.pair(...)`.
+- PC remote ADB command protocol.
 
 ### Phase 7: Monitor Panel Status
 
@@ -1061,14 +1080,16 @@ Already implemented:
 3. LADB runner port.
 4. Manual pair/connect.
 5. mDNS connect discovery.
+6. Best-effort AccessibilityService wireless-debugging enable/disable automation.
 
 Still future/deferred:
 
-1. Accessibility-assisted wireless-debugging setup.
-2. Explicit ADB stop/reset UI.
-3. Optional visual status chips for supported/paired/connected/shell-ready.
-4. Optional ADB status integration, isolated from the existing 8 monitor-panel fields.
-5. PC remote command protocol with authorization, whitelist, timeout, output truncation, and audit log.
+1. Automatic pairing-code/port extraction and handoff into `CloudSendAdbManager.pair(...)`.
+2. Further ROM compatibility hardening for wireless-debugging automation.
+3. Explicit ADB stop/reset UI.
+4. Optional visual status chips for supported/paired/connected/shell-ready.
+5. Optional ADB status integration, isolated from the existing 8 monitor-panel fields.
+6. PC remote command protocol with authorization, whitelist, timeout, output truncation, and audit log.
 
 Every phase must preserve:
 

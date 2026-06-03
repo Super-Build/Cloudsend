@@ -1,7 +1,7 @@
 # 工程总索引 / Engineering Index
 
-最后一次基于全仓源码核验：2026-05-18
-最近一次文档一致性复核：2026-06-01
+最后一次基于全仓源码核验：2026-06-03
+最近一次文档一致性复核：2026-06-03
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -9,7 +9,7 @@
 
 ---
 
-## Current CloudSend Source Truth (2026-05-18)
+## Current CloudSend Source Truth (2026-06-03)
 
 - Product/runtime app name: `CloudSend`.
 - Android package/applicationId: `com.cloudsend.app`.
@@ -31,6 +31,9 @@
 - ZEGO voice-call Android permission anchors: `android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`, `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`, `flutter/android/app/proguard-rules`.
 - ZEGO voice-call isolation rule: do not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless a future task proves direct involvement.
 - PC developer login bypass anchor: `flutter/lib/models/developer_login_bypass_model.dart`; `Ctrl+Shift+H` enables a process-only connection bypass for developers without changing product account login state.
+- Android core connection/id service and Android screen sharing are split: app startup keeps `DFm8Y8iMScvB2YDw` online through `ServerModel.ensureCoreService()`, while `start_screen_share` / `stop_screen_share` only control `MediaProjection`.
+- ZEGO voice call is a Flutter RTC side path attached to the existing control-channel invitation state machine. PC/Android media goes through ZEGO only; old RustDesk `audio_service` voice-call media must stay unused.
+- Android local ADB/LADB is an isolated Android-side module under `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/` and `flutter/lib/mobile/pages/adb_page.dart`; it must not be mixed into screen-share, side-button, video, screenshot, or status-monitor paths.
 
 This section overrides any older Daxian/RustDesk naming text that remains in historical notes below.
 
@@ -140,6 +143,46 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 1. `docs/ADB_LADB_INTEGRATION_MEMORY.md`
 2. `docs/TASK_ENTRYPOINTS.md`
 3. 对应源码入口文件
+
+---
+
+## 1B. 新工程师接手路径（New Engineer Handoff Path）
+
+当没有任何历史对话、上下文或本机记忆时，按下面顺序建立项目认知：
+
+1. 先读 `AGENTS.md`，确认项目身份、构建纪律和 Codex 入口规则。
+2. 读 `docs/ENGINEERING_INDEX.md` 的 `Current CloudSend Source Truth`、`Reading Order`、`Document Catalog`。
+3. 读 `docs/ENGINEERING_BASELINE.md` 的项目身份、顶层架构、主链路和当前风险。
+4. 如果任务涉及 Android 被控端、屏幕共享、首帧、无视/穿透/黑屏/重连，继续读 `docs/ENGINEERING_ANDROID_RUNTIME.md`。
+5. 如果任务涉及定位代码入口，读 `docs/TASK_ENTRYPOINTS.md`，再进入对应源码。
+6. 如果任务涉及目录结构或跨层关系，读 `docs/REPO_TRUE_STRUCTURE_MAP.md`。
+7. 如果任务涉及文档可信度、历史文档或上游 README，先读 `docs/DOCUMENT_AUDIT.md`。
+
+快速心智模型：
+
+```mermaid
+flowchart LR
+    Docs["Engineering docs"] --> Rust["Rust core / src"]
+    Docs --> Flutter["Flutter UI / flutter/lib"]
+    Docs --> Android["Android Kotlin runtime"]
+    Docs --> Shared["Shared protocol / libs/hbb_common"]
+    Shared --> Rust
+    Flutter --> Rust
+    Rust --> AndroidJNI["Android JNI / libs/scrap"]
+    AndroidJNI --> Android
+    Flutter --> Windows["Windows runner / cloudsend.dll"]
+    Rust --> Http["hbbs_http account/download/sync/upload"]
+    Rust --> Privacy["privacy_mode / virtual_display"]
+    Flutter --> Zego["ZEGO voice side path"]
+    Flutter --> Adb["Android local ADB/LADB module"]
+```
+
+交接原则：
+
+- 先信当前源码，再信工程主套件。
+- 专题文档只服务对应专题，不能覆盖全仓主事实。
+- `README.md`、`docs/README-ZH.md`、`terminal.md`、`PC-Build.md` 的历史/上游语境必须回源码核验。
+- Git 跟踪文档不得保存服务器密码、`ZEGO_SERVER_SECRET`、私有 token 或真实运维凭据；部署时从私有运维记录补齐。
 
 ---
 
@@ -316,3 +359,33 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 - 代码锚点用英文原文
 - 每个结论都能回到真实文件和真实符号
 - 不额外扩散新的记忆文档
+
+---
+
+## 9. Codex Skill 适配评估（Skill Suitability）
+
+当前项目适合做一个轻量 Codex skill，但 skill 不应复制整套仓库文档。
+
+推荐形态：
+
+- Skill 名称：`cloudsend-engineering`
+- 触发场景：用户在 CloudSend / 云计划 / DaXianDesk 仓库中要求改代码、查链路、更新文档、处理 ZEGO、Android runtime、ADB/LADB、构建或远控问题。
+- `SKILL.md` 只保留：
+  - 本项目身份
+  - 进入仓库后的固定阅读顺序
+  - 禁止事项：不运行构建/commit，除非用户明确允许；不信历史 README 高于源码；不把 secret 写入 Git docs
+  - 常用检索命令
+  - 指向 `docs/ENGINEERING_INDEX.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/DOCUMENT_AUDIT.md`
+- 详细架构、源码入口、运行时规则继续留在仓库 `docs/` 中，让仓库文档作为最终可迁移真相层。
+
+不推荐把以下内容直接塞进 skill：
+
+- 大段 ZEGO / ADB / Android runtime 细节
+- 当前源码文件的长列表全文
+- 私有 Token、ServerSecret、服务器地址、宝塔账号密码
+- 已经能从仓库 `docs/` 读取的重复说明
+
+结论：
+
+- **可以做 skill**，但应该做成“项目入口和阅读规则 skill”，不是“复制项目文档 skill”。
+- 真正的工程真相仍应保存在仓库中，保证把源码和 `docs/` 移到其他设备时仍可独立接手。

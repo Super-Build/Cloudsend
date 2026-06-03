@@ -1,6 +1,6 @@
 # ZEGO Voice Call Architecture / ZEGO 语音通话工程方案
 
-最后同步源码：2026-06-01
+最后同步源码：2026-06-03
 
 本文是 CloudSend PC -> Android 1v1 ZEGO 语音通话的工程级链路说明。ZEGO 只承载语音媒体，CloudSend 原远控连接只承载邀请、接听、挂断和房间参数分发。
 
@@ -29,7 +29,7 @@ sequenceDiagram
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
     AndroidRust->>AndroidUI: VoiceCallIncoming
-    AndroidUI-->>AndroidRust: user accepts after RECORD_AUDIO permission
+    AndroidUI-->>AndroidRust: user taps Accept or 10s countdown auto-accepts after RECORD_AUDIO permission
     AndroidRust-->>Conn: VoiceCallResponse(accepted=true)
     AndroidRust->>AndroidUI: ZegoVoiceCallReady(callee payload)
     Conn-->>PC: VoiceCallResponse(accepted=true)
@@ -52,7 +52,7 @@ flowchart LR
     subgraph Control["CloudSend existing control connection"]
         A["PC voice button"] --> B["Rust Data::NewVoiceCall"]
         B --> C["VoiceCallRequest / VoiceCallResponse"]
-        C --> D["Android accept / reject dialog"]
+        C --> D["Android auto-accept dialog"]
         D --> E["CloseVoiceCall"]
     end
 
@@ -137,7 +137,7 @@ Runtime isolation:
 
 ## 6. Official Demo Alignment
 
-The local official demo `ZegoExpressDemo_flutter_dart.zip` was reviewed as an implementation reference.
+The official ZEGO Flutter quick-start flow was reviewed as an implementation reference. The demo zip is not a Git-tracked project source file; if a local `ZegoExpressDemo_flutter_dart.zip` is provided again, treat it as external reference material and verify against current ZEGO docs plus CloudSend source anchors.
 
 | Official demo flow | Demo source | CloudSend source |
 |---|---|---|
