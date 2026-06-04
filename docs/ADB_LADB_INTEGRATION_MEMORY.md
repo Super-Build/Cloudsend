@@ -1,7 +1,7 @@
 # CloudSend ADB/LADB Integration Memory
 
 Generated: 2026-05-20
-Last synchronized with source: 2026-06-03
+Last synchronized with source: 2026-06-04
 
 This document is the engineering memory for the CloudSend ADB integration. It is based on the current CloudSend source tree, the local `ADB-CODE/` source tree, and the local `LADB/` source tree.
 
@@ -94,8 +94,8 @@ Implemented ADB integration:
   - `cloudsend_adb_output`: returns the bounded terminal output buffer.
   - `cloudsend_adb_start`: starts the LADB-style ADB scan/connect/shell flow.
   - `cloudsend_adb_stop`: stops the current ADB shell/server state without clearing pairing memory.
-  - `cloudsend_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Skip`.
-  - `cloudsend_adb_pair`: runs `adb pair localhost:<port>` with the supplied pairing code.
+  - `cloudsend_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Auto`.
+  - `cloudsend_adb_pair`: runs real `adb pair` with endpoint fallback (`localhost:<port>`, `127.0.0.1:<port>`, and the current Wi-Fi IPv4 address when available) plus the supplied pairing code.
   - `cloudsend_adb_command`: writes user input into the current shell process.
   - `cloudsend_adb_wireless_debug_status`: returns the current best-effort wireless-debugging automation state.
   - `cloudsend_adb_wireless_debug_set`: asks the existing AccessibilityService automation to enable or disable wireless debugging.
@@ -116,9 +116,9 @@ Implemented ADB integration:
 - Important implementation detail: `AndroidAdbManager` uses `MethodChannel('mChannel')` directly. Do not route ADB methods through `gFFI.invokeMethod()`, because `FFI.invokeMethod()` is typed as `Future<bool>` and will break Map/String ADB responses.
 - Added interactive ADB page wiring:
   - Tapping the ADB page `Start service` button opens a pairing dialog.
-  - The pairing dialog has pairing port and pairing-code inputs plus `Cancel`, `Skip`, and `Pair` actions.
+  - The pairing dialog has pairing port and pairing-code inputs plus `Cancel`, `Auto` (displayed as `自动`), and `Pair` actions.
   - `Cancel` closes the dialog and performs no ADB action.
-  - `Skip` skips manual port/code entry and directly scans/starts the already paired wireless-debugging ADB path. It no longer enters a non-ADB local shell.
+  - `Auto` skips manual port/code entry and directly scans/starts the already paired wireless-debugging ADB path. It no longer enters a non-ADB local shell.
   - `Pair` uses the manually entered port and pairing code, then starts the ADB scan/connect/shell flow on success.
   - The terminal card shows a clipped top progress bar while waiting/starting/pairing and polls native ADB output every 100 ms.
   - A command input card exists under the terminal and is enabled only after the ADB shell is ready.
@@ -130,14 +130,33 @@ Current runtime behavior:
 - ADB start/pair/command actions only run after the user taps the ADB page controls.
 - First successful manual pairing saves `paired_before` in `SharedPreferences`.
 - If `paired_before` is true, tapping `Start service` skips the pairing dialog and automatically starts the scan/connect/shell flow. If auto-start fails, the UI falls back to the pairing dialog.
-- If `paired_before` is false, `Skip` in the pairing dialog directly tries the same scan/connect/shell flow without manual code input. When that succeeds, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
-- `Skip` no longer starts a non-ADB local shell; it is now an ADB auto-scan/start path.
-- `Pair` runs `adb pair localhost:<port>` with a LADB-style pairing-code delay, then starts the ADB server/scan/connect/shell flow when pairing succeeds.
+- If `paired_before` is false, `Auto` in the pairing dialog directly tries the same scan/connect/shell flow without manual code input. When that succeeds, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
+- `Auto` no longer starts a non-ADB local shell; it is now an ADB auto-scan/start path.
+- `Pair` runs `adb pair` against endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available) with a LADB-style pairing-code delay, then starts the ADB server/scan/connect/shell flow when pairing succeeds.
 - When ADB shell is ready, the ADB card button becomes a red `Stop service` button.
 - `Stop service` closes the current shell, disables shell auto-restart, runs `adb kill-server`, and leaves the stored pairing memory intact for later restart.
 - The runner uses LADB-style mDNS connect-port discovery via `CloudSendAdbDnsDiscover`, scanning `_adb-tls-connect._tcp`.
-- When a connect port is found, it runs `adb connect localhost:<port>`.
+- When a connect port is found, it tries `adb connect` against endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available), then polls `adb devices` before selecting a serial.
 - When no connect port is found, it uses LADB's `adb wait-for-device` fallback.
+
+### 2.1.2 ADB Compatibility Hardening Synchronized on 2026-06-04
+
+Current source-level facts that must be preserved in future ADB work:
+
+- `CloudSendAdbRunner.adbEndpoints(port)` builds an ordered endpoint list: `localhost:<port>`, `127.0.0.1:<port>`, and the active Wi-Fi IPv4 address when discoverable.
+- Manual pairing uses the same endpoint fallback list; it must not trust `localhost` alone on OEM ROMs where local ADB routes differently.
+- Pairing success is strict: output containing `failed`, `unable`, `cannot`, `error`, `invalid`, or `wrong` is treated as failure even if the adb process exits unexpectedly cleanly.
+- Failed manual pairing clears `paired_before` through `CloudSendAdbManager.setPairedBefore(context, next.paired)`, so a bad pair attempt does not poison future automatic startup.
+- mDNS discovery retries `NsdManager.FAILURE_ALREADY_ACTIVE` resolve failures up to four times before giving up on that service sample.
+- mDNS host selection prefers a local-host match but keeps non-local hosts as fallback instead of discarding them, because some OEM ROMs advertise non-loopback or differently resolved addresses.
+- `adb connect` is followed by repeated `adb devices` polling (`waitForConnectedDevices`) before the runner decides that no local device is available.
+- A successful connect stores `preferredSerial`, and later shell selection prefers that serial before falling back to other local devices.
+- Shell auto-restart is capped by `MAX_SHELL_RESTART_ATTEMPTS`; no future change should reintroduce an unbounded restart loop.
+- Wireless-debugging automation delayed callbacks must re-check `wirelessDebugAutomationRunning`; cancellation must stop queued automation work, not only update the button state.
+
+Known current limitation:
+
+- The `Auto` action scans/connects an already paired wireless-debugging endpoint. It does not extract a pairing port/code from the Settings UI and feed it into `CloudSendAdbManager.pair(...)` yet.
 - It parses `adb devices`, chooses a local device (`localhost:` / `127.0.0.1:`) first when multiple devices are present, and then opens `adb shell`.
 - On shell entry it injects `alias adb="<nativeLibraryDir>/libadb.so"`.
 - On ADB shell entry it requests `WRITE_SECURE_SETTINGS` using `pm grant <package> android.permission.WRITE_SECURE_SETTINGS` and prints `ADB permission grant requested` and `ADB shell ready`.
@@ -279,7 +298,7 @@ Important behavior:
 - If Android 11+ wireless debugging is not enabled, it waits until the user enables it.
 - It waits for mDNS scan to discover a connect port.
 - It runs `adb start-server`.
-- It runs `adb connect localhost:<port>` when a port is found.
+- Upstream LADB runs `adb connect localhost:<port>` when a port is found. CloudSend intentionally extends this with endpoint fallback for OEM compatibility.
 - It falls back to `adb wait-for-device` when no port is found.
 - It opens `adb shell`.
 - It attempts `pm grant <package> android.permission.WRITE_SECURE_SETTINGS` from the shell when permission is not already granted.
@@ -711,7 +730,7 @@ Implemented UI behavior:
 2. If `paired_before` is true, it starts ADB scan/connect automatically.
 3. Otherwise it opens a manual pairing dialog with port/code inputs.
 4. `Cancel` closes the pairing dialog without performing any ADB action.
-5. `Skip` skips manual input and directly attempts scan/connect/shell for an already paired wireless-debugging device.
+5. `Auto` (`自动`) skips manual input and directly attempts scan/connect/shell for an already paired wireless-debugging device.
 6. `Pair` runs real `adb pair` and then starts scan/connect/shell on success.
 7. When `shellReady == true`, the first-card button changes to a red `Stop service` action.
 8. `Stop service` closes the shell/server state but preserves pairing memory.
@@ -720,7 +739,7 @@ Implemented UI behavior:
 
 Still pending:
 
-- Explicit stop/reset button.
+- Optional reset/re-pair UI that clears stored pairing memory when the user explicitly wants a clean ADB setup.
 - Separate visual status chips for supported/paired/connected/shell-ready.
 - Further ROM compatibility hardening for the AccessibilityService wireless-debugging automation.
 - PC remote command UI/protocol.
@@ -907,11 +926,11 @@ Ported local adb runner essentials:
 
 - ProcessBuilder execution wrapper: implemented for `start-server`, `pair`, `devices`, `shell`, and command forwarding.
 - `adb pair`: implemented with the LADB-style pairing-code delay.
-- `adb connect`: implemented through `CloudSendAdbDnsDiscover`, which scans `_adb-tls-connect._tcp`, waits briefly for newer broadcasts, and runs `adb connect localhost:<port>`.
+- `adb connect`: implemented through `CloudSendAdbDnsDiscover`, which scans `_adb-tls-connect._tcp`, waits briefly for newer broadcasts, and tries endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available).
 - `adb wait-for-device`: used as fallback when no mDNS connect port is discovered.
 - `adb devices`: parsed to choose a connected local device.
 - `adb shell` or one-shot command execution: shell opening is implemented once a device is connected; command input is enabled only when `shellReady` is true.
-- Non-ADB local shell: still exists as a native hook, but the ADB page no longer uses it for `Skip`.
+- Non-ADB local shell: still exists as a native hook, but the ADB page no longer uses it for `Auto`.
 - Stop path: implemented through `cloudsend_adb_stop`, shell process shutdown, restart suppression, and `adb kill-server`.
 - Bounded output: implemented with an in-memory 16 KB output buffer.
 - Timeout: implemented for pairing and command execution paths.
@@ -920,7 +939,7 @@ Ported local adb runner essentials:
 
 Still pending:
 
-- Explicit stop/reset UI.
+- Optional reset/re-pair UI that explicitly clears `paired_before`.
 - Optional startup-command setting.
 - PC remote ADB command protocol.
 
@@ -954,7 +973,7 @@ Implemented UI:
 - Connect status.
 - Last error.
 - `Pair` runs real `adb pair`; success stores `paired_before` and starts the scan/connect/shell flow.
-- `Skip` skips manual input and directly attempts the ADB scan/connect/shell flow; if that succeeds, `paired_before` is stored so the next start does not show the pairing dialog.
+- `Auto` (`自动`) skips manual input and directly attempts the ADB scan/connect/shell flow; if that succeeds, `paired_before` is stored so the next start does not show the pairing dialog.
 - `Cancel` exits the dialog without starting any local shell or ADB action.
 - If `paired_before` auto-start fails, the UI falls back to the pairing dialog.
 
@@ -1086,7 +1105,7 @@ Still future/deferred:
 
 1. Automatic pairing-code/port extraction and handoff into `CloudSendAdbManager.pair(...)`.
 2. Further ROM compatibility hardening for wireless-debugging automation.
-3. Explicit ADB stop/reset UI.
+3. Optional ADB reset/re-pair UI that clears stored pairing memory. The stop UI already exists.
 4. Optional visual status chips for supported/paired/connected/shell-ready.
 5. Optional ADB status integration, isolated from the existing 8 monitor-panel fields.
 6. PC remote command protocol with authorization, whitelist, timeout, output truncation, and audit log.

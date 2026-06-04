@@ -1,5 +1,15 @@
 # Changelog
 
+## [v5.2.1-adb-hardening-docsync-18] ADB/LADB compatibility memory sync - 2026-06-04
+
+### Android Local ADB
+- Updated ADB engineering memory to match the current source: manual pair/connect now use endpoint fallback (`localhost`, `127.0.0.1`, and current Wi-Fi IPv4 when available), not a single `localhost:<port>` path.
+- Documented `CloudSendAdbDnsDiscover` behavior: retry `NsdManager.FAILURE_ALREADY_ACTIVE`, prefer local-host matches, and keep non-local hosts as fallback for OEM ROMs.
+- Documented `CloudSendAdbRunner` behavior: poll `adb devices` after connect, store `preferredSerial`, cap shell restart attempts, and reject pairing output containing failure keywords even if process status is misleading.
+- Documented that failed manual pairing clears `paired_before`, while the ADB page `Auto` / `自动` action only scans/connects an already paired wireless-debugging endpoint.
+- Clarified that automatic extraction of pairing port/code from Settings into `CloudSendAdbManager.pair(...)` is still future work.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-android-core-share-split-17] Android 核心服务与屏幕共享拆分 - 2026-06-01
 
 ### Android Runtime
@@ -46,13 +56,13 @@
 
 ### LADB-Aligned Runtime Behavior
 - `Start service` initializes ADB state. If `paired_before` is stored, it attempts automatic mDNS scan, ADB connect, and shell entry. If automatic startup fails, it falls back to the manual pairing dialog.
-- Manual pairing uses real `adb pair localhost:<port>` plus pairing code input, then starts ADB server/connect/shell on success.
+- Superseded by `v5.2.1-adb-hardening-docsync-18`: manual pairing now uses endpoint fallback (`localhost`, `127.0.0.1`, and current Wi-Fi IPv4 when available), then starts ADB server/connect/shell on success.
 - Superseded by `v5.2.1-adb-ui-control-16`: `Skip` now skips manual input and attempts the ADB scan/connect/shell flow; it no longer enters non-ADB local shell mode.
 - mDNS discovery scans `_adb-tls-connect._tcp`, uses a MulticastLock, prefers current/newer local services, and falls back safely when no port is found.
 - Terminal output is bounded, user-visible, and polled by the ADB page. Shell restart is capped to avoid uncontrolled infinite restart loops.
 
 ### Boundaries
-- Accessibility-assisted wireless-debugging automation is not implemented yet; the `Open debugging` card remains a future integration point based on ADB-CODE.
+- Superseded by later ADB automation work: accessibility-assisted wireless-debugging automation now exists as a best-effort, cancellable flow inside `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`.
 - PC remote ADB command transport is not implemented yet; future work must use explicit request/response messages, authorization, timeout, whitelist policy, output truncation, and audit logging.
 - Current `cloudsend_adb_command` is an interactive terminal write into the long-lived local shell. It is not a complete remote RPC result path because it does not provide per-command completion, exit code, stdout/stderr separation, or response boundaries.
 - Future PC remote command/script execution should add a dedicated bounded request/response executor instead of treating the terminal stream as a reliable command result.

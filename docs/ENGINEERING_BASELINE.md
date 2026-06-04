@@ -445,6 +445,15 @@ Feature gate：
 - ADB 页面直接通过 `MethodChannel('mChannel')` 调用 `cloudsend_adb_*` 方法，不应改走 `gFFI.invokeMethod()`，因为 ADB 方法返回 Map/String。
 - PC remote ADB command protocol 仍不是已落地能力；未来必须显式设计 request/response、授权、超时、白名单、输出截断和审计日志。
 
+Current source-verified ADB hardening (2026-06-04):
+
+- Pair/connect now use endpoint fallback: `localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available.
+- `CloudSendAdbDnsDiscover` retries `NsdManager.FAILURE_ALREADY_ACTIVE` resolve failures and keeps non-local hosts as fallback when no local match is available.
+- `CloudSendAdbRunner` polls `adb devices` after `adb connect`, stores `preferredSerial`, and caps shell restart attempts.
+- Manual pair failure clears `paired_before`; a failed pairing attempt must not poison later auto-start behavior.
+- The ADB page action `Auto` / `自动` scans/connects an already paired wireless-debugging endpoint. It does not yet extract a fresh pairing code/port from Settings.
+- Wireless-debugging automation lives in `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`; it is best-effort, user-visible, cancellable, and timeout-protected.
+
 ---
 
 ## 3. 已核验的主链路（Verified Main Flows）

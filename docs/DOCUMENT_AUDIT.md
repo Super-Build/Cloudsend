@@ -1,6 +1,6 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-06-03
+最后一次从关键源码锚点与文档一致性核验：2026-06-04
 最近一次文档分层与可读性整理：2026-06-03
 
 > 本文件用于回答两个问题：
@@ -96,6 +96,23 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` 仍是固定日期源码审计，但它内部的 `Trusted Guidance Set` 已被 2026-06-03 主套件覆盖。
 - `docs/ADB_LADB_INTEGRATION_MEMORY.md` 从“实现记忆 + 未来方案”调整为“已落地 ADB/LADB 专题文档 + 后续风险边界”，但其 ADB-CODE/LADB review 章节仍属于参考背景。
 - `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是部署模板，不是密钥仓库。真实部署值必须从私有运维记录获取。
+
+---
+
+## 0.4 2026-06-04 ADB/LADB 兼容硬化文档复核
+
+本次复核只同步文档记忆，没有执行编译、清理或 git commit。
+
+已对照当前源码并同步的 ADB/LADB 事实：
+
+- `CloudSendAdbRunner` 当前 pair/connect 使用 endpoint fallback：`localhost:<port>`、`127.0.0.1:<port>`、当前 Wi-Fi IPv4。
+- `CloudSendAdbDnsDiscover` 当前会重试 `NsdManager.FAILURE_ALREADY_ACTIVE`，优先本机地址匹配，同时保留非本机 host 作为国产 ROM fallback。
+- `CloudSendAdbRunner` 当前会在 `adb connect` 后轮询 `adb devices`，记录 `preferredSerial`，并限制 shell 自动重启次数。
+- 手动配对失败会清理 `paired_before`，避免一次失败污染后续自动启动。
+- ADB 页面 `Auto` / `自动` 只负责扫描/连接已配对无线调试端点；自动从 Settings UI 提取配对端口/配对码并调用 `CloudSendAdbManager.pair(...)` 仍是未来工作。
+- 无线调试自动化当前落在 `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`，必须保持显式触发、可取消、超时保护、状态可见。
+
+已同步文档：`docs/ADB_LADB_INTEGRATION_MEMORY.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/ENGINEERING_BASELINE.md`、`docs/CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
 
 ---
 

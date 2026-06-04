@@ -171,7 +171,7 @@ Then choose the topic-specific entrypoint below.
 
 Do not start from `README.md`, `docs/README-ZH.md`, `terminal.md`, or `PC-Build.md` unless the task is explicitly about upstream/community background, terminal history, or Windows build-environment background.
 
-## Android Local ADB/LADB Entrypoints (2026-06-03)
+## Android Local ADB/LADB Entrypoints (2026-06-04)
 
 For Android local ADB/LADB page, pairing, mDNS discovery, shell, command input, or wireless-debugging automation tasks, start here:
 
@@ -206,6 +206,9 @@ Current canonical keywords:
 - `CloudSendAdbRunner`
 - `CloudSendAdbDnsDiscover`
 - `CloudSendAdbState`
+- `adbEndpoints`
+- `preferredSerial`
+- `NsdManager.FAILURE_ALREADY_ACTIVE`
 - `paired_before`
 - `_adb-tls-connect._tcp`
 - `adb_wifi_enabled`
@@ -216,6 +219,8 @@ Boundary:
 - Android local ADB/LADB does not control screen sharing, side buttons, video stream, screenshot stream, ZEGO voice, or existing monitor-panel status.
 - PC remote ADB command protocol is not implemented yet. Future work must design an explicit authenticated request/response protocol with whitelist, timeout, output truncation, and audit logging.
 - Keep ADB calls on `MethodChannel('mChannel')`; do not route Map/String ADB responses through `gFFI.invokeMethod()`.
+- Current pair/connect behavior uses endpoint fallback (`localhost`, `127.0.0.1`, and current Wi-Fi IPv4 when available), mDNS resolve retry for `FAILURE_ALREADY_ACTIVE`, `adb devices` polling after connect, and `preferredSerial` selection.
+- The pairing dialog action formerly called `Skip` is currently `Auto` / `自动`: it scans/connects an already paired wireless-debugging endpoint and does not parse a new pairing code from Settings yet.
 
 ---
 

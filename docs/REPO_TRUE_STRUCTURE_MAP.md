@@ -502,6 +502,8 @@ Boundary:
 
 - ADB/LADB does not drive screen sharing, side buttons, video stream, screenshot stream, or monitor-panel status.
 - PC remote ADB command protocol is not implemented yet.
+- Current local ADB pair/connect uses endpoint fallback (`localhost`, `127.0.0.1`, active Wi-Fi IPv4), mDNS retry/fallback, `adb devices` polling, and `preferredSerial` selection.
+- `Auto` / `自动` scans/connects an already paired wireless-debugging endpoint; automatic pairing-code/port extraction from Settings is still future work.
 
 ### 6.10 Developer login bypass chain
 

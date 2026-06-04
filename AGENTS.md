@@ -75,6 +75,7 @@
 - `adb/CloudSendAdbRunner.kt` = packaged `libadb.so` runner
 - `adb/CloudSendAdbDnsDiscover.kt` = wireless debugging mDNS discovery
 - `adb/CloudSendAdbState.kt` = ADB state snapshot
+- ADB pair/connect currently uses endpoint fallback (`localhost`, `127.0.0.1`, active Wi-Fi IPv4), mDNS retry/fallback, `preferredSerial`, and cancellable wireless-debugging automation. PC remote ADB command protocol is still future work.
 - `pkg2230.kt` = 主 JNI bridge
 - `ffi.kt` = 兼容 JNI bridge
 - `p50.java` + `q50.java` = XOR / 混淆辅助
