@@ -1,7 +1,7 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-06-04
-最近一次文档分层与可读性整理：2026-06-03
+最后一次从关键源码锚点与文档一致性核验：2026-06-07
+最近一次文档分层与可读性整理：2026-06-07
 
 > 本文件用于回答两个问题：
 >
@@ -113,6 +113,24 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - 无线调试自动化当前落在 `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`，必须保持显式触发、可取消、超时保护、状态可见。
 
 已同步文档：`docs/ADB_LADB_INTEGRATION_MEMORY.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/ENGINEERING_BASELINE.md`、`docs/CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
+
+---
+
+## 0.5 2026-06-07 ZEGO Token proxy endpoint audit
+
+当前源码事实：
+
+- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://43.99.51.91:50003`。
+- 该 PC 入口由外部反向代理转发到上游 Token 服务 `https://1.738489234.com/api/v1/voice-call/create`。
+- 文档必须同时保留两层说明：PC 当前访问入口和上游真实 Token 服务接口。
+- Git-tracked docs 仍不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
+
+已同步文档：
+
+- `docs/ENGINEERING_BASELINE.md`
+- `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`
+- `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
 
 ---
 

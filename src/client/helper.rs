@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 
-const DEFAULT_ZEGO_TOKEN_URL: &str = "https://1.738489234.com/api/v1/voice-call/create";
+const DEFAULT_ZEGO_TOKEN_URL: &str = "http://43.99.51.91:50003";
 const DEFAULT_ZEGO_TOKEN_API_KEY: &str = "PHFfBRiEXVKFvEGD2cJp";
 
 #[derive(Debug, Default)]

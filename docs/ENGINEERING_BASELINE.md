@@ -1,7 +1,7 @@
 # 工程基线 / Engineering Baseline
 
-最后一次从全仓源码核验：2026-06-03
-最近一次文档一致性复核：2026-06-03
+最后一次从全仓源码核验：2026-06-07
+最近一次文档一致性复核：2026-06-07
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -786,6 +786,7 @@ Current source truth:
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
 - PC/controller hardcodes the ZEGO Token endpoint in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`; local override and legacy fallback are intentionally not used.
+- Current PC/controller ZEGO Token endpoint is `http://43.99.51.91:50003`; this endpoint is expected to reverse proxy to upstream `https://1.738489234.com/api/v1/voice-call/create`.
 - PC/controller also hardcodes a Bearer key in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`; treat it as a deployed client credential that must match the token service `.env`, but do not duplicate the real value in Git-tracked docs.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
 - `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp` when requesting the token service. The token service must include this value in room/stream derivation so each established PC-Android control connection gets an isolated 1v1 ZEGO room.

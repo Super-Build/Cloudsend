@@ -1,6 +1,6 @@
 # ZEGO Voice Call Architecture / ZEGO 语音通话工程方案
 
-最后同步源码：2026-06-03
+最后同步源码：2026-06-07
 
 本文是 CloudSend PC -> Android 1v1 ZEGO 语音通话的工程级链路说明。ZEGO 只承载语音媒体，CloudSend 原远控连接只承载邀请、接听、挂断和房间参数分发。
 
@@ -17,6 +17,7 @@
 ```mermaid
 sequenceDiagram
     participant PC as "PC Flutter + Rust session"
+    participant Proxy as "HTTP reverse proxy"
     participant Token as "CloudSend ZEGO Token Service"
     participant Conn as "Existing CloudSend control channel"
     participant AndroidRust as "Android Rust connection-manager"
@@ -24,7 +25,8 @@ sequenceDiagram
     participant ZegoPC as "ZEGO SDK on PC"
     participant ZegoAndroid as "ZEGO SDK on Android"
 
-    PC->>Token: POST /api/v1/voice-call/create(pcPeerId, androidPeerId, cloudsendSessionId)
+    PC->>Proxy: POST http://43.99.51.91:50003(pcPeerId, androidPeerId, cloudsendSessionId)
+    Proxy->>Token: reverse proxy to https://1.738489234.com/api/v1/voice-call/create
     Token-->>PC: roomId, caller/callee userId, caller/callee streamId, caller/callee token
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
@@ -113,6 +115,7 @@ UI rule:
 Room and stream isolation:
 
 - PC obtains ZEGO metadata from the token service per call.
+- Current PC endpoint is `http://43.99.51.91:50003`, which is expected to reverse proxy to `https://1.738489234.com/api/v1/voice-call/create`.
 - `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp`.
 - Token service must create unique `roomId`, `callerUserId`, `calleeUserId`, `callerStreamId`, and `calleeStreamId`.
 - PC sends only the Android/callee token to the controlled side; caller token stays in PC memory.

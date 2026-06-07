@@ -1,6 +1,6 @@
 # ZEGO Voice Call Integration / ZEGO 语音通话接入
 
-最后同步源码：2026-06-03
+最后同步源码：2026-06-07
 
 > 本文记录 CloudSend 1v1 第三方语音通话接入方案。它只复用现有语音按钮、来电确认、挂断控制入口；媒体能力改由 ZEGO RTC 承载，不再使用 RustDesk 原生 `audio_service` 语音通话推流链路。
 
@@ -115,10 +115,20 @@ PC voice button
 默认接口：
 
 ```text
-POST https://1.738489234.com/api/v1/voice-call/create
+POST http://43.99.51.91:50003
 Authorization: Bearer <VOICE_API_KEY>
 Content-Type: application/json
 ```
+
+反代上游接口：
+
+```text
+https://1.738489234.com/api/v1/voice-call/create
+```
+
+当前 PC/controller 访问 `http://43.99.51.91:50003`。该地址由外部反向代理转发到上游 `https://1.738489234.com/api/v1/voice-call/create`，并必须保留 `POST` 请求体、`Authorization`、`Content-Type` 等请求头。
+
+Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible to anyone who can observe that network path. Prefer HTTPS for public production traffic when available.
 
 请求体：
 
@@ -148,6 +158,10 @@ Content-Type: application/json
 ```
 
 PC/controller hardcoded endpoint:
+
+- `http://43.99.51.91:50003`
+
+Upstream token-service endpoint kept for deployment/reference:
 
 - `https://1.738489234.com/api/v1/voice-call/create`
 
