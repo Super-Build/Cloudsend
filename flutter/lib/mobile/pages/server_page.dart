@@ -647,8 +647,6 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                     label: Text(translate("Start service")),
                   ),
                 ).marginOnly(bottom: 8),
-          PermissionRow(translate("Screen Capture"), serverModel.mediaOk,
-              serverModel.toggleService),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
           hasAudioPermission
@@ -662,8 +660,6 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                     style: const TextStyle(color: MyTheme.darkGray),
                   ))
                 ]),
-          PermissionRow(translate("Transfer file"), serverModel.fileOk,
-              serverModel.toggleFile),
           SizedBox(height: 8),
           SwitchListTile(
             visualDensity: VisualDensity.compact,
@@ -1135,6 +1131,7 @@ void androidChannelInit() {
     }
     return "";
   });
+  unawaited(gFFI.invokeMethod("flush_pending_voice_call_event"));
 }
 
 void showScamWarning(BuildContext context, ServerModel serverModel) {

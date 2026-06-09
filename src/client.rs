@@ -225,8 +225,12 @@ impl Client {
         if config::is_incoming_only() {
             bail!("Incoming only mode");
         }
+        let force_relay_requested = interface.is_force_relay() || use_ws() || Config::is_proxy();
         // to-do: remember the port for each peer, so that we can retry easier
         if hbb_common::is_ip_str(peer) {
+            if force_relay_requested {
+                bail!("Direct IP connection is disabled in relay-only mode");
+            }
             return Ok((
                 (
                     connect_tcp_local(check_port(peer, RELAY_PORT + 1), None, CONNECT_TIMEOUT)
@@ -240,6 +244,9 @@ impl Client {
         }
         // Allow connect to {domain}:{port}
         if hbb_common::is_domain_port_str(peer) {
+            if force_relay_requested {
+                bail!("Direct address connection is disabled in relay-only mode");
+            }
             return Ok((
                 (
                     connect_tcp_local(peer, None, CONNECT_TIMEOUT).await?,
@@ -274,7 +281,7 @@ impl Client {
             }
         };
 
-        if crate::get_ipv6_punch_enabled() {
+        if !force_relay_requested && crate::get_ipv6_punch_enabled() {
             crate::test_ipv6().await;
         }
 
@@ -282,7 +289,7 @@ impl Client {
         let mut udp =
         // no need to care about multiple rendezvous servers case, since it is acutally not used any more.
         // Shared state for UDP NAT test result
-        if crate::get_udp_punch_enabled() {
+        if !force_relay_requested && crate::get_udp_punch_enabled() {
             if let Ok((socket, addr)) = new_direct_udp_for(&rendezvous_server).await {
                 let udp_port = Arc::new(Mutex::new(0));
                 let up_cloned = udp_port.clone();
@@ -327,7 +334,7 @@ impl Client {
         let my_nat_type = crate::get_nat_type(100).await;
         let mut is_local = false;
         let mut feedback = 0;
-        let force_relay = interface.is_force_relay() || use_ws() || Config::is_proxy();
+        let force_relay = force_relay_requested;
         use hbb_common::protobuf::Enum;
         let nat_type = if force_relay {
             NatType::SYMMETRIC
@@ -357,7 +364,7 @@ impl Client {
         // Stop UDP NAT test task if still running
         let _ = stop_udp_tx.send(());
         let mut msg_out = RendezvousMessage::new();
-        let mut ipv6 = if crate::get_ipv6_punch_enabled() {
+        let mut ipv6 = if !force_relay && crate::get_ipv6_punch_enabled() {
             if let Some((socket, addr)) = crate::get_ipv6_socket().await {
                 (Some(socket), Some(addr))
             } else {
@@ -380,7 +387,11 @@ impl Client {
             ..Default::default()
         });
         for i in 1..=3 {
-            log::info!("#{} punch attempt with {}, id: {}", i, my_addr, peer);
+            if force_relay {
+                log::info!("#{} relay request with {}, id: {}", i, my_addr, peer);
+            } else {
+                log::info!("#{} punch attempt with {}, id: {}", i, my_addr, peer);
+            }
             socket.send(&msg_out).await?;
             // below timeout should not bigger than hbbs's connection timeout.
             if let Some(msg_in) =
@@ -431,7 +442,15 @@ impl Client {
                                     }
                                 }
                             }
-                            log::info!("Hole Punched {} = {}", peer, peer_addr);
+                            if force_relay {
+                                log::info!(
+                                    "relay-only rendezvous response {}, relay_server: {}",
+                                    peer,
+                                    relay_server
+                                );
+                            } else {
+                                log::info!("Hole Punched {} = {}", peer, peer_addr);
+                            }
                             break;
                         }
                     }
@@ -443,11 +462,13 @@ impl Client {
                         );
                         start = Instant::now();
                         let mut connect_futures = Vec::new();
-                        if let Some(s) = ipv6.0 {
-                            let addr = AddrMangle::decode(&rr.socket_addr_v6);
-                            if addr.port() > 0 {
-                                if s.connect(addr).await.is_ok() {
-                                    connect_futures.push(udp_nat_connect(s, "IPv6").boxed());
+                        if !force_relay {
+                            if let Some(s) = ipv6.0 {
+                                let addr = AddrMangle::decode(&rr.socket_addr_v6);
+                                if addr.port() > 0 {
+                                    if s.connect(addr).await.is_ok() {
+                                        connect_futures.push(udp_nat_connect(s, "IPv6").boxed());
+                                    }
                                 }
                             }
                         }
@@ -492,8 +513,13 @@ impl Client {
         }
         let time_used = start.elapsed().as_millis() as u64;
         log::info!(
-            "{} ms used to punch hole, relay_server: {}, {}",
+            "{} ms used to {}, relay_server: {}, {}",
             time_used,
+            if force_relay {
+                "request relay rendezvous"
+            } else {
+                "punch hole"
+            },
             relay_server,
             if is_local {
                 "is_local: true".to_owned()
@@ -544,6 +570,33 @@ impl Client {
         udp_socket_nat: Option<Arc<UdpSocket>>,
         udp_socket_v6: Option<Arc<UdpSocket>>,
     ) -> ResultType<(Stream, bool, Option<Vec<u8>>, Option<KcpStream>)> {
+        if interface.is_force_relay() {
+            if relay_server.is_empty() {
+                bail!("Relay-only mode requires a relay server");
+            }
+            let start = std::time::Instant::now();
+            let mut conn = match Self::request_relay(
+                peer_id,
+                relay_server.to_owned(),
+                rendezvous_server,
+                !signed_id_pk.is_empty(),
+                key,
+                token,
+                conn_type,
+            )
+            .await
+            {
+                Ok(conn) => conn,
+                Err(e) => {
+                    interface.update_direct(Some(false));
+                    bail!("Failed to connect via relay server: {}", e);
+                }
+            };
+            interface.update_direct(Some(false));
+            log::info!("{:?} used to establish Relay connection", start.elapsed());
+            let pk = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn).await?;
+            return Ok((conn, false, pk, None));
+        }
         let direct_failures = interface.get_lch().read().unwrap().direct_failures;
         let mut connect_timeout = 0;
         const MIN: u64 = 1000;
@@ -604,7 +657,7 @@ impl Client {
         interface.update_direct(Some(direct));
         if interface.is_force_relay() || conn.is_err() {
             if !relay_server.is_empty() {
-                conn = Self::request_relay(
+                conn = match Self::request_relay(
                     peer_id,
                     relay_server.to_owned(),
                     rendezvous_server,
@@ -613,18 +666,25 @@ impl Client {
                     token,
                     conn_type,
                 )
-                .await;
+                .await
+                {
+                    Ok(conn) => Ok(conn),
+                    Err(e) => {
+                        interface.update_direct(Some(false));
+                        bail!("Failed to connect via relay server: {}", e);
+                    }
+                };
                 interface.update_direct(Some(false));
-                if let Err(e) = conn {
-                    bail!("Failed to connect via relay server: {}", e);
-                }
                 typ = "Relay";
                 direct = false;
             } else {
                 bail!("Failed to make direct connection to remote desktop");
             }
         }
-        if !relay_server.is_empty() && (direct_failures == 0) != direct {
+        if !interface.is_force_relay()
+            && !relay_server.is_empty()
+            && (direct_failures == 0) != direct
+        {
             let n = if direct { 0 } else { 1 };
             log::info!("direct_failures updated to {}", n);
             interface.get_lch().write().unwrap().set_direct_failure(n);
@@ -1727,9 +1787,10 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.restarting_remote_device = false;
-        self.force_relay =
-            config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
-                || force_relay;
+        let cloudsend_force_relay = true;
+        self.force_relay = cloudsend_force_relay
+            || config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
+            || force_relay;
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");
             if !other_server_key.is_empty() && key.is_empty() {

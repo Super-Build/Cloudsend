@@ -1,5 +1,49 @@
 # Changelog
 
+## [v5.2.1-android-relay-reconnect-zego-21] Android relay reconnect and ZEGO stale-state cleanup - 2026-06-09
+
+### Updated
+
+- Android auto reconnect retry interval is now 2.5 seconds while keeping the 60-second silent grace window. Android network-available callbacks request a rendezvous/register refresh without restarting `MainService`.
+- PC waiting / reconnect / peer-info paths may send normal `sessionRefreshVideo(...)` requests to wake an already-authorized normal screen-share first frame. This does not start ignore mode or screenshot fallback.
+- Android authorization now pushes one immediate real status packet from JNI, so PC state catches up right after reconnect instead of waiting for the next periodic status tick.
+- Android auto reconnect password continuation now reuses only the remote password already entered/passed in the current PC session. It no longer uses the local `mainGetPermanentPassword()` as a remote password.
+- `CloudSendStatusModel` stale detection keeps the last known status until the next real Android status packet instead of clearing screen-share / ignore / blank state during transient packet silence.
+
+### Android Runtime / PC Reconnect / ZEGO
+- `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)` now refreshes the existing foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive on screen/network/memory events without restarting `MainService`, changing `_isReady`, or touching `MediaProjection`.
+- Android 14+ screen sharing now follows one-shot `MediaProjection` semantics: `reuseVirtualDisplay` is disabled for Android 14+, stale saved projection intents are cleared on stop/loss/security failure, and each new share request uses a fresh capture intent.
+- Lock-screen/system `MediaProjection` stop is now treated as screen-share loss only. `handleProjectionStoppedKeepService(...)`, `stopCapture2()`, `killMediaProjection()`, and `stopCaptureKeepService()` keep `_isReady = true`, refresh foreground/CPU/Wi-Fi/floating-window keep-alive, and do not close the core relay session.
+- Non-explicit `MainService.onDestroy()` no longer clears Rust JNI context while the app process is alive; it requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. Explicit destroy still clears the context immediately.
+- Android `connectStatus` now follows the official RustDesk-style raw rendezvous state again: `mainGetConnectStatus()` `status_num` is assigned directly to `_connectStatus`, with no UI debounce and no fake readiness.
+- Android auto reconnect now forces relay, performs one guarded early retry shortly after the timer starts, and reuses the current PC session's cached remote password if a password prompt appears during the active reconnect timer, avoiding manual `123` entry when the session password is already known.
+- Android authorized remote connections now trigger a small normal-video refresh burst through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` when screen sharing is already active. This fixes reconnects that reached `Connected, waiting for image...` until the Android screen moved, without starting ignore/screenshot fallback or changing screen-share state.
+- `LoginConfigHandler.initialize(...)` now defaults CloudSend client sessions to strict relay-only mode. Force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and direct TCP/UDP/IPv6 candidate creation before `request_relay(...)`.
+- Android ZEGO state cleanup now clears voice-call flags on disconnected clients and ignores stale local `ZegoVoiceCallModel.active` when a new incoming invite is the only current signal, allowing PC2 to call Android after PC1 hangs up or disconnects.
+- No build, clean, or git commit was executed by Codex.
+
+## [v5.2.1-zego-background-incoming-call-20] Android ZEGO incoming-call foregrounding - 2026-06-09
+
+### ZEGO Voice Call
+- Android incoming ZEGO calls now bring the app UI foreground from `MainService`, post a high-priority call notification/full-screen intent, and replay pending state through `onResume` / `onNewIntent` plus Flutter `flush_pending_voice_call_event`, so the existing 3-second auto-accept dialog runs even when the app was backgrounded.
+- Android background incoming-call pending state is stored by `client id`, so clearing one cancelled/rejected invite cannot erase another pending invite from a different controlling PC.
+- `ServerModel` now owns a per-client 3-second auto-accept timer independent of dialog rendering. If Android cannot show the incoming-call dialog immediately, the pending call can still auto-accept once the Flutter model receives the incoming state.
+- Voice-call auto-accept timers are cleared on manual accept/reject, PC hangup/cancel, client removal, close-all, non-incoming state updates, and ZEGO failure cleanup, preventing stale timers from accepting a later invite.
+- PC ZEGO business prompts now use `custom-nook-nocancel-hasclose-*` dialog types, so token-service failures, duplicate-call prompts, non-Android-peer prompts, and process-owner-busy prompts do not close the remote-control session.
+- Active ZEGO calls now retain a call timestamp on both PC and Android; delayed close packets older than the current active call are ignored so rapid hangup/reinvite sequences cannot close a newer room.
+- Added `android.permission.USE_FULL_SCREEN_INTENT` for background incoming-call foregrounding compatibility.
+- No build, clean, or git commit was executed by Codex.
+
+## [v5.2.1-android-connection-stability-19] Android core service and PC reconnect hardening - 2026-06-09
+
+### Android Runtime / PC Reconnect
+- Android `MainService` is kept as a foreground `START_STICKY` core service with a 60-second internal keep-alive ticker for foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive only.
+- Network changes, screen on/off, low-memory callbacks, and screen-share state changes must not restart `MainService`, rewrite `_isReady`, or stop Android `MediaProjection`.
+- `src/ui_cm_interface.rs::remove_connection(...)` no longer sends `"stop_capture"` when the last PC connection is removed. PC disconnect, reconnect, and window close now only remove the connection record and do not stop Android screen sharing.
+- Android automatic reconnect on PC uses one 2.5-second timer and a 60-second silent grace window before showing `Connecting...`; retry ticks do not clear permissions or reset `CloudSendStatusModel`.
+- Android `cloudsend_status` push is throttled and guarded by a short JNI timeout / single-flight query so status sampling cannot block the connection loop.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-adb-hardening-docsync-18] ADB/LADB compatibility memory sync - 2026-06-04
 
 ### Android Local ADB
@@ -16,14 +60,14 @@
 - Android app 启动后默认拉起核心连接/id 服务，PC 可在无屏幕共享时连接 Android 并发起 ZEGO 语音通话。
 - `Start service` / `Stop service` 改为仅控制屏幕共享 `MediaProjection`，停止屏幕共享不再关闭核心服务或已建立连接。
 - Android 启动顺序调整为先同步 app config path，再启动核心服务；若 `MainService` 已运行，同步目录时会刷新 native config path。
-- PC 等待首帧时不再自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`，只保持等待状态与 Android 操作浮层。
+- PC 等待首帧时不再自动发送"开无视"或截屏 fallback；允许补发正常 `sessionRefreshVideo(...)` 唤醒已授权的正常屏幕共享首帧，只保持等待状态与 Android 操作浮层。
 - 侧按钮 `开共享` 恢复为一次性无视兜底：每次点击都会重新武装一次清理，屏幕共享真正恢复后只清一次无视状态，不影响后续手动 `开无视`。
 - 侧按钮 `关共享` 恢复为停止 `MediaProjection` 后自动进入无视保画面；锁屏导致 projection 丢失时，仅在无障碍已开启且之前有共享时自动切无视。
 - 锁屏保画面补强为延迟双检查：锁屏前已有共享且无障碍已开启时，即使 ROM 尚未立刻清空 `mediaProjection`，也会切入 ignore fallback 保持画面。
 - Android 小圆球悬浮窗默认透明但保留点击能力，菜单入口 `Show RustDesk` 改为 `进入软件`。
 - Android 共享页移除 ZEGO 通话卡片标题图标，并将权限卡片中的 `Transfer file` 调整到权限项末尾。
 - `startIgnoreFallback(...)` 增加无障碍硬守卫；无障碍未开启时，熄屏/黑屏/保活路径不会进入无视截屏流。
-- Android 掉线自动重连改为单个 5 秒定时器无限重试，避免重复错误事件造成请求风暴。
+- Android 掉线自动重连改为单个 2.5 秒定时器，避免重复错误事件造成请求风暴；当前显示策略已在 2026-06-09 调整为前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示。
 - No build, clean, or git commit was executed by Codex.
 
 ## [v5.2.1-adb-ui-control-16] ADB page start/stop and pairing dialog semantics - 2026-05-21
@@ -134,8 +178,8 @@
 ### Status Panel Correctness
 - Fixed first-connection status flicker: Android now pushes one `cloudsend_status` packet immediately after authorization, instead of waiting for the next 1s timer tick.
 - Changed `CloudSendStatusData` fields to nullable booleans so the monitor can render an explicit waiting state (`—`) instead of showing all-red false defaults before the first packet arrives.
-- Added a 5s stale-status watchdog in `CloudSendStatusModel`; if status packets stop arriving, the panel resets to waiting state instead of keeping misleading old values.
-- Reset the monitor on manual reconnect, Android auto-reconnect, and session close.
+- Added a 5s stale-status watchdog in `CloudSendStatusModel`; if status packets stop arriving, the panel keeps the last known state until the next real Android packet instead of clearing active screen-share / ignore / blank state during transient silence.
+- Reset the monitor on session close and non-Android manual reconnect; Android auto-reconnect keeps status intact.
 
 ### Android Status Semantics
 - Added `@Volatile` visibility protection for cross-thread Android status fields: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.

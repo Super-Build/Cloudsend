@@ -81,6 +81,7 @@ pub struct Remote<T: InvokeUiSession> {
     sender: mpsc::UnboundedSender<Data>,
     // Stop sending local audio to remote client.
     voice_call_request_timestamp: Option<NonZeroI64>,
+    active_zego_voice_call_timestamp: Option<NonZeroI64>,
     pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
     zego_voice_call_active: bool,
     zego_voice_call_owner: Option<String>,
@@ -142,6 +143,7 @@ impl<T: InvokeUiSession> Remote<T> {
             data_count: Arc::new(AtomicUsize::new(0)),
             video_format: CodecFormat::Unknown,
             voice_call_request_timestamp: None,
+            active_zego_voice_call_timestamp: None,
             pending_zego_voice_call: None,
             zego_voice_call_active: false,
             zego_voice_call_owner: None,
@@ -380,6 +382,7 @@ impl<T: InvokeUiSession> Remote<T> {
 
     fn reset_zego_voice_call_state(&mut self, notify_ui: bool) {
         self.voice_call_request_timestamp = None;
+        self.active_zego_voice_call_timestamp = None;
         self.pending_zego_voice_call = None;
         self.zego_voice_call_active = false;
         self.release_owned_zego_voice_call();
@@ -405,7 +408,19 @@ impl<T: InvokeUiSession> Remote<T> {
 
     fn handle_zego_voice_call_close_request(&mut self, req_timestamp: i64) {
         if self.zego_voice_call_active {
-            self.reset_zego_voice_call_state(true);
+            if let Some(ts) = self.active_zego_voice_call_timestamp {
+                if req_timestamp >= ts.get() {
+                    self.reset_zego_voice_call_state(true);
+                } else {
+                    log::debug!(
+                        "Ignoring stale active ZEGO voice-call close request: current={}, request={}",
+                        ts.get(),
+                        req_timestamp
+                    );
+                }
+            } else {
+                self.reset_zego_voice_call_state(true);
+            }
             return;
         }
         if let Some(ts) = self.voice_call_request_timestamp {
@@ -937,7 +952,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.peer_info.platform
                     );
                     self.handler.msgbox(
-                        "warning",
+                        "custom-nook-nocancel-hasclose-info",
                         "语音通话",
                         "语音通话仅支持连接 Android 后使用",
                         "",
@@ -950,8 +965,12 @@ impl<T: InvokeUiSession> Remote<T> {
                     || self.pending_zego_voice_call.is_some()
                 {
                     log::warn!("Ignoring duplicate ZEGO voice-call request while busy");
-                    self.handler
-                        .msgbox("warning", "语音通话", "已有语音通话正在等待或进行中", "");
+                    self.handler.msgbox(
+                        "custom-nook-nocancel-hasclose-info",
+                        "语音通话",
+                        "已有语音通话正在等待或进行中",
+                        "",
+                    );
                     return true;
                 }
                 let req_timestamp = get_time();
@@ -963,7 +982,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         "Ignoring ZEGO voice-call request because another call owns the process"
                     );
                     self.handler.msgbox(
-                        "warning",
+                        "custom-nook-nocancel-hasclose-info",
                         "语音通话",
                         "当前 PC 已存在其他语音通话 请先挂断后再发起新的通话",
                         "",
@@ -987,7 +1006,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         log::error!("Failed to create ZEGO voice call: {err}");
                         self.reset_zego_voice_call_state(true);
                         self.handler.msgbox(
-                            "error",
+                            "custom-nook-nocancel-hasclose-error",
                             "语音通话",
                             "创建通话失败 请检查 Token 服务和网络",
                             "",
@@ -998,7 +1017,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         log::error!("Failed to run ZEGO voice-call token task: {err}");
                         self.reset_zego_voice_call_state(true);
                         self.handler.msgbox(
-                            "error",
+                            "custom-nook-nocancel-hasclose-error",
                             "语音通话",
                             "创建通话失败 请检查 Token 服务和网络",
                             "",
@@ -1018,7 +1037,8 @@ impl<T: InvokeUiSession> Remote<T> {
             }
             Data::CloseVoiceCall => {
                 let close_timestamp = self
-                    .voice_call_request_timestamp
+                    .active_zego_voice_call_timestamp
+                    .or(self.voice_call_request_timestamp)
                     .map(|ts| ts.get())
                     .unwrap_or_else(get_time);
                 self.reset_zego_voice_call_state(true);
@@ -1999,12 +2019,15 @@ impl<T: InvokeUiSession> Remote<T> {
                                 response.req_timestamp
                             );
                         } else {
+                            let request_timestamp = ts;
                             self.voice_call_request_timestamp = None;
                             if response.accepted {
                                 // The peer accepted the voice call.
                                 self.handler.on_voice_call_started();
                                 if let Some(info) = self.pending_zego_voice_call.take() {
                                     self.zego_voice_call_active = true;
+                                    self.active_zego_voice_call_timestamp =
+                                        Some(request_timestamp);
                                     self.handler
                                         .on_zego_voice_call_ready(&info.caller_payload_json());
                                 } else {

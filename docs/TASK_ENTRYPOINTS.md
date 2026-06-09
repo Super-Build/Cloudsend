@@ -1,7 +1,7 @@
 # 任务入口点 / Task Entrypoints
 
-最后一次从全仓源码核验：2026-06-03
-最近一次文档入口整理：2026-06-03
+最后一次从全仓源码核验：2026-06-09
+最近一次文档入口整理：2026-06-09
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -106,6 +106,7 @@ Boundary:
 
 - ZEGO voice-call work must not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless the future task explicitly proves those systems are involved.
 - The original RustDesk voice-call media path must remain hidden from the CloudSend PC toolbar voice button.
+- ZEGO business failure prompts must not use plain Flutter `error` / `warning` dialog types; use `custom-nook-nocancel-hasclose-*` so token failures or duplicate-call prompts do not close the remote-control session.
 
 Android visible app name tasks must start from:
 
@@ -428,6 +429,7 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - `startIgnoreFallback()`
 - `stopScreenShareAndStartIgnore()`
 - `stopScreenShareOnly()`
+- `src/ui_cm_interface.rs::remove_connection(...)`
 - `screenOffActive`
 - `ensure_core_service`
 - `start_screen_share`
@@ -465,8 +467,17 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 不要遗漏：
 
 - waiting dialog 与 Android overlay 的层级关系
-- waiting timer 不得自动发送 fallback request / `sessionRefreshVideo(...)`
-- Android auto reconnect 必须是 5s 单 timer、无限重试、不可堆叠
+- waiting timer 不得自动发送 ignore/screenshot fallback；允许补发正常 `sessionRefreshVideo(...)` 来唤醒已授权的正常屏幕共享首帧，不能自动切无视或截屏。
+- Android auto reconnect 必须尊重 Rust `hasRetry`，使用 2.5s 单 timer，启动后允许一次带存活判断的短延迟首试，不能堆叠，不能在 retry tick 中反复清权限或 `CloudSendStatusModel`；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示 `Connecting...`
+- Android auto reconnect must force relay through `sessionReconnect(..., forceRelay: true)`. During the active auto-reconnect timer, `input-password` may only reuse the remote password already entered/passed in the current PC session; it must not use the local `mainGetPermanentPassword()` as the remote password.
+- CloudSend client sessions are strict relay-only in `src/client.rs`: `LoginConfigHandler.initialize(...)` forces relay; `Client::_start(...)` skips UDP/IPv6 punch setup and rejects explicit direct addresses; `Client::connect(...)` calls `request_relay(...)` without creating direct candidates. Initial connect and reconnect must not depend on direct/NAT punch behavior.
+- Android visible `connectStatus` is raw rendezvous registration state. Check `flutter/lib/models/server_model.dart` `timerCallback()` before treating `Ready` / `not_ready_status` changes as service death: `status_num` is assigned directly to `_connectStatus`, with no debounce and no fake readiness.
+- Android 14+ screen-share permission/session cannot be reused after projection stop/loss. Check `XerQvgpGBzr8FDFr` fresh capture intent, `DFm8Y8iMScvB2YDw.reuseVirtualDisplay`, and `handleProjectionStoppedKeepService(...)` before changing screen-share recovery.
+- Lock-screen projection loss must not stop the core service or relay connection. `handleProjectionStoppedKeepService(...)` keeps `_isReady = true` and refreshes core keep-alive; only explicit app/service destroy may clear Rust JNI context.
+- Reconnect first-frame stalls should be fixed by authorized `"add_connection"` -> `forceVideoFrameRefresh(...)` while normal screen sharing is active, with PC-side normal `sessionRefreshVideo(...)` as an additional nudge after reconnect / waiting / peer-info refresh. Do not solve this by automatic ignore/screenshot fallback.
+- Android authorization must immediately push one real JNI status packet to PC, then continue on the normal periodic status cadence. Do not fake readiness/share/ignore/blank state.
+- `remove_connection(...)` 不得因为最后一个 PC 连接被移除就向 Android 发送 `"stop_capture"`；屏幕共享只能由 Android UI 或远端侧按钮显式停止
+- ZEGO Android busy-state checks must clear disconnected-client residue and stale local `ZegoVoiceCallModel.active` before rejecting a new incoming call.
 - “任何真实首帧都能清理 waiting”的不变量
 
 ---

@@ -205,21 +205,9 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             crate::clipboard::try_empty_clipboard_files(ClipboardSide::Host, id);
         }
 
-        #[cfg(any(target_os = "android"))]
-        if CLIENTS
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|(_k, v)| !v.is_file_transfer && !v.is_terminal)
-            .next()
-            .is_none()
-        {
-            if let Err(e) =
-                scrap::android::call_main_service_set_by_name("stop_capture", None, None)
-            {
-                // log::debug!("stop_capture err:{}", e);
-            }
-        }
+        // Android screen sharing is controlled only by explicit Android UI actions
+        // or remote side-button commands. A PC disconnect/reconnect must not stop
+        // MediaProjection, otherwise short network drops clear the sharing state.
 
         self.ui_handler.remove_connection(id, close);
     }

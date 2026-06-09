@@ -52,6 +52,8 @@ use serde_derive::Serialize;
 use serde_json::{json, value::Value};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::sync::atomic::Ordering;
+#[cfg(target_os = "android")]
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::{
     num::NonZeroI64,
     path::PathBuf,
@@ -81,7 +83,7 @@ lazy_static::lazy_static! {
 /// Return None when MainService/JNI is not ready or the payload is invalid.
 /// Callers must skip pushing in that case so the PC monitor keeps the
 /// "waiting" state instead of showing fake red values.
-fn cloudsend_status_json_or_none() -> Option<String> {
+fn cloudsend_status_json_or_none_sync() -> Option<String> {
     match call_main_service_get_by_name("cloudsend_status") {
         Ok(json) => {
             let trimmed = json.trim();
@@ -122,8 +124,37 @@ fn cloudsend_status_json_or_none() -> Option<String> {
 }
 
 #[cfg(target_os = "android")]
-fn cloudsend_status_message() -> Option<Message> {
-    let json = cloudsend_status_json_or_none()?;
+async fn cloudsend_status_json_or_none() -> Option<String> {
+    if CLOUDSEND_STATUS_QUERY_IN_FLIGHT.swap(true, AtomicOrdering::AcqRel) {
+        log::debug!("cloudsend_status: previous JNI query still running, skip push");
+        return None;
+    }
+    match timeout(
+        200,
+        hbb_common::tokio::task::spawn_blocking(|| {
+            let json = cloudsend_status_json_or_none_sync();
+            CLOUDSEND_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
+            json
+        }),
+    )
+    .await
+    {
+        Ok(Ok(json)) => json,
+        Ok(Err(err)) => {
+            CLOUDSEND_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
+            log::debug!("cloudsend_status: background JNI worker failed: {}", err);
+            None
+        }
+        Err(_) => {
+            log::debug!("cloudsend_status: JNI query timed out, skip push");
+            None
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+async fn cloudsend_status_message() -> Option<Message> {
+    let json = cloudsend_status_json_or_none().await?;
     let mut misc = Misc::new();
     misc.set_cloudsend_status(json);
     let mut msg_out = Message::new();
@@ -138,6 +169,8 @@ lazy_static::lazy_static! {
 pub static CLICK_TIME: AtomicI64 = AtomicI64::new(0);
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub static MOUSE_MOVE_TIME: AtomicI64 = AtomicI64::new(0);
+#[cfg(target_os = "android")]
+static CLOUDSEND_STATUS_QUERY_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -288,6 +321,7 @@ pub struct Connection {
     voice_call_request_timestamp: Option<NonZeroI64>,
     voice_calling: bool,
     pending_zego_voice_call: Option<ZegoVoiceCallInfo>,
+    active_zego_voice_call_timestamp: Option<NonZeroI64>,
     zego_voice_call_active: bool,
     options_in_login: Option<OptionMessage>,
     #[cfg(not(any(target_os = "ios")))]
@@ -454,6 +488,7 @@ impl Connection {
             voice_call_request_timestamp: None,
             voice_calling: false,
             pending_zego_voice_call: None,
+            active_zego_voice_call_timestamp: None,
             zego_voice_call_active: false,
             options_in_login: None,
             #[cfg(not(any(target_os = "ios")))]
@@ -532,6 +567,8 @@ impl Connection {
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         std::thread::spawn(move || Self::handle_input(_rx_input, tx_cloned));
         let mut second_timer = crate::rustdesk_interval(time::interval(Duration::from_secs(1)));
+        #[cfg(target_os = "android")]
+        let mut cloudsend_status_tick = 0u8;
 
         #[cfg(feature = "unix-file-copy-paste")]
         let rx_clip_holder;
@@ -564,6 +601,15 @@ impl Connection {
                         ipc::Data::Authorize => {
                             conn.require_2fa.take();
                             conn.send_logon_response().await;
+                            conn.try_start_cm(
+                                conn.lr.my_id.clone(),
+                                conn.lr.my_name.clone(),
+                                conn.authorized,
+                            );
+                            #[cfg(target_os = "android")]
+                            if let Some(msg) = cloudsend_status_message().await {
+                                conn.send(msg).await;
+                            }
                             if conn.port_forward_socket.is_some() {
                                 break;
                             }
@@ -872,11 +918,17 @@ impl Connection {
                     conn.file_remove_log_control.on_timer().drain(..).map(|x| conn.send_to_cm(x)).count();
                     #[cfg(feature = "hwcodec")]
                     conn.update_supported_encoding();
-                    // CloudSend: push Android controlled-end feature status to PC once per second.
+                    // CloudSend: keep Android status off the hot path; JNI failures must not disturb the session.
                     #[cfg(target_os = "android")]
                     if conn.authorized {
-                        if let Some(msg) = cloudsend_status_message() {
-                            conn.send(msg).await;
+                        cloudsend_status_tick = cloudsend_status_tick.wrapping_add(1);
+                        if cloudsend_status_tick >= 5 {
+                            cloudsend_status_tick = 0;
+                        }
+                        if cloudsend_status_tick == 0 {
+                            if let Some(msg) = cloudsend_status_message().await {
+                                conn.send(msg).await;
+                            }
                         }
                     }
                 }
@@ -1602,7 +1654,7 @@ impl Connection {
         // If MainService/JNI is not ready yet, skip and let the timer retry.
         #[cfg(target_os = "android")]
         if self.authorized {
-            if let Some(msg) = cloudsend_status_message() {
+            if let Some(msg) = cloudsend_status_message().await {
                 self.send(msg).await;
             }
         }
@@ -3326,16 +3378,19 @@ impl Connection {
                 if let Some(info) = self.pending_zego_voice_call.take() {
                     self.send_to_cm(Data::StartVoiceCall);
                     self.zego_voice_call_active = true;
+                    self.active_zego_voice_call_timestamp = Some(ts);
                     self.send_to_cm(Data::ZegoVoiceCallReady(info.callee_payload_json()));
                     self.send(new_voice_call_response(ts.get(), true)).await;
                 } else {
                     log::warn!("Accepted ZEGO voice call without pending payload");
+                    self.active_zego_voice_call_timestamp = None;
                     self.zego_voice_call_active = false;
                     self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
                     self.send(new_voice_call_response(ts.get(), false)).await;
                 }
             } else {
                 self.pending_zego_voice_call = None;
+                self.active_zego_voice_call_timestamp = None;
                 self.zego_voice_call_active = false;
                 self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
                 self.send(new_voice_call_response(ts.get(), false)).await;
@@ -3350,11 +3405,15 @@ impl Connection {
     }
 
     pub async fn close_voice_call(&mut self) -> Option<i64> {
-        let close_timestamp = self.voice_call_request_timestamp.map(|ts| ts.get());
+        let close_timestamp = self
+            .active_zego_voice_call_timestamp
+            .or(self.voice_call_request_timestamp)
+            .map(|ts| ts.get());
         // Notify the connection manager that the voice call has been closed.
         self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
         self.voice_calling = false;
         self.zego_voice_call_active = false;
+        self.active_zego_voice_call_timestamp = None;
         self.voice_call_request_timestamp = None;
         self.pending_zego_voice_call = None;
         close_timestamp
@@ -3369,6 +3428,7 @@ impl Connection {
                 log::warn!("Clearing stale controlled-side ZEGO voice-call pending request");
                 self.voice_call_request_timestamp = None;
                 self.pending_zego_voice_call = None;
+                self.active_zego_voice_call_timestamp = None;
                 self.zego_voice_call_active = false;
                 self.voice_calling = false;
                 self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
@@ -3379,7 +3439,19 @@ impl Connection {
 
     async fn handle_zego_voice_call_close_request(&mut self, req_timestamp: i64) {
         if self.zego_voice_call_active {
-            self.close_voice_call().await;
+            if let Some(ts) = self.active_zego_voice_call_timestamp {
+                if req_timestamp >= ts.get() {
+                    self.close_voice_call().await;
+                } else {
+                    log::debug!(
+                        "Ignoring stale active controlled-side ZEGO voice-call close request: current={}, request={}",
+                        ts.get(),
+                        req_timestamp
+                    );
+                }
+            } else {
+                self.close_voice_call().await;
+            }
             return;
         }
         if let Some(ts) = self.voice_call_request_timestamp {

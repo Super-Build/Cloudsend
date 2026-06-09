@@ -31,7 +31,7 @@ sequenceDiagram
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
     AndroidRust->>AndroidUI: VoiceCallIncoming
-    AndroidUI-->>AndroidRust: user taps Accept or 10s countdown auto-accepts after RECORD_AUDIO permission
+    AndroidUI-->>AndroidRust: user taps Accept or 3s countdown auto-accepts after RECORD_AUDIO permission
     AndroidRust-->>Conn: VoiceCallResponse(accepted=true)
     AndroidRust->>AndroidUI: ZegoVoiceCallReady(callee payload)
     Conn-->>PC: VoiceCallResponse(accepted=true)
@@ -125,7 +125,7 @@ Runtime isolation:
 - `src/client/io_loop.rs` rejects non-Android peers.
 - `src/client/io_loop.rs` rejects another PC-side ZEGO call while one call owns the current PC process. This avoids Flutter ZEGO singleton callback mixing.
 - `src/server/connection.rs` rejects duplicate incoming ZEGO invites on the same controlled Android connection.
-- `flutter/lib/models/server_model.dart` rejects a second incoming call while the same Android process already has pending or active ZEGO state.
+- `flutter/lib/models/server_model.dart` rejects a second incoming call while another client already has pending/active ZEGO state or the same client is already in an active ZEGO call, but clears stale local ZEGO state when a new incoming invite is the only current signal.
 
 ## 5. Source Anchors
 

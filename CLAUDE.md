@@ -1,7 +1,7 @@
 # CLAUDE.md — CloudSend / 云计划 v5.2.1
 
-最后一次与全仓源码对齐：2026-06-03
-最近一次文档分层整理：2026-06-03
+最后一次与全仓源码对齐：2026-06-09
+最近一次文档分层整理：2026-06-09
 
 > 本文件是 **Claude Code** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
@@ -120,9 +120,18 @@ PC 侧关键状态在：
 
 - 服务活着 != 已经有首帧
 - Android core connection/id service != Android screen sharing；`Start service` / `Stop service` 只控制 `MediaProjection` 屏幕共享。
-- PC waiting-for-image 不得自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；只能等待真实帧或用户手动点击"开无视"。
+- Android 14+ `MediaProjection` token / `createVirtualDisplay()` is one-shot. Android 15 QPR1+ may stop projection on lock screen. Treat projection stop as screen-share loss only: release projection resources, clear stale saved intent on Android 14+, keep `MainService` / Rust JNI context / relay connection alive.
+- `MainService.onDestroy()` clears Rust JNI context only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart; network, lock-screen, memory, status, and screen-share changes must not trigger core-service restart.
+- PC waiting-for-image 不得自动发送"开无视"或截屏 fallback；允许补发正常 `sessionRefreshVideo(...)` 请求来唤醒已授权的正常屏幕共享首帧，不能自动切无视/截屏。
 - 侧按钮 `开共享`/`关共享` 是 Android runtime 的主动操作：`开共享` 可临时无视兜底并在共享恢复后一次性清无视，`关共享` 可在无障碍存在时自动切无视保画面。
-- Android 掉线自动重连是 5s 单 timer、无限重试、不可堆叠。
+- Android 掉线自动重连是 2.5s 单 timer、不可堆叠；启动后允许一次带存活判断的短延迟首试；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示连接提示。
+- Android 授权 `add_connection` 且正常屏幕共享已开启时，会通过 `forceVideoFrameRefresh(...)` 补正常视频首帧，解决重连后静态屏幕卡在 waiting-for-image；不得用 PC 自动切无视/截屏 fallback 解决该问题。
+- Android 授权成功后必须立即向 PC 推送一次真实 JNI 状态包，之后再回到周期状态推送；不得伪造就绪、共享、无视或黑屏状态。
+- 连接必须是 strict relay-only：PC 侧 `sessionReconnect(..., forceRelay: true)`，Rust `LoginConfigHandler.initialize(...)` 默认 `force_relay = true`；force relay 下不得启动 UDP/IPv6/direct 连接候选，显式 IP/domain:port 直连入口也必须拒绝。
+- Android 自动重连期间如果底层出现 `input-password`，只能复用本次 PC 会话已经输入/传入过的远端密码；不能用本机 `mainGetPermanentPassword()` 冒充远端密码。无会话密码缓存时仍应回到密码输入流程。
+- `src/ui_cm_interface.rs::remove_connection(...)` 不能因为最后一个 PC 连接移除就向 Android 发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
+- Android `connectStatus` 必须保持官方 RustDesk 风格的真实 rendezvous 注册状态：`mainGetConnectStatus()` 的 `status_num` 直接写入 `_connectStatus`，不得做 UI 防抖或假就绪；它也不是核心服务存活证明。
+- Android ZEGO 忙状态只以仍被客户端跟踪的 `inVoiceCall` / `incomingVoiceCall` 为准；断开的旧客户端或陈旧 `ZegoVoiceCallModel.active` 不能阻止下一台 PC 发起通话。
 - 任何真实 RGBA 帧到达 UI 时都应清理 waiting
 
 ### 4.4 登录逻辑要分两层看

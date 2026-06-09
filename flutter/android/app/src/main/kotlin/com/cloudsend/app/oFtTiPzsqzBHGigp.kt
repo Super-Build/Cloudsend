@@ -67,6 +67,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        DFm8Y8iMScvB2YDw.ctx?.flushPendingVoiceCallEvent()
         val inputPer = nZW99cdXQ0COhB2o.isOpen
         activity.runOnUiThread {
             flutterMethodChannel?.invokeMethod(
@@ -74,6 +75,12 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 mapOf(p50.a(byteArrayOf(-84, -103, 52, 68), byteArrayOf(-62, -8, 89, 33, 6, -21, -28, 34)) to p50.a(byteArrayOf(-20, -6, 118, -3, 9), byteArrayOf(-123, -108, 6, -120, 125, 29, -84)), p50.a(byteArrayOf(60, 80, -114, 53, -62), byteArrayOf(74, 49, -30, 64, -89, 10)) to inputPer.toString())
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        DFm8Y8iMScvB2YDw.ctx?.flushPendingVoiceCallEvent()
     }
 
     private fun requestMediaProjection() {
@@ -139,7 +146,9 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
     }
 
     private fun ensureMainServiceStarted() {
-        val intent = Intent(activity, DFm8Y8iMScvB2YDw::class.java)
+        val intent = Intent(activity, DFm8Y8iMScvB2YDw::class.java).apply {
+            action = DFm8Y8iMScvB2YDw.ACT_ENSURE_CORE_SERVICE
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent)
@@ -191,6 +200,10 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 }
                 "stop_screen_share", "stop_service" -> {
                     activeMainService()?.stopScreenShareOnly("flutter-command")
+                    result.success(true)
+                }
+                "flush_pending_voice_call_event" -> {
+                    activeMainService()?.flushPendingVoiceCallEvent()
                     result.success(true)
                 }
                 "cloudsend_adb_init" -> {

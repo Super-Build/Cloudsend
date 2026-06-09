@@ -1,7 +1,7 @@
 # 文档真实性审计 / Document Audit
 
-最后一次从关键源码锚点与文档一致性核验：2026-06-07
-最近一次文档分层与可读性整理：2026-06-07
+最后一次从关键源码锚点与文档一致性核验：2026-06-09
+最近一次文档分层与可读性整理：2026-06-09
 
 > 本文件用于回答两个问题：
 >
@@ -13,6 +13,26 @@
 - **A = 高可信**：大部分结论与当前源码一致
 - **B = 部分可信**：方向对，但有局部漂移
 - **C = 历史参考**：只能当背景，不能直接驱动改代码
+
+---
+
+## 0.0 2026-06-09 Android connection stability audit
+
+本次复核同步了 Android 核心服务、屏幕共享、PC 自动重连与状态推送的当前源码事实：
+
+- `MainService` 是前台 `START_STICKY` 核心服务，60 秒内部 keep-alive ticker 只刷新通知、CPU wake lock、Wi-Fi lock 和悬浮窗，不触碰 `MediaProjection`、权限或 PC session。
+- 网络变化、锁屏/亮屏、低内存回调可以通过 `refreshCoreKeepAlive(...)` 刷新已有保活资源，但不得重启 `MainService`、不得重写 `_isReady`、不得停止屏幕共享。
+- Android 14+ `MediaProjection` token / `createVirtualDisplay()` 只能使用一次；Android 15 QPR1+ 锁屏可能停止投屏。当前源码把 projection stop 当成屏幕共享丢失处理：释放投屏资源、清 Android 14+ 旧授权缓存、保持 `_isReady = true`、刷新核心保活，不清 Rust JNI context、不关闭中继 session。
+- `MainService.onDestroy()` 只在显式销毁时清 Rust JNI context；非显式 service 销毁会保留 JNI context 并请求带冷却的 `ACT_ENSURE_CORE_SERVICE` 恢复，网络/锁屏/状态/屏幕共享变化本身不得触发核心服务重启。
+- `src/ui_cm_interface.rs::remove_connection(...)` 不得因最后一个 PC 连接移除而发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
+- PC Android 自动重连是 2.5 秒单 timer，并在 timer 启动后有一次带存活判断的短延迟首试；前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示；自动重连 retry 不清权限、不 reset `CloudSendStatusModel`。
+- Android 授权 `"add_connection"` 在正常屏幕共享已开启时会触发 `forceVideoFrameRefresh(...)` 小刷新，用于重连成功后的静态画面首帧同步；这不是自动切无视/截屏 fallback，也不改变屏幕共享状态。
+- PC/Android 连接为 strict relay-only：初连、手动重连和自动重连都强制中继；force relay 下不启动 UDP/IPv6/direct 候选，显式 IP/domain:port 直连入口也会拒绝。自动重连 timer 存活时只复用本次 PC 会话已经输入/传入过的远端密码处理 `input-password`，不能用本机 `mainGetPermanentPassword()`。
+- Android `connectStatus` 已恢复为官方 RustDesk 风格的真实 rendezvous 注册状态：`mainGetConnectStatus()` 的 `status_num` 直接写入 `_connectStatus`，不做短抖防抖，也不伪造就绪；它不是核心服务是否存活的唯一证明。
+- ZEGO Android 忙状态清理覆盖断开客户端和陈旧 `ZegoVoiceCallModel.active`，避免 PC1 通话结束残留阻塞 PC2 发起新通话。
+- `cloudsend_status` 是诊断状态推送，已节流并加 JNI 短超时/单飞保护，不能阻塞连接主循环。
+
+已同步文档：`AGENTS.md`、`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`CHANGELOG.md`。
 
 ---
 
@@ -49,7 +69,7 @@ Current trusted docs have been synchronized with the Part 8 final source truth:
 - `cloudsend_status_message()` returns `Option<Message>`.
 - `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` returns an empty string on exception.
 - `CloudSendStatusModel.updateFromEvent()` preserves current/null values for missing keys.
-- `MainService.onDestroy()` clears Rust `MAIN_SERVICE_CTX` through `ClsFx9V0S.VHsFQTvK()`.
+- `MainService.onDestroy()` clears Rust `MAIN_SERVICE_CTX` only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 
 Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_ANDROID_RUNTIME.md`, and `TASK_ENTRYPOINTS.md`.
 
@@ -87,7 +107,9 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - `docs/REPO_TRUE_STRUCTURE_MAP.md` 正文刷新到 2026-06-03，并补齐 ZEGO、ADB/LADB、开发者免登录、构建产物跨层链。
 - `docs/TASK_ENTRYPOINTS.md` 增加 Android local ADB/LADB 入口和 Project Handoff 入口。
 - `docs/ENGINEERING_BASELINE.md` 增加 documentation handoff baseline 和 Android local ADB/LADB subsystem。
-- `docs/ENGINEERING_ANDROID_RUNTIME.md` 修正 ZEGO 来电弹窗事实：当前是 `showAutoAcceptVoiceCallDialog`，只有 `接受` 按钮，10 秒倒计时自动接听。
+- `docs/ENGINEERING_ANDROID_RUNTIME.md` 修正 ZEGO 来电弹窗事实：当前是 `showAutoAcceptVoiceCallDialog`，只有 `接受` 按钮，3 秒倒计时自动接听。
+- 2026-06-09 复核：ZEGO 来电 3 秒自动接听由 `flutter/lib/models/server_model.dart::ServerModel._startVoiceCallAutoAcceptTimer(...)` 持有，弹窗倒计时只是可见 UI，不再是唯一自动接听机制。
+- 2026-06-09 复核：ZEGO PC 业务提示必须使用 `custom-nook-nocancel-hasclose-*`，不能使用会触发 `closeConnection()` 的普通 `error` / `warning` 弹窗类型。
 - `docs/ADB_LADB_INTEGRATION_MEMORY.md` 修正无线调试自动化事实：当前已有 best-effort AccessibilityService 自动化链路，不再是纯 placeholder。
 - `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 必须保持可落地模板，但不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
 

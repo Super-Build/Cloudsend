@@ -1,6 +1,6 @@
 # Android 运行时工程文档 / Android Runtime Engineering Notes
 
-最后一次从全仓源码核验：2026-06-03
+最后一次从全仓源码核验：2026-06-09
 
 > 本文件记录的是**当前代码真正体现出来的 Android 运行时模型**。
 > 中文用于解释状态和风险；English symbol / path 用于把结论牢牢钉回源码。
@@ -51,8 +51,10 @@ Current Android-side source truth:
   - `Data::CloseVoiceCall`
 - When the user accepts, `src/server/connection.rs::handle_voice_call` emits `Data::ZegoVoiceCallReady` with the callee payload.
 - Android Flutter shows incoming ZEGO calls through `flutter/lib/models/server_model.dart::showAutoAcceptVoiceCallDialog`.
+- `flutter/lib/models/server_model.dart::ServerModel._startVoiceCallAutoAcceptTimer(...)` owns the actual per-client 3-second auto-accept timer. The visible dialog countdown is only UI feedback and must not be the only auto-accept mechanism.
 - The incoming ZEGO dialog has only an `接受` button, no reject button and no close (`X`). Cancel/back actions submit the accept flow instead of rejecting.
-- If the user does not tap `接受`, the dialog auto-accepts after a 10-second countdown.
+- If the user does not tap `接受`, the dialog auto-accepts after a 3-second countdown.
+- When Android receives `update_voice_call_state` with `incoming_voice_call = true`, `DFm8Y8iMScvB2YDw` stores pending voice-call state by `client id`, brings `oFtTiPzsqzBHGigp` to the foreground, and posts a high-priority voice-call notification/full-screen intent. `oFtTiPzsqzBHGigp.onResume()` / `onNewIntent()` and Flutter `androidChannelInit()` -> `"flush_pending_voice_call_event"` flush pending events so `ServerModel` starts the 3-second auto-accept timer even if the app was in the background. Pending state must be removed only for the matching `client id`.
 - Android Flutter checks/requests `android.permission.RECORD_AUDIO` only after the accept flow starts, either by tapping `接受` or by the countdown. If microphone permission is denied, it rejects the call because ZEGO cannot publish local audio.
 - `flutter/lib/models/server_model.dart::updateVoiceCallState` must preserve incoming voice-call events even if the local `_clients` list has not yet received the matching connection add event.
 - `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` must reject a second simultaneous incoming call only on the same Android endpoint while that Android already has a pending or active ZEGO call.
@@ -62,7 +64,7 @@ Current Android-side source truth:
 - Pending close requests carry the original invite timestamp through `src/client/helper.rs::new_voice_call_close_request(...)`; stale close packets must not clear newer pending invites.
 - `src/server/connection.rs::handle_voice_call` moves pending ZEGO payload into active state with `take()` on accept. After accept, pending state must be empty and `zego_voice_call_active` represents the active call.
 - `flutter/lib/models/server_model.dart::onClientRemove` must leave `ZegoVoiceCallModel` when the removed client was in or receiving a ZEGO call, preventing stale busy state after abnormal disconnect.
-- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, and `BLUETOOTH_CONNECT`; release minification keeps ZEGO classes through `flutter/android/app/proguard-rules`.
+- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `BLUETOOTH_CONNECT`, and `USE_FULL_SCREEN_INTENT`; release minification keeps ZEGO classes through `flutter/android/app/proguard-rules`.
 - `flutter/lib/models/zego_voice_call_model.dart` must keep ZEGO join/play/audio-frame failures visible in the Android status card through Chinese error diagnostics; do not silently hide failed joins or show fake connected state.
 - Android Flutter enables speaker routing through `ZegoExpressEngine.instance.setAudioRouteToSpeaker(true)`.
 - Android Flutter explicitly keeps ZEGO capture/playback audio unmuted through `enableAudioCaptureDevice(true)`, `mutePublishStreamAudio(false)`, `muteAllPlayStreamAudio(false)`, and `mutePlayStreamAudio(streamId, false)`.
@@ -95,18 +97,34 @@ Current source truth:
 - `runMobileApp` must sync `platformFFI.syncAndroidServiceAppDirConfigPath()` before `ensureCoreService()` so `MainService.onCreate()` reads the same app config path as Flutter/Rust.
 - The Android `SYNC_APP_DIR_CONFIG_PATH` channel handler must also call `ClsFx9V0S.xt4P9mWE(appDir, "")` when `MainService` is already running, covering service-before-UI and sticky-restart cases.
 - The core connection/id service is expected to stay online while the app process is alive; users do not manually stop this core service from the UI.
+- `DFm8Y8iMScvB2YDw.onStartCommand(...)` returns `START_STICKY` as a foreground core service keep-alive, but network / screen / memory / screen-share state changes must not call `startService(...)` to restart `MainService`.
+- Android 14+ `MediaProjection` authorization and `createVirtualDisplay()` are one-shot. `XerQvgpGBzr8FDFr` must create a fresh capture intent for every screen-share request, and `DFm8Y8iMScvB2YDw` must not reuse virtual-display/session state on Android 14+.
+- Android 15 QPR1+ may stop `MediaProjection` when the screen locks. `MediaProjection.Callback.onStop()` / `SecurityException` handling must release projection resources, clear stale saved projection intent on Android 14+, keep `_isReady = true`, refresh core keep-alive, and never clear Rust JNI context or close the relay session.
+- `DFm8Y8iMScvB2YDw.onDestroy()` clears Rust JNI context only for explicit app/service destroy. Non-explicit service destruction keeps the JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. This restart path is only for actual service destruction; network / lock-screen / memory / status / screen-share changes must not restart `MainService`.
+- `MainService` owns a 60s internal keep-alive ticker. The ticker may refresh the foreground notification, CPU wake lock, Wi-Fi lock, and floating window only; it must not touch `MediaProjection`, frame source state, permissions, or PC session state.
+- Android network / screen on-off / low-memory callbacks may refresh the existing core keep-alive through `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)`: foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive only. They must not upgrade state changes into `startService(...)` restarts, `_isReady` rewrites, `MediaProjection` changes, permission clears, or PC session changes.
+- Android `main_stop_service()` is a safety no-op. The core connection/id service is not a screen-share switch and must not be stopped through `stop-service=Y`.
 - `ensure_core_service` / `init_service` only start and bind `DFm8Y8iMScvB2YDw`; they must not request `MediaProjection`.
-- `start_screen_share` / `start_capture` are the only Flutter-to-Android entrypoints that request or reuse `MediaProjection` for screen sharing.
+- `start_screen_share` / `start_capture` are the only Flutter-to-Android entrypoints that request `MediaProjection` for screen sharing. Android 14+ cannot reuse old projection tokens after stop/loss.
 - `stop_screen_share` / Flutter `stop_service` stop only screen sharing through `stopScreenShareOnly(...)`; they do not call `bind.mainStopService()` on Android and do not close active PC connections.
+- `src/ui_cm_interface.rs::remove_connection(...)` must not call `"stop_capture"` when the last PC connection is removed. PC disconnects, PC reconnects, and PC window close must not stop Android `MediaProjection`.
 - Accepting a PC connection must not automatically call `start_capture`; PC can stay connected and use ZEGO voice while Android has not granted screen sharing.
 - `checkMediaPermission()` reports the Android permission-card `media` state from `isStart`, meaning active screen sharing, not core service readiness.
-- PC waiting-for-first-frame must not automatically send `"开无视"`, screenshot fallback, or `sessionRefreshVideo(...)`. It only keeps the waiting dialog and Android operation overlay visible.
+- Android `PermissionChecker` no longer renders duplicate `Screen Capture` or `Transfer file` rows in the permission card; `Start service` / `Stop service` remains the only visible screen-sharing switch.
+- Authorized Android `"add_connection"` events schedule a short `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` burst when normal screen sharing is already active. This is the allowed first-frame nudge after reconnect; it must not start `MediaProjection`, ignore fallback, screenshot fallback, or alter permission/session state.
+- Android authorization immediately pushes one real controlled-end status packet from JNI before the normal 5-second status cadence continues. This keeps PC state timely after reconnect without fabricating readiness/share/ignore/blank values.
+- PC waiting-for-first-frame must not automatically send `"开无视"` or screenshot fallback. It may send normal `sessionRefreshVideo(...)` requests to wake an already-authorized normal screen-share first frame; it must not switch to ignore/screenshot mode automatically.
 - Side-button `开共享` is the intentional exception to PC waiting behavior: it arms `clearIgnoreOnceAfterShareStart`, may temporarily start ignore fallback while `MediaProjection` is being requested/reused, and clears ignore exactly once when screen sharing becomes active.
 - Side-button `关共享` stops only `MediaProjection` and then calls `startIgnoreFallback(...)` when AccessibilityService is available, preserving picture through the ignore stream.
 - Native `startIgnoreFallback(...)` must require `nZW99cdXQ0COhB2o.isOpen`; without AccessibilityService, screen-off/black-screen paths must not enter ignore/screenshot mode.
 - Screen-off/projection-loss fallback may start ignore only when AccessibilityService is open and a screen share was active/lost; it is not a general screen-off command.
 - Screen-off fallback uses delayed checks after `ACTION_SCREEN_OFF`; some ROMs stop delivering frames before `mediaProjection` is nulled, so the guard is previous screen-share activity plus AccessibilityService, not only `mediaProjection == null`.
-- Recoverable Android reconnect uses one 5s periodic timer with no retry limit; repeated connection errors must not create stacked timers or rapid reconnect loops.
+- Recoverable Android reconnect uses one 2.5s periodic timer only when the Rust-side message box is retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts; repeated connection errors must not create stacked timers or rapid reconnect loops, and retry ticks must not repeatedly clear permissions or `CloudSendStatusModel`.
+- Recoverable Android reconnect has a 60s silent grace window. During that window the PC keeps the last frame frozen and retries in the background; it shows the user-visible `Connecting...` prompt only if recovery still has not happened after 60 seconds.
+- Android `ConnectivityManager.NetworkCallback.onAvailable(...)` requests one throttled rendezvous/register refresh through `ClsFx9V0S.G4yQ9OYY()` without restarting `MainService`, stopping `MediaProjection`, or changing ignore/blank state. This shortens recovery after brief network loss while keeping core service lifecycle separate.
+- Recoverable Android reconnect must force relay through `sessionReconnect(..., forceRelay: true)`. The Rust client is strict relay-only: force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and TCP/UDP/IPv6 direct candidates before `request_relay(...)`. If `input-password` appears while the Android auto-reconnect timer is active, Flutter may only reuse the remote password already entered/passed in the current PC session; it must not use the local `mainGetPermanentPassword()` as the remote password.
+- Android visible `connectStatus` is the raw rendezvous registration state, not proof that `MainService` died. `flutter/lib/models/server_model.dart` must follow the official RustDesk-style path: read `mainGetConnectStatus()`, assign `status_num` directly to `_connectStatus`, and never debounce or fake readiness. Registration-state changes must not stop, restart, or clear the Android core service.
+- ZEGO local busy state on Android is valid for other-client voice state or current-client `inVoiceCall`; the new incoming invite itself must not be counted as the stale busy reason. Client removal and stale local `ZegoVoiceCallModel.active` must be cleared so a later controller can invite the same Android after the previous call was hung up.
 
 ## 0. 最近运行时修复（Recent Runtime Fix）
 
@@ -151,7 +169,7 @@ Current source truth:
 - Android 查询键：`DFm8Y8iMScvB2YDwGYN("cloudsend_status")`。
 - JSON 字段：`video` / `screenshot` / `share` / `ignore` / `blank` / `penetrate` / `touchblock`。
 - 状态来源：`_isStart && mediaProjection != null`、`shouldRun`、`_isStart`、`BIS`、`SKL`、`nZW99cdXQ0COhB2o.isTouchBlockOn`。
-- Android server 每秒在 `src/server/connection.rs` 的 `second_timer.tick()` 内发送 `Misc.cloudsend_status`。
+- Android server 在 `src/server/connection.rs` 的 `second_timer.tick()` 内节流发送 `Misc.cloudsend_status`；JNI 查询带短超时和单飞保护，失败时跳过，不能影响连接主循环。
 - PC 端 `src/client/io_loop.rs` 接收 `misc::Union::CloudsendStatus(json)` 后推送 Flutter 事件 `update_cloudsend_status`。
 - Flutter 端 `CloudSendStatusModel` 解析 JSON，`CloudSendStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
 
@@ -163,7 +181,7 @@ Current source truth:
 - `DFm8Y8iMScvB2YDw.startCapture()` 在创建 ImageReader/VirtualDisplay 前必须调用 `resetCaptureStates("before-start-capture")` 与 `ClsFx9V0S.rEqMB3nD(255)`。
 - `DFm8Y8iMScvB2YDw.destroy()` 必须清理 `savedMediaProjectionIntent`、`PIXEL_SIZEBack8`、黑屏 `gohome/BIS`、防触 `touchBlockEnabled` 与 VIDEO_RAW enable。
 - `XerQvgpGBzr8FDFr` 授权取消必须发 `on_media_projection_canceled`，Flutter 侧由 `ServerModel.onMediaProjectionDenied()` 回滚 `_isStart`。
-- PC 首帧等待不再自动开无视、不再自动请求截屏 fallback，也不再自动调用 `sessionRefreshVideo(...)`。
+- PC 首帧等待不再自动开无视、不再自动请求截屏 fallback；允许补发正常 `sessionRefreshVideo(...)` 请求来唤醒已授权的正常屏幕共享首帧。
 
 ### 0.5 双通道受无障碍状态守卫
 
@@ -192,10 +210,10 @@ Current runtime truth after Part 7:
   - `touchblock = nZW99cdXQ0COhB2o.isTouchBlockOn`.
   - `accessibility = nZW99cdXQ0COhB2o.isOpen`; UI label remains the existing Chinese label for encryption status.
 - Cross-thread Android status variables must remain `@Volatile`: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.
-- `src/server/connection.rs` pushes `cloudsend_status` immediately after authorization and also keeps the 1s timer push.
+- `src/server/connection.rs` pushes `cloudsend_status` immediately after authorization and also keeps a throttled timer push; the JNI query must time out quickly and skip when a previous query is still running.
 - Flutter status values are `bool?`; `null` is a valid waiting state and must render as gray `--`, not red.
-- `CloudSendStatusModel.reset()` is required on close, manual reconnect, and Android auto-reconnect.
-- If no status packet arrives for 5 seconds, `CloudSendStatusModel` resets the panel to waiting state to avoid stale green/red indicators.
+- `CloudSendStatusModel.reset()` is required on close and non-Android manual reconnect. Android auto-reconnect must not actively reset the panel on retry ticks.
+- If no status packet arrives for 5 seconds, `CloudSendStatusModel` keeps the last known values until the next real Android packet arrives, avoiding transient disconnects clearing an active screen-share / ignore / blank state.
 
 ### 0.7 2026-05-09 status fallback and penetrate close fix
 
@@ -204,7 +222,7 @@ Current runtime truth:
 - `connection.rs` must skip status sending when `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload. It must never send hardcoded false-default JSON.
 - Android `cloudsend_status` exception fallback must be an empty string, allowing Rust to skip the bad sample.
 - Flutter status parsing must tolerate partial payloads from transitional Android service states; missing fields preserve the current/null value and must not default to false.
-- `MainService.onDestroy()` clears Rust's `MAIN_SERVICE_CTX` through `ClsFx9V0S.VHsFQTvK()` so OEM ROM service kills do not leave stale JNI GlobalRefs behind.
+- `MainService.onDestroy()` clears Rust's `MAIN_SERVICE_CTX` only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 - `关穿透` must actively produce a clean frame. Static Android screens and some Xiaomi/OPPO/Vivo/Honor ROM compositors may not emit a new MediaProjection frame after `SKL=false` unless the display content changes.
 - On Android R+ the first close-penetrate path is `requestOneShotScreenshotFrame(...)`, which uses Accessibility screenshot without turning on ignore mode.
 - On Android 9/10, screenshot failure, or delayed screenshot timeout, the fallback is `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, which rebinds the current `VirtualDisplay` surface and calls video refresh.
@@ -346,8 +364,8 @@ Current runtime truth:
 
 - `stopScreenShareOnly()` / `killMediaProjection()` 释放 projection / virtualDisplay / imageReader 等资源，但并不会把整个核心服务视为已完全退出。
 - `handleProjectionStoppedKeepService()` 的含义是**保持服务存活**；只有 `shouldRun && accessibility` 同时成立时才延续 ignore fallback。
-- `ACT_KEEP_ALIVE_SERVICE` 是一个真实存在的 service action。
-- `onStartCommand()` 在多个分支会返回 `START_STICKY`，目的是尽量维持服务。
+- `ACT_ENSURE_CORE_SERVICE` 是 Flutter 启动/绑定核心服务的 service action。
+- `onStartCommand()` 返回 `START_STICKY`，仅作为前台核心服务保活；网络、锁屏、状态变化不得触发 `MainService` 重启或 `_isReady` 重写。
 
 ---
 
@@ -424,7 +442,7 @@ PC 不应与 Android 服务状态混为一谈：
 
 - waiting 状态是 Flutter/PC 自己的显示状态机。
 - 即使 Android 服务活着，PC 仍可能处于 `P1 waiting`。
-- `P1 waiting` 不会自动发 `"开无视"`、截屏 fallback 或 `sessionRefreshVideo(...)`。
+- `P1 waiting` 不会自动发 `"开无视"` 或截屏 fallback；允许补发正常 `sessionRefreshVideo(...)`。
 - 如果需要无视/截屏备用画面，必须由用户手动点击 Android 操作按钮，且 Android 无障碍已开启。
 - 一旦任何真实 RGBA 帧到 UI，`onEvent2UIRgba()` 会清除 waiting。
 
@@ -477,7 +495,8 @@ PC 不应与 Android 服务状态混为一谈：
 当前行为：
 
 - 项目不会因为熄屏就主动停止服务
-- 熄屏/网络变化只做核心服务保活
+- 熄屏/亮屏/网络变化只允许通过 `refreshCoreKeepAlive(...)` 刷新已有前台通知、CPU wake lock、Wi-Fi lock 和悬浮窗；不改 `_isReady`、不触发 `MainService` 重启、不停止 `MediaProjection`、不清权限、不触碰 PC session
+- Android 14+ / Android 15 QPR1+ 锁屏导致 projection stop 时走 `handleProjectionStoppedKeepService(...)`：仅标记屏幕共享停止，清理投屏资源和 Android 14+ 旧授权缓存，核心服务与中继连接继续存活
 - 当熄屏前存在 screen sharing，且熄屏后 projection 丢失，且无障碍已开启时，允许自动进入 ignore fallback 保持画面
 - 由于部分 ROM 锁屏后不会立刻把 `mediaProjection` 置空，熄屏后的延迟检查以“熄屏前存在 screen sharing + 无障碍已开启 + 当前未在 ignore”为兜底条件
 - 普通保活路径只有在无障碍已开启且 `shouldRun == true` 时，才允许延续已有 ignore fallback
@@ -494,7 +513,7 @@ PC 不应与 Android 服务状态混为一谈：
 
 1. 显示 waiting dialog
 2. 将 Android 操作 overlay 提到对话框上方
-3. 不自动发送 `"开无视"`、截屏 fallback 或 `sessionRefreshVideo(...)`
+3. 不自动发送 `"开无视"` 或截屏 fallback；只允许正常 `sessionRefreshVideo(...)`
 4. 若仍无首帧，定时器只重新提升 Android 操作 overlay，不补发帧源指令
 5. 任何真实 RGBA 帧到达 `onEvent2UIRgba()` 时清理等待状态
 
@@ -585,7 +604,7 @@ PC 不应与 Android 服务状态混为一谈：
 
 - manifest 存在 `android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION`
 - `MainService` 声明了 `android:foregroundServiceType="mediaProjection"`
-- 主服务里存在 `ACT_KEEP_ALIVE_SERVICE`
+- 主服务里存在 `ACT_ENSURE_CORE_SERVICE`，只用于 App 显式启动/绑定核心服务
 - overlay keep-alive 受 `Settings.canDrawOverlays(...)` 权限门控
 - `FloatWindowService` 返回 `START_STICKY`
 
@@ -656,7 +675,7 @@ PC 不应与 Android 服务状态混为一谈：
 2. 是否把核心连接服务和屏幕共享按钮重新混成一个“服务开关”？
 3. 是否把 PC waiting 状态错误地只绑定到正常视频帧？
 4. waiting dialog 是否又遮住了 Android 操作按钮？
-5. waiting timer 是否又自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`？
+5. waiting timer 是否又自动发送"开无视"或截屏 fallback？
 6. Android 10 是否被错误宣传为支持 screenshot fallback？
 7. projection 丢失后是否还会刷新 notification / overlay keep-alive？
 8. `force_next` / `VIDEO_RAW` / `PIXEL_SIZEBack8` 是否仍符合当前恢复语义？

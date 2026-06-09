@@ -1,7 +1,7 @@
 # 工程总索引 / Engineering Index
 
-最后一次基于全仓源码核验：2026-06-03
-最近一次文档一致性复核：2026-06-03
+最后一次基于全仓源码核验：2026-06-09
+最近一次文档一致性复核：2026-06-09
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -9,7 +9,7 @@
 
 ---
 
-## Current CloudSend Source Truth (2026-06-03)
+## Current CloudSend Source Truth (2026-06-09)
 
 - Product/runtime app name: `CloudSend`.
 - Android package/applicationId: `com.cloudsend.app`.
@@ -28,11 +28,18 @@
 - Virtual display platform addition key: `cloudsend_virtual_displays`.
 - ZEGO voice-call architecture/integration docs: `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, and `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
 - ZEGO voice-call runtime anchors: `ZegoVoiceCallInfo`, `ZegoVoiceCallModel`, `zego_voice_call_ready`, `Data::ZegoVoiceCallReady`.
-- ZEGO voice-call Android permission anchors: `android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`, `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`, `flutter/android/app/proguard-rules`.
+- ZEGO voice-call Android permission anchors: `android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`, `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`, `android.permission.USE_FULL_SCREEN_INTENT`, `flutter/android/app/proguard-rules`.
 - ZEGO voice-call isolation rule: do not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless a future task proves direct involvement.
 - PC developer login bypass anchor: `flutter/lib/models/developer_login_bypass_model.dart`; `Ctrl+Shift+H` enables a process-only connection bypass for developers without changing product account login state.
 - Android core connection/id service and Android screen sharing are split: app startup keeps `DFm8Y8iMScvB2YDw` online through `ServerModel.ensureCoreService()`, while `start_screen_share` / `stop_screen_share` only control `MediaProjection`.
+- Android network / screen / memory events refresh the existing core keep-alive resources through `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)`; they do not restart `MainService`, rewrite `_isReady`, or stop screen sharing.
+- Android 14+ `MediaProjection` token / `createVirtualDisplay()` is one-shot, and Android 15 QPR1+ may stop projection on lock screen. Projection stop must be handled as screen-share loss only; it must not clear Rust JNI context, stop `MainService`, or close the relay session.
+- Non-explicit `MainService.onDestroy()` keeps Rust JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. Only explicit app/service destroy clears the core JNI context.
+- Android visible `connectStatus` follows the official RustDesk-style raw rendezvous registration state: `mainGetConnectStatus()` `status_num` is assigned directly to `_connectStatus`. Do not debounce it or fake readiness, and do not treat it as proof that the core service died.
+- CloudSend client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` defaults `force_relay = true`, Android auto reconnect calls `sessionReconnect(..., forceRelay: true)`, and `Client::_start(...)` / `Client::connect(...)` must not create UDP/IPv6/direct candidates while force relay is active. Explicit IP/domain:port direct connection is rejected in relay-only mode.
+- Android auto reconnect handles `input-password` by reusing the remote password already entered/passed in the current PC session while its reconnect timer is active. It must not use the local `mainGetPermanentPassword()` as a remote password.
 - ZEGO voice call is a Flutter RTC side path attached to the existing control-channel invitation state machine. PC/Android media goes through ZEGO only; old RustDesk `audio_service` voice-call media must stay unused.
+- Android ZEGO stale local busy state is cleared from disconnected clients and stale `ZegoVoiceCallModel.active` before rejecting a new incoming call.
 - Android local ADB/LADB is an isolated Android-side module under `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/` and `flutter/lib/mobile/pages/adb_page.dart`; it must not be mixed into screen-share, side-button, video, screenshot, or status-monitor paths.
 
 This section overrides any older Daxian/RustDesk naming text that remains in historical notes below.

@@ -1,7 +1,7 @@
 # 工程基线 / Engineering Baseline
 
-最后一次从全仓源码核验：2026-06-07
-最近一次文档一致性复核：2026-06-07
+最后一次从全仓源码核验：2026-06-09
+最近一次文档一致性复核：2026-06-09
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -71,7 +71,7 @@
 - 侧按钮 `开共享` 可临时进入 ignore fallback 兜住授权/恢复期间的画面；如果 ignore 已存在则保持现状，恢复 screen sharing 后只清一次。
 - `destroy()` 是停服务全清入口，必须清 `savedMediaProjectionIntent`、黑屏、防触、无视/穿透残留状态。
 - 授权取消回调为 `on_media_projection_canceled`，Flutter 端必须调用 `ServerModel.onMediaProjectionDenied()`。
-- PC 首帧等待不再自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；等待期间只显示 waiting dialog 与 Android 操作浮层。
+- PC 首帧等待不再自动发送"开无视"或截屏 fallback；等待期间只显示 waiting dialog 与 Android 操作浮层，并可补发正常 `sessionRefreshVideo(...)` 请求来唤醒已授权的正常屏幕共享首帧。
 
 ### 0.5 2026-04-22 无障碍感知双通道基线
 
@@ -132,14 +132,14 @@ Current cleanup truth:
 Current source truth:
 
 - Android status field `Misc.cloudsend_status = 39` remains the single status transport.
-- Android sends one `cloudsend_status` packet immediately after authorization, then continues the existing 1s timer push.
+- Android sends one `cloudsend_status` packet immediately after authorization, then continues a throttled status push. Status push is diagnostic only and must never disturb the connection session.
 - `CloudSendStatusData` fields are nullable booleans:
   - `null` means waiting / unknown and must render gray `--`.
   - `true` means on / exists and renders green.
   - `false` means off / missing and renders red.
 - `CloudSendStatusModel.reset()` resets all eight status fields to `null` and cancels the stale timer.
-- Reset is required on session close, manual reconnect, and Android auto-reconnect.
-- `CloudSendStatusModel` treats status as stale after 5 seconds without packets and resets to waiting state.
+- Reset is required on session close and non-Android manual reconnect. Android auto-reconnect must not actively reset the status panel during retry ticks.
+- `CloudSendStatusModel` treats status as stale after 5 seconds without packets but keeps the last known values until the next real Android status packet arrives, avoiding transient disconnects clearing a still-active screen-share / ignore / blank state.
 - Android cross-thread status fields must stay volatile: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and `nZW99cdXQ0COhB2o.ctx`.
 - Status JSON must snapshot Android values before building the `JSONObject`.
 - Status semantics:
@@ -157,12 +157,13 @@ Current source truth:
 
 Current source truth:
 
-- `src/server/connection.rs` must use `cloudsend_status_message()` for both immediate-after-authorization status push and the 1s timer status push.
+- `src/server/connection.rs` must use `cloudsend_status_message()` for both immediate-after-authorization status push and throttled timer status push.
 - If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload, the server must skip that status push. It must never send hardcoded false-default JSON.
-- `cloudsend_status_message()` returns `Option<Message>`; callers must send only `Some(msg)`.
+- `cloudsend_status_message()` is async, returns `Option<Message>`, runs the Android JNI query behind a short timeout, and callers must send only `Some(msg)`.
+- Android `cloudsend_status` timer push is throttled to avoid querying JNI from the connection hot path every second; an in-flight JNI query must make the next status sample skip instead of stacking workers.
 - `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` must return an empty string on exception so Rust can skip the bad sample.
 - `CloudSendStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must preserve the current/null value and must not become false by default.
-- `MainService.onDestroy()` must call `ClsFx9V0S.VHsFQTvK()` to clear Rust's `MAIN_SERVICE_CTX` GlobalRef. This prevents stale service references after OEM ROM service kills/restarts.
+- `MainService.onDestroy()` must clear Rust's `MAIN_SERVICE_CTX` GlobalRef only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 - `关穿透` must produce or request a clean frame immediately. A plain Rust `video_service::refresh()` is insufficient on static Android screens and some OEM compositors.
 - `nZW99cdXQ0COhB2o.requestOneShotScreenshotFrame(...)` is the close-penetrate cleanup path on Android R+; Android 9/10 or screenshot failure paths must fall back to `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`.
 - `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` may rebind the current `VirtualDisplay` surface to force a fresh MediaProjection frame when normal composition is static.
@@ -177,12 +178,29 @@ Current source truth:
 - `runMobileApp` must call `platformFFI.syncAndroidServiceAppDirConfigPath()` before `ensureCoreService()`, and the Android `SYNC_APP_DIR_CONFIG_PATH` handler must refresh `ClsFx9V0S.xt4P9mWE(...)` if `MainService` is already running.
 - `ServerModel.ensureCoreService()` binds the Rust event listener, invokes Android `"ensure_core_service"`, and calls `bind.mainStartService()` only once per app process.
 - Android `"ensure_core_service"` / `"init_service"` only start and bind `DFm8Y8iMScvB2YDw`; they do not request `MediaProjection`.
-- Android `"start_screen_share"` / `"start_capture"` request or reuse `MediaProjection` and call `DFm8Y8iMScvB2YDw.startCapture()`.
+- Android `DFm8Y8iMScvB2YDw.onStartCommand(...)` returns `START_STICKY` as a foreground core service keep-alive, but network / screen / memory / screen-share state changes must not call `startService(...)` to restart `MainService`.
+- Android 14+ `MediaProjection` authorization and `createVirtualDisplay()` are one-shot. `XerQvgpGBzr8FDFr` creates a fresh capture intent for every request, and `DFm8Y8iMScvB2YDw` disables virtual-display/session reuse on Android 14+.
+- Android 15 QPR1+ may stop `MediaProjection` on lock screen. Projection stop is screen-share loss only: release projection resources, clear stale saved intent on Android 14+, keep `_isReady = true`, refresh core keep-alive, and do not clear Rust JNI context or close the relay session.
+- Android `DFm8Y8iMScvB2YDw.onDestroy()` clears Rust JNI context only for explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart; network / lock-screen / memory / status / screen-share changes must not restart `MainService`.
+- `MainService` owns a 60s internal keep-alive ticker. The ticker may refresh the foreground notification, CPU wake lock, Wi-Fi lock, and floating window only; it must not touch `MediaProjection`, frame source state, permissions, or PC session state.
+- Android network / screen on-off / low-memory callbacks may call `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)` to refresh the existing foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive. They must not upgrade state changes into core-service restarts, `_isReady` rewrites, `MediaProjection` changes, permission clears, or PC session changes.
+- Android `main_stop_service()` is intentionally a no-op; no Android UI path should set `stop-service=Y` to stop the core connection service. Screen sharing must be stopped through `"stop_screen_share"` / `stopScreenShareOnly(...)`.
+- Android `"start_screen_share"` / `"start_capture"` request `MediaProjection` and call `DFm8Y8iMScvB2YDw.startCapture()`. Android 14+ cannot reuse old projection tokens after stop/loss.
 - Android `"stop_screen_share"` / Flutter `"stop_service"` now call `DFm8Y8iMScvB2YDw.stopScreenShareOnly(...)`; this stops screen sharing and ignore fallback state but keeps the core service online.
+- Android PC connection removal in `src/ui_cm_interface.rs::remove_connection(...)` must never call `"stop_capture"`. PC disconnects, PC reconnects, and PC window close only remove the connection record; they must not stop Android `MediaProjection`.
 - Flutter mobile server page always shows `ServerInfo()`; the visible `Start service` / `Stop service` button in the permission card controls screen sharing only.
+- Android `PermissionChecker` no longer renders the duplicate `Screen Capture` row or the `Transfer file` row in the permission card; `Start service` / `Stop service` is the only visible screen-sharing switch.
 - Accepting a PC connection no longer calls Android `"start_capture"` automatically; PC can connect and start ZEGO voice while Android has no screen-sharing permission active.
 - `DFm8Y8iMScvB2YDw.checkMediaPermission()` reports `media = isStart`, meaning the Android permission card reflects active screen sharing, not core service readiness.
-- Android recoverable reconnect uses one 5s periodic timer with no retry limit. Repeated connection-error events must not create additional reconnect timers or rapid request loops.
+- Android recoverable reconnect uses one 2.5s periodic timer only for errors that Rust already marks retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts. Repeated connection-error events must not create additional reconnect timers or rapid request loops, and retry ticks must not repeatedly clear permissions or `CloudSendStatusModel`.
+- Android recoverable reconnect has a 60s silent grace window: PC keeps the last frame frozen and retries in the background. It shows the user-visible `Connecting...` prompt only if the connection has not recovered after 60 seconds.
+- Android network recovery requests a throttled rendezvous/register refresh through `ClsFx9V0S.G4yQ9OYY()` without restarting `MainService`, stopping `MediaProjection`, or changing ignore/blank state.
+- Android authorized `"add_connection"` refreshes normal video through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` when screen sharing is already active, so a static Android screen can deliver a fresh first frame after PC reconnect without waiting for user touch/movement.
+- Android authorization immediately pushes one real `CloudSendStatusModel` status packet from JNI before falling back to the 5-second status cadence, so reconnect state catches up quickly without fabricating readiness/share/ignore/blank values.
+- Android recoverable reconnect forces `sessionReconnect(..., forceRelay: true)`. If a password prompt appears while the Android auto-reconnect timer is active, `flutter/lib/models/model.dart::_continueAndroidAutoReconnectWithPassword(...)` may only reuse the remote password already entered/passed in the current PC session; it must not use the local `mainGetPermanentPassword()` as a remote password.
+- CloudSend client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` sets `force_relay = true`; `Client::_start(...)` skips UDP NAT test, IPv6 punch setup, and explicit IP/domain:port direct connection while force relay is active; `Client::connect(...)` directly calls `request_relay(...)` instead of creating TCP/UDP/IPv6 direct candidates. Initial connect, manual reconnect, and Android auto reconnect must all stay on the configured relay path.
+- Android server-page `connectStatus` follows the official RustDesk-style raw rendezvous online state. `flutter/lib/models/server_model.dart` reads `mainGetConnectStatus()` and assigns `status_num` directly to `_connectStatus`; it must not debounce transient values or fake readiness. A `not_ready_status` value is a real registration-state sample, not a command to stop, restart, or clear the Android core service.
+- Android ZEGO local busy state must be cleared when a disconnected client had `inVoiceCall` / `incomingVoiceCall`. `_hasLocalAndroidVoiceCall(...)` treats other-client voice state or current-client `inVoiceCall` as busy, but clears stale `ZegoVoiceCallModel.active` when the only current signal is a new incoming invite. This prevents PC1 hangup/disconnect residue from rejecting a later PC2 invite to the same Android.
 
 ### 0.11 2026-06-03 documentation handoff baseline
 
@@ -562,7 +580,7 @@ Current source-verified ADB hardening (2026-06-04):
 源码事实：
 
 - Android 会话连接成功但首帧未到时，PC 会进入 waiting 状态。
-- waiting 状态不会自动发送"开无视"、截屏 fallback 或 `sessionRefreshVideo(...)`；PC 只保持等待并把 Android 操作按钮提升到 waiting dialog 上层。
+- waiting 状态不会自动发送"开无视"或截屏 fallback；PC 只保持等待、把 Android 操作按钮提升到 waiting dialog 上层，并可补发正常 `sessionRefreshVideo(...)` 唤醒正常视频首帧。
 - 如果需要截屏/无视备用流，必须由用户手动点击"开无视"，且 Android 无障碍服务必须已开启。
 - 收到**任何真实 RGBA 帧**时，`onEvent2UIRgba()` 会清除等待状态。
 - Android 控制按钮会被提升到 waiting dialog 上层，防止被遮挡。
@@ -814,13 +832,16 @@ Current source truth:
 - Flutter joins/leaves ZEGO room through `flutter/lib/models/zego_voice_call_model.dart`.
 - Flutter must not emit visible ZEGO debug toasts such as payload, publish request, play request, or stream id traces. ZEGO internals are log-only; user-visible voice text is concise Chinese state and error text.
 - `flutter/lib/models/zego_voice_call_model.dart` must not treat `startPlayingStream(...)` as proof of real media. Real media readiness is based on ZEGO callbacks: `onRoomStateChanged`, `onPublisherStateUpdate`, `onPlayerStateUpdate`, `onPublisherSendAudioFirstFrame`, and `onPlayerRecvAudioFirstFrame`.
-- Android shows `flutter/lib/models/server_model.dart::showAutoAcceptVoiceCallDialog` for incoming ZEGO voice calls. The dialog has only an `Accept` button, no reject action, and auto-accepts after a 10-second countdown. Cancel/back actions submit the accept flow instead of rejecting.
-- Android checks/requests `android.permission.RECORD_AUDIO` after the accept flow starts, either by tapping `接受` or by the 10-second auto-accept countdown; denied microphone permission rejects the call.
+- Android shows `flutter/lib/models/server_model.dart::showAutoAcceptVoiceCallDialog` for incoming ZEGO voice calls. The dialog has only an `Accept` button, no reject action, and displays a 3-second countdown. Cancel/back actions submit the accept flow instead of rejecting.
+- Android `flutter/lib/models/server_model.dart::ServerModel._startVoiceCallAutoAcceptTimer(...)` owns the actual per-client 3-second auto-accept timer, so auto-accept does not depend on the dialog being visible or successfully rendered.
+- Android incoming ZEGO calls must bring the app UI forward through `DFm8Y8iMScvB2YDw.kt::bringAppToForegroundForVoiceCall(...)` and replay pending state through `oFtTiPzsqzBHGigp.onResume()` / `onNewIntent()` plus Flutter `"flush_pending_voice_call_event"`, so `ServerModel` can start its auto-accept timer when the app was in the background.
+- Android `DFm8Y8iMScvB2YDw.kt` stores background incoming-call pending JSON by `client id`; clearing one rejected/cancelled invite must not erase another pending invite from a different controlling PC.
+- Android checks/requests `android.permission.RECORD_AUDIO` after the accept flow starts, either by tapping `接受` or by the 3-second auto-accept countdown; denied microphone permission rejects the call.
 - Android `flutter/lib/models/server_model.dart::updateVoiceCallState` must not drop incoming voice-call events when the local `_clients` list has not yet received the connection add event.
 - Android `src/server/connection.rs` tracks `zego_voice_call_active` per connection and rejects duplicate incoming ZEGO requests while that connection has a pending or active call.
 - Android `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` rejects a second simultaneous incoming ZEGO call on the same Android device while one ZEGO call is pending or active. This is local to that Android endpoint.
 - Android `flutter/lib/models/server_model.dart::onClientRemove` leaves `ZegoVoiceCallModel` if the removed client was in or receiving a ZEGO call, clearing stale busy state after abnormal disconnect.
-- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, and `BLUETOOTH_CONNECT`; Android release minification keeps ZEGO classes in `flutter/android/app/proguard-rules`.
+- Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `BLUETOOTH_CONNECT`, and `USE_FULL_SCREEN_INTENT`; Android release minification keeps ZEGO classes in `flutter/android/app/proguard-rules`.
 - Android calls `setAudioRouteToSpeaker(true)` from `flutter/lib/models/zego_voice_call_model.dart` so the speaker is enabled by default.
 - Flutter explicitly enables ZEGO audio capture and audio transport with `enableAudioCaptureDevice(true)`, `mutePublishStreamAudio(false)`, `muteAllPlayStreamAudio(false)`, and `mutePlayStreamAudio(streamId, false)`.
 - `src/client/io_loop.rs` has a process-level ZEGO call owner guard so one PC process cannot run two simultaneous ZEGO calls through the singleton Flutter ZEGO engine and mix callbacks across rooms.
@@ -833,10 +854,12 @@ Current source truth:
 - Current PC voice-call panel collapses by double-clicking the expanded card; the collapsed right-side rail uses vertical `语音通话` text and supports long-press vertical dragging. It is rendered above `BlockableOverlay` in `flutter/lib/desktop/pages/remote_page.dart` so Android screen-sharing touch blocking does not cover voice-call controls.
 - `flutter/lib/models/zego_voice_call_model.dart` binds the ZEGO engine lifecycle to `appId + userId + userName`; ZEGO `1000020` (`CommonUserNotSame`) triggers engine recreation with the current identity and one login retry.
 - PC voice-call creation failure, peer rejection, manual close, invalid response timestamp, or local Flutter ZEGO join failure must reset only the ZEGO voice-call state, not the remote-control session. `src/client/io_loop.rs::reset_zego_voice_call_state(...)` clears `voice_call_request_timestamp`, `pending_zego_voice_call`, `zego_voice_call_active`, and the process owner.
+- PC-side ZEGO business prompts in `src/client/io_loop.rs::Data::NewVoiceCall` must use `custom-nook-nocancel-hasclose-*` dialog types. Plain `error` / `warning` dialogs wire `OK` to `closeConnection()` in Flutter common UI and must not be used for token failure, duplicate-call, non-Android-peer, or process-owner-busy prompts.
 - Stale ZEGO `VoiceCallResponse` packets whose `req_timestamp` does not match the current pending invite are ignored in `src/client/io_loop.rs`; they must not clear the current pending invite. This preserves rapid `invite -> hangup before accept -> immediate re-invite` flows.
 - `src/client/io_loop.rs::clear_expired_pending_zego_voice_call(...)` expires stale pending ZEGO invites after 60 seconds so a lost accept/reject response cannot block future calls on the same PC-Android connection.
 - `src/client/io_loop.rs` calls `clear_expired_pending_zego_voice_call(...)` from the 1-second `status_timer.tick()` branch as well as before a new invite, so pending cleanup is time-driven and does not depend on the next user click. Timeout cleanup must also send `VoiceCallRequest(false)` to Android so the controlled side clears its old pending state before any later invite.
 - ZEGO close requests use `src/client/helper.rs::new_voice_call_close_request(...)` to carry the original invite timestamp while the call is still pending. PC and Android ignore stale pending-close packets whose timestamp does not match the current pending invite, so a late close from an old call cannot clear a newer invite.
+- Once a ZEGO call becomes active, both PC and Android retain `active_zego_voice_call_timestamp`. Active close requests older than the current active timestamp are ignored, so a delayed close from an older call cannot hang up a newer active call. Close requests with the current timestamp, or newer timestamps from an older build, still close the current active call.
 - Android controlled-side `src/server/connection.rs::clear_expired_pending_zego_voice_call(...)` also expires stale pending invites after 60 seconds, notifies Flutter with `CloseVoiceCall`, and sends `VoiceCallResponse.accepted = false` back to PC. This is the controlled-side fallback if a pending invite is not resolved by PC close or user accept in time.
 - Android controlled-side `src/server/connection.rs::handle_voice_call(...)` moves the pending ZEGO payload into active state with `take()` when accepted. After accept, pending state must be empty and `zego_voice_call_active` alone represents the active call.
 - `flutter/lib/models/zego_voice_call_model.dart` serializes `leave()` through `_leaveFuture` and ignores the same recently closed payload for a short window. This prevents delayed `zego_voice_call_ready` events or rapid hangup/reinvite flows from logging back into the old room after logout has already started.

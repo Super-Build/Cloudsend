@@ -116,7 +116,11 @@ class FfiModel with ChangeNotifier {
   bool _touchMode = false;
   Timer? _timer;
   Timer? _androidAutoReconnectTimer;
-  static const Duration _androidAutoReconnectInterval = Duration(seconds: 5);
+  Timer? _androidAutoReconnectPromptTimer;
+  static const Duration _androidAutoReconnectInterval =
+      Duration(milliseconds: 2500);
+  // Keep short Android drops silent; show the reconnect prompt only after this grace window.
+  static const Duration _androidAutoReconnectPromptDelay = Duration(seconds: 60);
   static const Duration _androidFirstFrameFallbackDelay = Duration(seconds: 10);
   var _reconnects = 1;
   bool _viewOnly = false;
@@ -165,6 +169,9 @@ class FfiModel with ChangeNotifier {
     final lower = text.toLowerCase();
     return !lower.contains('manually') &&
         !lower.contains('not allowed') &&
+        !lower.contains('offline') &&
+        !lower.contains('failed') &&
+        !lower.contains('resolve') &&
         !lower.contains('handshake') &&
         !lower.contains('mismatch') &&
         !lower.contains('exist');
@@ -173,6 +180,8 @@ class FfiModel with ChangeNotifier {
   void _stopAndroidAutoReconnect() {
     _androidAutoReconnectTimer?.cancel();
     _androidAutoReconnectTimer = null;
+    _androidAutoReconnectPromptTimer?.cancel();
+    _androidAutoReconnectPromptTimer = null;
   }
 
   void _showAndroidActionsOverlayAboveDialogs({int delayMSecs = 10}) {
@@ -197,6 +206,25 @@ class FfiModel with ChangeNotifier {
     });
   }
 
+  void _requestAndroidVideoRefresh({int delayMSecs = 0}) {
+    if (!isPeerAndroid || _pi.displays.isEmpty) {
+      return;
+    }
+    Timer(Duration(milliseconds: delayMSecs), () {
+      final target = parent.target;
+      if (!isPeerAndroid ||
+          target == null ||
+          target.closed ||
+          target.connType != ConnType.defaultConn ||
+          _pi.displays.isEmpty) {
+        return;
+      }
+      unawaited(sessionRefreshVideo(sessionId, _pi).catchError((e) {
+        debugPrint('Android video refresh request failed: $e');
+      }));
+    });
+  }
+
   void _startAndroidAutoReconnect(
       OverlayDialogManager dialogManager, SessionID sessionId) {
     if (_androidAutoReconnectTimer != null) {
@@ -204,28 +232,70 @@ class FfiModel with ChangeNotifier {
     }
     _stopAndroidAutoReconnect();
     _reconnects = 1;
-    waitForFirstImage.value = true;
-    waitForImageDialogShow.value = true;
-    dialogManager.dismissAll();
-    dialogManager.showLoading(translate('Connecting...'), onCancel: () {
-      _stopAndroidAutoReconnect();
-      closeConnection();
-    });
-    _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
 
     void tryReconnect() {
       final target = parent.target;
-      if (!isPeerAndroid || target == null || target.closed) {
+      if (_androidAutoReconnectTimer == null ||
+          !isPeerAndroid ||
+          target == null ||
+          target.closed) {
         _stopAndroidAutoReconnect();
         return;
       }
-      bind.sessionReconnect(sessionId: sessionId, forceRelay: false);
-      clearPermissions();
-      parent.target?.cloudSendStatusModel.reset();
+      bind.sessionReconnect(sessionId: sessionId, forceRelay: true);
+      _requestAndroidVideoRefresh(delayMSecs: 800);
     }
 
+    void showReconnectPrompt() {
+      final target = parent.target;
+      if (!isPeerAndroid ||
+          target == null ||
+          target.closed ||
+          _androidAutoReconnectTimer == null) {
+        _stopAndroidAutoReconnect();
+        return;
+      }
+      waitForFirstImage.value = true;
+      waitForImageDialogShow.value = true;
+      dialogManager.dismissAll();
+      dialogManager.showLoading(translate('Connecting...'), onCancel: () {
+        _stopAndroidAutoReconnect();
+        closeConnection();
+      });
+      _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
+    }
+
+    Timer(const Duration(milliseconds: 300), tryReconnect);
     _androidAutoReconnectTimer =
         Timer.periodic(_androidAutoReconnectInterval, (_) => tryReconnect());
+    _androidAutoReconnectPromptTimer =
+        Timer(_androidAutoReconnectPromptDelay, showReconnectPrompt);
+  }
+
+  Future<void> _continueAndroidAutoReconnectWithPassword(
+      OverlayDialogManager dialogManager, SessionID sessionId) async {
+    final target = parent.target;
+    if (!isPeerAndroid ||
+        _androidAutoReconnectTimer == null ||
+        target == null ||
+        target.closed) {
+      return;
+    }
+    final password = target._lastSessionPassword;
+    if (password.isEmpty) {
+      enterPasswordDialog(sessionId, dialogManager);
+      return;
+    }
+    target.login(target._lastSessionOsUsername, target._lastSessionOsPassword,
+        sessionId, password, false);
+    if (waitForImageDialogShow.value) {
+      dialogManager.dismissAll();
+      dialogManager.showLoading(translate('Connecting...'), onCancel: () {
+        _stopAndroidAutoReconnect();
+        closeConnection();
+      });
+      _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
+    }
   }
 
   bool get viewOnly => _viewOnly;
@@ -941,7 +1011,12 @@ class FfiModel with ChangeNotifier {
     } else if (type == 'input-2fa') {
       enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
-      enterPasswordDialog(sessionId, dialogManager);
+      if (isPeerAndroid && _androidAutoReconnectTimer != null) {
+        unawaited(
+            _continueAndroidAutoReconnectWithPassword(dialogManager, sessionId));
+      } else {
+        enterPasswordDialog(sessionId, dialogManager);
+      }
     } else if (type == 'session-login' || type == 'session-re-login') {
       enterUserLoginDialog(sessionId, dialogManager);
     } else if (type == 'session-login-password' ||
@@ -1007,7 +1082,7 @@ class FfiModel with ChangeNotifier {
   showMsgBox(SessionID sessionId, String type, String title, String text,
       String link, bool hasRetry, OverlayDialogManager dialogManager,
       {bool? hasCancel}) {
-    if (_isRecoverableAndroidConnectionError(type, title, text)) {
+    if (hasRetry && _isRecoverableAndroidConnectionError(type, title, text)) {
       _timer?.cancel();
       _startAndroidAutoReconnect(dialogManager, sessionId);
       return;
@@ -1029,13 +1104,17 @@ class FfiModel with ChangeNotifier {
 
   void reconnect(OverlayDialogManager dialogManager, SessionID sessionId,
       bool forceRelay) {
-    bind.sessionReconnect(sessionId: sessionId, forceRelay: forceRelay);
-    clearPermissions();
-    parent.target?.cloudSendStatusModel.reset();
+    final effectiveForceRelay = isPeerAndroid || forceRelay;
+    bind.sessionReconnect(sessionId: sessionId, forceRelay: effectiveForceRelay);
+    if (!isPeerAndroid) {
+      clearPermissions();
+      parent.target?.cloudSendStatusModel.reset();
+    }
     _stopAndroidAutoReconnect();
     if (isPeerAndroid) {
       waitForFirstImage.value = true;
       waitForImageDialogShow.value = true;
+      _requestAndroidVideoRefresh(delayMSecs: 800);
     }
     dialogManager.dismissAll();
     if (isPeerAndroid) {
@@ -1109,8 +1188,11 @@ class FfiModel with ChangeNotifier {
       waitForImageTimer = Timer(_androidFirstFrameFallbackDelay, () {
         if (waitForFirstImage.isTrue && isPeerAndroid) {
           _showAndroidActionsOverlayAboveDialogs(delayMSecs: 10);
+          _requestAndroidVideoRefresh();
         }
       });
+      _requestAndroidVideoRefresh(delayMSecs: 200);
+      _requestAndroidVideoRefresh(delayMSecs: 1200);
       bind.sessionOnWaitingForImageDialogShow(sessionId: sessionId);
       return;
     }
@@ -1259,6 +1341,10 @@ class FfiModel with ChangeNotifier {
         handleResolutions(peerId, evt["resolutions"]);
       }
       parent.target?.elevationModel.onPeerInfo(_pi);
+      if (isPeerAndroid && !isCache) {
+        _requestAndroidVideoRefresh(delayMSecs: 200);
+        _requestAndroidVideoRefresh(delayMSecs: 1000);
+      }
     }
     if (connType == ConnType.defaultConn) {
       setViewOnly(
@@ -3098,8 +3184,8 @@ class CloudSendStatusModel with ChangeNotifier {
         Timer(_staleThreshold + const Duration(milliseconds: 500), () {
       if (isStale) {
         debugPrint(
-            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), reset');
-        reset();
+            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), keep last known state');
+        notifyListeners();
       }
     });
   }
@@ -3168,6 +3254,9 @@ class FFI {
   var connType = ConnType.defaultConn;
   var closed = false;
   var auditNote = '';
+  String _lastSessionOsUsername = '';
+  String _lastSessionOsPassword = '';
+  String _lastSessionPassword = '';
 
   /// dialogManager use late to ensure init after main page binding [globalKey]
   late final dialogManager = OverlayDialogManager();
@@ -3263,6 +3352,9 @@ class FFI {
   }) {
     closed = false;
     auditNote = '';
+    if ((password ?? '').isNotEmpty) {
+      _lastSessionPassword = password!;
+    }
     if (isMobile) mobileReset();
     assert(
         (!(isPortForward && isViewCamera)) &&
@@ -3467,6 +3559,13 @@ class FFI {
   /// Login with [password], choose if the client should [remember] it.
   void login(String osUsername, String osPassword, SessionID sessionId,
       String password, bool remember) {
+    if (password.isNotEmpty) {
+      _lastSessionPassword = password;
+    }
+    if (osUsername.isNotEmpty || osPassword.isNotEmpty) {
+      _lastSessionOsUsername = osUsername;
+      _lastSessionOsPassword = osPassword;
+    }
     bind.sessionLogin(
         sessionId: sessionId,
         osUsername: osUsername,

@@ -1815,8 +1815,7 @@ pub fn main_get_data_dir_ios() -> SyncReturn<String> {
 pub fn main_stop_service() {
     #[cfg(target_os = "android")]
     {
-        config::Config::set_option("stop-service".into(), "Y".into());
-        crate::rendezvous_mediator::RendezvousMediator::restart();
+        log::debug!("Ignoring Android main_stop_service; core service lives with the app process");
     }
 }
 
