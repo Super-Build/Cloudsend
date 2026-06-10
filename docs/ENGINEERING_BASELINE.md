@@ -180,6 +180,7 @@ Current source truth:
 - Android `"ensure_core_service"` / `"init_service"` only start and bind `DFm8Y8iMScvB2YDw`; they do not request `MediaProjection`.
 - Android `DFm8Y8iMScvB2YDw.onStartCommand(...)` returns `START_STICKY` as a foreground core service keep-alive, but network / screen / memory / screen-share state changes must not call `startService(...)` to restart `MainService`.
 - Android 14+ `MediaProjection` authorization and `createVirtualDisplay()` are one-shot. `XerQvgpGBzr8FDFr` creates a fresh capture intent for every request, and `DFm8Y8iMScvB2YDw` disables virtual-display/session reuse on Android 14+.
+- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` still calls `requestMediaProjection()` after a `SecurityException`, so this path can re-open screen-share authorization. Do not treat the no-prompt SecurityException behavior as landed.
 - Android 15 QPR1+ may stop `MediaProjection` on lock screen. Projection stop is screen-share loss only: release projection resources, clear stale saved intent on Android 14+, keep `_isReady = true`, refresh core keep-alive, and do not clear Rust JNI context or close the relay session.
 - Android `DFm8Y8iMScvB2YDw.onDestroy()` clears Rust JNI context only for explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart; network / lock-screen / memory / status / screen-share changes must not restart `MainService`.
 - `MainService` owns a 60s internal keep-alive ticker. The ticker may refresh the foreground notification, CPU wake lock, Wi-Fi lock, and floating window only; it must not touch `MediaProjection`, frame source state, permissions, or PC session state.
@@ -359,6 +360,7 @@ Kotlin / Java：
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFrLMwitwQbfu7AC.kt`
   - `FloatWindowService`
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/BootReceiver.kt`
+  - Current source truth: after boot/start-on-boot permission checks, this receiver still starts `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE`; it has not been changed to core-only `ACT_ENSURE_CORE_SERVICE`.
   - 开机启动接收器
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/ig2xH1U3RDNsb7CS.kt`
   - 剪贴板桥

@@ -100,6 +100,7 @@ Current source truth:
 - `DFm8Y8iMScvB2YDw.onStartCommand(...)` returns `START_STICKY` as a foreground core service keep-alive, but network / screen / memory / screen-share state changes must not call `startService(...)` to restart `MainService`.
 - Android 14+ `MediaProjection` authorization and `createVirtualDisplay()` are one-shot. `XerQvgpGBzr8FDFr` must create a fresh capture intent for every screen-share request, and `DFm8Y8iMScvB2YDw` must not reuse virtual-display/session state on Android 14+.
 - Android 15 QPR1+ may stop `MediaProjection` when the screen locks. `MediaProjection.Callback.onStop()` / `SecurityException` handling must release projection resources, clear stale saved projection intent on Android 14+, keep `_isReady = true`, refresh core keep-alive, and never clear Rust JNI context or close the relay session.
+- Current source truth: `createOrSetVirtualDisplay(...)` still catches `SecurityException`, calls `handleProjectionStoppedKeepService("virtual-display-security")`, then calls `requestMediaProjection()`. That means this path may prompt the user for screen-share authorization again; it is not currently a silent no-prompt recovery.
 - `DFm8Y8iMScvB2YDw.onDestroy()` clears Rust JNI context only for explicit app/service destroy. Non-explicit service destruction keeps the JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. This restart path is only for actual service destruction; network / lock-screen / memory / status / screen-share changes must not restart `MainService`.
 - `MainService` owns a 60s internal keep-alive ticker. The ticker may refresh the foreground notification, CPU wake lock, Wi-Fi lock, and floating window only; it must not touch `MediaProjection`, frame source state, permissions, or PC session state.
 - Android network / screen on-off / low-memory callbacks may refresh the existing core keep-alive through `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)`: foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive only. They must not upgrade state changes into `startService(...)` restarts, `_isReady` rewrites, `MediaProjection` changes, permission clears, or PC session changes.
@@ -605,6 +606,7 @@ PC 不应与 Android 服务状态混为一谈：
 - manifest 存在 `android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION`
 - `MainService` 声明了 `android:foregroundServiceType="mediaProjection"`
 - 主服务里存在 `ACT_ENSURE_CORE_SERVICE`，只用于 App 显式启动/绑定核心服务
+- Current source truth: `BootReceiver.kt` still launches `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` when `start_on_boot` and pre-permissions pass. Boot start must not be described as core-only `ACT_ENSURE_CORE_SERVICE` unless the Kotlin source is changed again.
 - overlay keep-alive 受 `Settings.canDrawOverlays(...)` 权限门控
 - `FloatWindowService` 返回 `START_STICKY`
 

@@ -23,6 +23,8 @@
 - `MainService` 是前台 `START_STICKY` 核心服务，60 秒内部 keep-alive ticker 只刷新通知、CPU wake lock、Wi-Fi lock 和悬浮窗，不触碰 `MediaProjection`、权限或 PC session。
 - 网络变化、锁屏/亮屏、低内存回调可以通过 `refreshCoreKeepAlive(...)` 刷新已有保活资源，但不得重启 `MainService`、不得重写 `_isReady`、不得停止屏幕共享。
 - Android 14+ `MediaProjection` token / `createVirtualDisplay()` 只能使用一次；Android 15 QPR1+ 锁屏可能停止投屏。当前源码把 projection stop 当成屏幕共享丢失处理：释放投屏资源、清 Android 14+ 旧授权缓存、保持 `_isReady = true`、刷新核心保活，不清 Rust JNI context、不关闭中继 session。
+- 当前源码仍保留 `createOrSetVirtualDisplay(...)` 的 `SecurityException -> handleProjectionStoppedKeepService("virtual-display-security") -> requestMediaProjection()` 链路，因此该路径可能重新弹出屏幕共享授权；不要误判为“SecurityException 静默处理且不弹授权”已经落地。
+- 当前源码仍保留 `BootReceiver.kt -> ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` 的开机自启链路；不要误判为“开机只启动 ACT_ENSURE_CORE_SERVICE 核心服务”已经落地。
 - `MainService.onDestroy()` 只在显式销毁时清 Rust JNI context；非显式 service 销毁会保留 JNI context 并请求带冷却的 `ACT_ENSURE_CORE_SERVICE` 恢复，网络/锁屏/状态/屏幕共享变化本身不得触发核心服务重启。
 - `src/ui_cm_interface.rs::remove_connection(...)` 不得因最后一个 PC 连接移除而发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
 - PC Android 自动重连是 2.5 秒单 timer，并在 timer 启动后有一次带存活判断的短延迟首试；前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示；自动重连 retry 不清权限、不 reset `CloudSendStatusModel`。

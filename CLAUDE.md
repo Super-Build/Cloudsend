@@ -121,6 +121,8 @@ PC 侧关键状态在：
 - 服务活着 != 已经有首帧
 - Android core connection/id service != Android screen sharing；`Start service` / `Stop service` 只控制 `MediaProjection` 屏幕共享。
 - Android 14+ `MediaProjection` token / `createVirtualDisplay()` is one-shot. Android 15 QPR1+ may stop projection on lock screen. Treat projection stop as screen-share loss only: release projection resources, clear stale saved intent on Android 14+, keep `MainService` / Rust JNI context / relay connection alive.
+- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` still calls `requestMediaProjection()` after `SecurityException`; do not document it as a silent no-prompt path unless the code is changed again.
+- Current source truth: `BootReceiver.kt` still starts `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` after boot permission checks; do not document boot start as `ACT_ENSURE_CORE_SERVICE` / core-only unless the code is changed again.
 - `MainService.onDestroy()` clears Rust JNI context only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart; network, lock-screen, memory, status, and screen-share changes must not trigger core-service restart.
 - PC waiting-for-image 不得自动发送"开无视"或截屏 fallback；允许补发正常 `sessionRefreshVideo(...)` 请求来唤醒已授权的正常屏幕共享首帧，不能自动切无视/截屏。
 - 侧按钮 `开共享`/`关共享` 是 Android runtime 的主动操作：`开共享` 可临时无视兜底并在共享恢复后一次性清无视，`关共享` 可在无障碍存在时自动切无视保画面。

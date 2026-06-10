@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.2.1-doc-revert-sync-23] Reverted screen-share recovery docs sync - 2026-06-10
+
+### Documentation
+- Synced engineering docs after reverting the prior Android screen-share recovery change.
+- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` still calls `requestMediaProjection()` after `SecurityException`, so that path may prompt screen-share authorization again.
+- Current source truth: `BootReceiver.kt` still starts `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` after boot permission checks; boot start is not currently core-only `ACT_ENSURE_CORE_SERVICE`.
+- No code, build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-zego-platform-relax-22] ZEGO platform gating and stale busy cleanup - 2026-06-10
 
 ### ZEGO Voice Call
