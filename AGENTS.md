@@ -126,11 +126,12 @@ PC 侧关键状态在：
 - 侧按钮 `开共享`/`关共享` 是 Android runtime 的主动操作：`开共享` 可临时无视兜底并在共享恢复后一次性清无视，`关共享` 可在无障碍存在时自动切无视保画面。
 - Android 掉线自动重连是 2.5s 单 timer、不可堆叠；启动后允许一次带存活判断的短延迟首试；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示连接提示。
 - Android 授权 `add_connection` 且正常屏幕共享已开启时，会通过 `forceVideoFrameRefresh(...)` 补正常视频首帧；PC waiting 状态也可补发正常 `sessionRefreshVideo(...)` 请求。二者都只能刷新正常视频，不能自动切无视/截屏 fallback。
-- Android 授权成功后必须立即向 PC 推送一次真实 JNI 状态包，之后再回到周期状态推送；不得伪造就绪、共享、无视或黑屏状态。
+- Android 授权成功后必须立即向 PC 推送一次真实 JNI 状态包，之后再回到 2s 节流状态推送；不得伪造就绪、共享、无视或黑屏状态。
 - 连接必须是 strict relay-only：PC 侧 `sessionReconnect(..., forceRelay: true)`，Rust `LoginConfigHandler.initialize(...)` 默认 `force_relay = true`；force relay 下不得启动 UDP/IPv6/direct 连接候选，显式 IP/domain:port 直连入口也必须拒绝。
-- Android 自动重连期间如果底层出现 `input-password`，只能复用本次 PC 会话已经输入/传入过的远端密码；不能用本机 `mainGetPermanentPassword()` 冒充远端密码。无会话密码缓存时仍应回到密码输入流程。
+- Android 自动重连期间如果底层出现 `input-password` / `re-input-password`，优先复用本次 PC 进程缓存的远端密码；缓存为空时可读取构建内置 `default-connect-password` 作为与首次连接同源的固定密码。仍然不能用本机 `mainGetPermanentPassword()` 冒充远端密码。
 - `src/ui_cm_interface.rs::remove_connection(...)` 不能因为最后一个 PC 连接移除就向 Android 发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
 - Android `connectStatus` 必须保持官方 RustDesk 风格的真实 rendezvous 注册状态：`mainGetConnectStatus()` 的 `status_num` 直接写入 `_connectStatus`，不得做 UI 防抖或假就绪；它也不是核心服务存活证明。
+- PC ZEGO 语音入口和 `src/client/io_loop.rs::Data::NewVoiceCall` 不再依赖 `PeerInfo.platform == Android`；对当前已连接会话直接尝试 ZEGO 邀请，避免平台字符串未识别的 Android 无法发起通话。
 - Android ZEGO 忙状态只以仍被客户端跟踪的 `inVoiceCall` / `incomingVoiceCall` 为准；断开的旧客户端或陈旧 `ZegoVoiceCallModel.active` 不能阻止下一台 PC 发起通话。
 - 任何真实 RGBA 帧到达 UI 时都应清理 waiting
 

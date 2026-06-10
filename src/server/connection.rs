@@ -393,6 +393,8 @@ const MILLI1: Duration = Duration::from_millis(1);
 const SEND_TIMEOUT_VIDEO: u64 = 12_000;
 const SEND_TIMEOUT_OTHER: u64 = SEND_TIMEOUT_VIDEO * 10;
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(target_os = "android")]
+const CLOUDSEND_STATUS_PUSH_INTERVAL_SECONDS: u8 = 2;
 
 impl Connection {
     pub async fn start(
@@ -922,7 +924,7 @@ impl Connection {
                     #[cfg(target_os = "android")]
                     if conn.authorized {
                         cloudsend_status_tick = cloudsend_status_tick.wrapping_add(1);
-                        if cloudsend_status_tick >= 5 {
+                        if cloudsend_status_tick >= CLOUDSEND_STATUS_PUSH_INTERVAL_SECONDS {
                             cloudsend_status_tick = 0;
                         }
                         if cloudsend_status_tick == 0 {

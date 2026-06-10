@@ -552,6 +552,13 @@ class ServerModel with ChangeNotifier {
         debugPrint("Failed to decode clientJson '$clientJson', error $e");
       }
     }
+    _clearDisconnectedVoiceCallState();
+    final hasLiveVoiceCall = _clients.any((client) =>
+        !client.disconnected &&
+        (client.inVoiceCall || client.incomingVoiceCall));
+    if (!hasLiveVoiceCall) {
+      unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+    }
     if (desktopType == DesktopType.cm) {
       if (_clients.isEmpty) {
         hideCmWindow();
@@ -667,6 +674,33 @@ class ServerModel with ChangeNotifier {
     }
     _voiceCallAutoAcceptTimers.clear();
     _voiceCallAutoAcceptSubmitting.clear();
+  }
+
+  void _clearDisconnectedVoiceCallState() {
+    var changed = false;
+    for (final client in _clients) {
+      if (!client.disconnected ||
+          (!client.inVoiceCall && !client.incomingVoiceCall)) {
+        continue;
+      }
+      _cancelVoiceCallAutoAcceptTimer(client.id);
+      parent.target?.dialogManager
+          .dismissByTag(getVoiceCallDialogTag(client.id));
+      parent.target?.invokeMethod("cancel_notification", client.id);
+      client.inVoiceCall = false;
+      client.incomingVoiceCall = false;
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    final hasLiveVoiceCall = _clients.any((client) =>
+        !client.disconnected &&
+        (client.inVoiceCall || client.incomingVoiceCall));
+    if (!hasLiveVoiceCall) {
+      unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+    }
+    notifyListeners();
   }
 
   void _submitZegoVoiceCallAccept(Client client) {
@@ -811,8 +845,10 @@ class ServerModel with ChangeNotifier {
   }
 
   bool _hasLocalAndroidVoiceCall(int clientId) {
+    _clearDisconnectedVoiceCallState();
     final hasOtherClientCall = _clients.any((client) =>
         client.id != clientId &&
+        !client.disconnected &&
         (client.inVoiceCall || client.incomingVoiceCall));
     if (hasOtherClientCall) {
       return true;
@@ -821,8 +857,8 @@ class ServerModel with ChangeNotifier {
     if (!(model?.active ?? false)) {
       return false;
     }
-    final hasCurrentActiveCall = _clients.any(
-        (client) => client.id == clientId && client.inVoiceCall);
+    final hasCurrentActiveCall = _clients.any((client) =>
+        client.id == clientId && !client.disconnected && client.inVoiceCall);
     if (!hasCurrentActiveCall) {
       // A previous controller may have disconnected before the final close event
       // reached Flutter. Clear the local ZEGO model so the next controller can call.
@@ -942,6 +978,7 @@ class ServerModel with ChangeNotifier {
 
   Future<void> closeAll() async {
     _cancelAllVoiceCallAutoAcceptTimers();
+    unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
     await Future.wait(
         _clients.map((client) => bind.cmCloseConnection(connId: client.id)));
     _clients.clear();
@@ -963,6 +1000,7 @@ class ServerModel with ChangeNotifier {
 
   void updateVoiceCallState(Map<String, dynamic> evt) {
     try {
+      _clearDisconnectedVoiceCallState();
       final client = Client.fromJson(jsonDecode(evt["client"]));
       var index = _clients.indexWhere((element) => element.id == client.id);
       if (index == -1) {

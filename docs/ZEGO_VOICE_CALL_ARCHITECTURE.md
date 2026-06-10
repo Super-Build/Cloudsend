@@ -25,7 +25,7 @@ sequenceDiagram
     participant ZegoPC as "ZEGO SDK on PC"
     participant ZegoAndroid as "ZEGO SDK on Android"
 
-    PC->>Proxy: POST http://43.99.51.91:50003(pcPeerId, androidPeerId, cloudsendSessionId)
+    PC->>Proxy: POST http://43.99.51.91:50003(pcPeerId, androidPeerId=remotePeerId, cloudsendSessionId)
     Proxy->>Token: reverse proxy to https://1.738489234.com/api/v1/voice-call/create
     Token-->>PC: roomId, caller/callee userId, caller/callee streamId, caller/callee token
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
@@ -116,13 +116,13 @@ Room and stream isolation:
 
 - PC obtains ZEGO metadata from the token service per call.
 - Current PC endpoint is `http://43.99.51.91:50003`, which is expected to reverse proxy to `https://1.738489234.com/api/v1/voice-call/create`.
-- `cloudsendSessionId = pcPeerId_androidPeerId_reqTimestamp`.
+- `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp`.
 - Token service must create unique `roomId`, `callerUserId`, `calleeUserId`, `callerStreamId`, and `calleeStreamId`.
 - PC sends only the Android/callee token to the controlled side; caller token stays in PC memory.
 
 Runtime isolation:
 
-- `src/client/io_loop.rs` rejects non-Android peers.
+- `src/client/io_loop.rs` no longer rejects by platform string; it attempts ZEGO for the current connected session so Android devices with an unrecognized platform string can still receive the invite.
 - `src/client/io_loop.rs` rejects another PC-side ZEGO call while one call owns the current PC process. This avoids Flutter ZEGO singleton callback mixing.
 - `src/server/connection.rs` rejects duplicate incoming ZEGO invites on the same controlled Android connection.
 - `flutter/lib/models/server_model.dart` rejects a second incoming call while another client already has pending/active ZEGO state or the same client is already in an active ZEGO call, but clears stale local ZEGO state when a new incoming invite is the only current signal.

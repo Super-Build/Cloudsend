@@ -946,20 +946,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 if let Some(ts) = self.clear_expired_pending_zego_voice_call() {
                     allow_err!(peer.send(&new_voice_call_close_request(ts)).await);
                 }
-                if self.peer_info.platform != "Android" {
-                    log::warn!(
-                        "Ignoring ZEGO voice-call request for non-Android peer: {}",
-                        self.peer_info.platform
-                    );
-                    self.handler.msgbox(
-                        "custom-nook-nocancel-hasclose-info",
-                        "语音通话",
-                        "语音通话仅支持连接 Android 后使用",
-                        "",
-                    );
-                    self.reset_zego_voice_call_state(true);
-                    return true;
-                }
                 if self.zego_voice_call_active
                     || self.voice_call_request_timestamp.is_some()
                     || self.pending_zego_voice_call.is_some()
@@ -975,8 +961,8 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 let req_timestamp = get_time();
                 let pc_peer_id = config::Config::get_id();
-                let android_peer_id = self.handler.get_id();
-                let zego_owner = format!("{}:{}", pc_peer_id, android_peer_id);
+                let remote_peer_id = self.handler.get_id();
+                let zego_owner = format!("{}:{}", pc_peer_id, remote_peer_id);
                 if !try_acquire_zego_voice_call_owner(&zego_owner) {
                     log::warn!(
                         "Ignoring ZEGO voice-call request because another call owns the process"
@@ -991,11 +977,11 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 self.zego_voice_call_owner = Some(zego_owner.clone());
                 let cloudsend_session_id =
-                    format!("{}_{}_{}", pc_peer_id, android_peer_id, req_timestamp);
+                    format!("{}_{}_{}", pc_peer_id, remote_peer_id, req_timestamp);
                 let zego_voice_call = match tokio::task::spawn_blocking(move || {
                     request_zego_voice_call_info(
                         &pc_peer_id,
-                        &android_peer_id,
+                        &remote_peer_id,
                         &cloudsend_session_id,
                     )
                 })

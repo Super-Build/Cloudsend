@@ -81,7 +81,7 @@ impl ZegoVoiceCallInfo {
 
 pub fn request_zego_voice_call_info(
     pc_peer_id: &str,
-    android_peer_id: &str,
+    remote_peer_id: &str,
     cloudsend_session_id: &str,
 ) -> Result<ZegoVoiceCallInfo> {
     let token_url = DEFAULT_ZEGO_TOKEN_URL;
@@ -99,7 +99,8 @@ pub fn request_zego_voice_call_info(
         .bearer_auth(api_key)
         .json(&json!({
             "pcPeerId": pc_peer_id,
-            "androidPeerId": android_peer_id,
+            // Keep the deployed token-service field name for compatibility.
+            "androidPeerId": remote_peer_id,
             "cloudsendSessionId": cloudsend_session_id,
         }))
         .send()

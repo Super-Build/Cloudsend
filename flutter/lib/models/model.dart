@@ -55,6 +55,8 @@ import 'package:flutter_hbb/native/custom_cursor.dart'
 typedef HandleMsgBox = Function(Map<String, dynamic> evt, String id);
 typedef ReconnectHandle = Function(OverlayDialogManager, SessionID, bool);
 final _constSessionId = Uuid().v4obj();
+final _androidSessionPasswordCache = <String, String>{};
+final _androidSessionOsPasswordCache = <String, Tuple2<String, String>>{};
 
 class CachedPeerData {
   Map<String, dynamic> updatePrivacyMode = {};
@@ -117,6 +119,7 @@ class FfiModel with ChangeNotifier {
   Timer? _timer;
   Timer? _androidAutoReconnectTimer;
   Timer? _androidAutoReconnectPromptTimer;
+  DateTime? _lastAndroidAutoReconnectPasswordSubmitAt;
   static const Duration _androidAutoReconnectInterval =
       Duration(milliseconds: 2500);
   // Keep short Android drops silent; show the reconnect prompt only after this grace window.
@@ -182,6 +185,7 @@ class FfiModel with ChangeNotifier {
     _androidAutoReconnectTimer = null;
     _androidAutoReconnectPromptTimer?.cancel();
     _androidAutoReconnectPromptTimer = null;
+    _lastAndroidAutoReconnectPasswordSubmitAt = null;
   }
 
   void _showAndroidActionsOverlayAboveDialogs({int delayMSecs = 10}) {
@@ -232,6 +236,7 @@ class FfiModel with ChangeNotifier {
     }
     _stopAndroidAutoReconnect();
     _reconnects = 1;
+    _lastAndroidAutoReconnectPasswordSubmitAt = null;
 
     void tryReconnect() {
       final target = parent.target;
@@ -272,20 +277,26 @@ class FfiModel with ChangeNotifier {
         Timer(_androidAutoReconnectPromptDelay, showReconnectPrompt);
   }
 
-  Future<void> _continueAndroidAutoReconnectWithPassword(
-      OverlayDialogManager dialogManager, SessionID sessionId) async {
+  bool _submitCachedAndroidReconnectPassword(
+      OverlayDialogManager dialogManager, SessionID sessionId) {
     final target = parent.target;
     if (!isPeerAndroid ||
-        _androidAutoReconnectTimer == null ||
         target == null ||
         target.closed) {
-      return;
+      return false;
     }
-    final password = target._lastSessionPassword;
+    final password = target._lastKnownAndroidSessionPassword;
     if (password.isEmpty) {
-      enterPasswordDialog(sessionId, dialogManager);
-      return;
+      return false;
     }
+    final now = DateTime.now();
+    final last = _lastAndroidAutoReconnectPasswordSubmitAt;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 1200)) {
+      return true;
+    }
+    _lastAndroidAutoReconnectPasswordSubmitAt = now;
+    target._restoreLastKnownAndroidOsPassword();
     target.login(target._lastSessionOsUsername, target._lastSessionOsPassword,
         sessionId, password, false);
     if (waitForImageDialogShow.value) {
@@ -295,6 +306,17 @@ class FfiModel with ChangeNotifier {
         closeConnection();
       });
       _showAndroidActionsOverlayAboveDialogs(delayMSecs: 100);
+    }
+    return true;
+  }
+
+  Future<void> _continueAndroidAutoReconnectWithPassword(
+      OverlayDialogManager dialogManager, SessionID sessionId) async {
+    if (_androidAutoReconnectTimer == null) {
+      return;
+    }
+    if (!_submitCachedAndroidReconnectPassword(dialogManager, sessionId)) {
+      enterPasswordDialog(sessionId, dialogManager);
     }
   }
 
@@ -1007,7 +1029,12 @@ class FfiModel with ChangeNotifier {
     final text = evt['text'];
     final link = evt['link'];
     if (type == 're-input-password') {
-      wrongPasswordDialog(sessionId, dialogManager, type, title, text);
+      if (isPeerAndroid && _androidAutoReconnectTimer != null) {
+        unawaited(
+            _continueAndroidAutoReconnectWithPassword(dialogManager, sessionId));
+      } else {
+        wrongPasswordDialog(sessionId, dialogManager, type, title, text);
+      }
     } else if (type == 'input-2fa') {
       enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
@@ -3098,7 +3125,7 @@ class CloudSendStatusModel with ChangeNotifier {
 
   var _show = true;
   final _data = CloudSendStatusData();
-  static const Duration _staleThreshold = Duration(seconds: 5);
+  static const Duration _staleThreshold = Duration(seconds: 8);
   DateTime? _lastUpdateTime;
   Timer? _staleTimer;
 
@@ -3131,6 +3158,22 @@ class CloudSendStatusModel with ChangeNotifier {
   }
 
   void reset() {
+    _clearStatusFields();
+    _lastUpdateTime = null;
+    _staleTimer?.cancel();
+    _staleTimer = null;
+    notifyListeners();
+  }
+
+  bool _clearStatusFields() {
+    final changed = _data.video != null ||
+        _data.screenshot != null ||
+        _data.share != null ||
+        _data.ignore != null ||
+        _data.blank != null ||
+        _data.penetrate != null ||
+        _data.touchblock != null ||
+        _data.accessibility != null;
     _data.video = null;
     _data.screenshot = null;
     _data.share = null;
@@ -3139,10 +3182,7 @@ class CloudSendStatusModel with ChangeNotifier {
     _data.penetrate = null;
     _data.touchblock = null;
     _data.accessibility = null;
-    _lastUpdateTime = null;
-    _staleTimer?.cancel();
-    _staleTimer = null;
-    notifyListeners();
+    return changed;
   }
 
   void updateFromEvent(Map<String, dynamic> evt) {
@@ -3184,7 +3224,11 @@ class CloudSendStatusModel with ChangeNotifier {
         Timer(_staleThreshold + const Duration(milliseconds: 500), () {
       if (isStale) {
         debugPrint(
-            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), keep last known state');
+            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), mark status waiting');
+        _clearStatusFields();
+        _lastUpdateTime = null;
+        _staleTimer?.cancel();
+        _staleTimer = null;
         notifyListeners();
       }
     });
@@ -3324,6 +3368,58 @@ class FFI {
         name: PeersModelName.lan, loadEvent: LoadEvent.lan, getInitPeers: null);
   }
 
+  String get _lastKnownAndroidSessionPassword {
+    if (_lastSessionPassword.isNotEmpty) {
+      return _lastSessionPassword;
+    }
+    final cached = _androidSessionPasswordCache[id];
+    if ((cached ?? '').isNotEmpty) {
+      _lastSessionPassword = cached!;
+      return cached;
+    }
+    final builtin = bind.mainGetBuildinOption(key: 'default-connect-password');
+    if (builtin.isNotEmpty) {
+      _cacheAndroidSessionPassword(id, builtin);
+      return builtin;
+    }
+    return '';
+  }
+
+  void _cacheAndroidSessionPassword(String peerId, String password) {
+    if (password.isEmpty) {
+      return;
+    }
+    _lastSessionPassword = password;
+    if (peerId.isNotEmpty) {
+      _androidSessionPasswordCache[peerId] = password;
+    }
+  }
+
+  void _cacheAndroidSessionOsPassword(
+      String peerId, String osUsername, String osPassword) {
+    if (osUsername.isEmpty && osPassword.isEmpty) {
+      return;
+    }
+    _lastSessionOsUsername = osUsername;
+    _lastSessionOsPassword = osPassword;
+    if (peerId.isNotEmpty) {
+      _androidSessionOsPasswordCache[peerId] =
+          Tuple2(osUsername, osPassword);
+    }
+  }
+
+  void _restoreLastKnownAndroidOsPassword() {
+    if (_lastSessionOsUsername.isNotEmpty || _lastSessionOsPassword.isNotEmpty) {
+      return;
+    }
+    final cached = _androidSessionOsPasswordCache[id];
+    if (cached == null) {
+      return;
+    }
+    _lastSessionOsUsername = cached.item1;
+    _lastSessionOsPassword = cached.item2;
+  }
+
   /// Mobile reuse FFI
   void mobileReset() {
     ffiModel.waitForFirstImage.value = true;
@@ -3353,7 +3449,7 @@ class FFI {
     closed = false;
     auditNote = '';
     if ((password ?? '').isNotEmpty) {
-      _lastSessionPassword = password!;
+      _cacheAndroidSessionPassword(id, password!);
     }
     if (isMobile) mobileReset();
     assert(
@@ -3560,11 +3656,10 @@ class FFI {
   void login(String osUsername, String osPassword, SessionID sessionId,
       String password, bool remember) {
     if (password.isNotEmpty) {
-      _lastSessionPassword = password;
+      _cacheAndroidSessionPassword(id, password);
     }
     if (osUsername.isNotEmpty || osPassword.isNotEmpty) {
-      _lastSessionOsUsername = osUsername;
-      _lastSessionOsPassword = osPassword;
+      _cacheAndroidSessionOsPassword(id, osUsername, osPassword);
     }
     bind.sessionLogin(
         sessionId: sessionId,
