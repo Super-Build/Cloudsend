@@ -26,6 +26,26 @@ const kUseTemporaryPassword = "use-temporary-password";
 const kUsePermanentPassword = "use-permanent-password";
 const kUseBothPasswords = "use-both-passwords";
 
+class _NativeVoiceCallState {
+  final bool disconnected;
+  final bool inVoiceCall;
+  final bool incomingVoiceCall;
+
+  const _NativeVoiceCallState({
+    required this.disconnected,
+    required this.inVoiceCall,
+    required this.incomingVoiceCall,
+  });
+
+  bool get hasLiveVoiceCall =>
+      !disconnected && (inVoiceCall || incomingVoiceCall);
+}
+
+bool _jsonBool(dynamic value) {
+  if (value is bool) return value;
+  return value?.toString() == 'true';
+}
+
 class ServerModel with ChangeNotifier {
   bool _isStart = false; // Android screen sharing status
   bool _coreServiceStarted = false; // Android connection/id service status
@@ -53,6 +73,7 @@ class ServerModel with ChangeNotifier {
   final List<Client> _clients = [];
   final Map<int, Timer> _voiceCallAutoAcceptTimers = {};
   final Set<int> _voiceCallAutoAcceptSubmitting = {};
+  Future<void> _voiceCallStateUpdateQueue = Future.value();
 
   Timer? cmHiddenTimer;
 
@@ -703,6 +724,63 @@ class ServerModel with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Map<int, _NativeVoiceCallState>?> _loadNativeVoiceCallState() async {
+    try {
+      final res = await bind.cmGetClientsState();
+      final clientsJson = jsonDecode(res);
+      if (clientsJson is! List) {
+        return null;
+      }
+      final states = <int, _NativeVoiceCallState>{};
+      for (final clientJson in clientsJson) {
+        if (clientJson is! Map) {
+          continue;
+        }
+        final rawId = clientJson['id'];
+        final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        if (id != null) {
+          states[id] = _NativeVoiceCallState(
+            disconnected: _jsonBool(clientJson['disconnected']),
+            inVoiceCall: _jsonBool(clientJson['in_voice_call']),
+            incomingVoiceCall: _jsonBool(clientJson['incoming_voice_call']),
+          );
+        }
+      }
+      return states;
+    } catch (e) {
+      debugPrint("_loadNativeVoiceCallState failed: $e");
+      return null;
+    }
+  }
+
+  void _clearStaleVoiceCallState(
+      Map<int, _NativeVoiceCallState> nativeVoiceState) {
+    var changed = false;
+    for (final client in _clients) {
+      final nativeState = nativeVoiceState[client.id];
+      if ((nativeState?.hasLiveVoiceCall ?? false) ||
+          (!client.inVoiceCall && !client.incomingVoiceCall)) {
+        continue;
+      }
+      _cancelVoiceCallAutoAcceptTimer(client.id);
+      parent.target?.dialogManager
+          .dismissByTag(getVoiceCallDialogTag(client.id));
+      parent.target?.invokeMethod("cancel_notification", client.id);
+      client.inVoiceCall = false;
+      client.incomingVoiceCall = false;
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    final hasLiveVoiceCall =
+        nativeVoiceState.values.any((state) => state.hasLiveVoiceCall);
+    if (!hasLiveVoiceCall) {
+      unawaited(parent.target?.zegoVoiceCallModel.leave() ?? Future.value());
+    }
+    notifyListeners();
+  }
+
   void _submitZegoVoiceCallAccept(Client client) {
     final clientId = client.id;
     if (_voiceCallAutoAcceptSubmitting.contains(clientId) ||
@@ -999,9 +1077,33 @@ class ServerModel with ChangeNotifier {
   }
 
   void updateVoiceCallState(Map<String, dynamic> evt) {
+    final queuedEvt = Map<String, dynamic>.from(evt);
+    _voiceCallStateUpdateQueue = _voiceCallStateUpdateQueue
+        .catchError((_) {})
+        .then((_) => _updateVoiceCallState(queuedEvt))
+        .catchError((e) {
+      debugPrint("updateVoiceCallState queue failed: $e");
+    });
+    unawaited(_voiceCallStateUpdateQueue);
+  }
+
+  Future<void> _updateVoiceCallState(Map<String, dynamic> evt) async {
     try {
+      final nativeVoiceState = await _loadNativeVoiceCallState();
+      if (nativeVoiceState != null) {
+        _clearStaleVoiceCallState(nativeVoiceState);
+      }
       _clearDisconnectedVoiceCallState();
       final client = Client.fromJson(jsonDecode(evt["client"]));
+      final nativeHasClient =
+          nativeVoiceState == null || nativeVoiceState.containsKey(client.id);
+      if (!nativeHasClient) {
+        _cancelVoiceCallAutoAcceptTimer(client.id);
+        parent.target?.dialogManager
+            .dismissByTag(getVoiceCallDialogTag(client.id));
+        parent.target?.invokeMethod("cancel_notification", client.id);
+        return;
+      }
       var index = _clients.indexWhere((element) => element.id == client.id);
       if (index == -1) {
         _clients.add(client);

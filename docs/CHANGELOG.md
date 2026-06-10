@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.2.1-zego-busy-state-cleanup-24] ZEGO stale busy-state cleanup - 2026-06-10
+
+### ZEGO Voice Call
+- Android connection removal now also clears `MainService` pending incoming voice-call cache through `remove_voice_call_state`, preventing a stale background invite from being replayed after the controlling PC disconnects.
+- Android Flutter voice-call state handling now cross-checks incoming voice-call events against the native CM client list and native voice-call flags before creating or keeping local busy state. Orphaned or stale voice-call flags are cleared before `_hasLocalAndroidVoiceCall(...)` can reject a fresh invite.
+- This cleanup is state-only. It does not modify ZEGO token creation, room/stream derivation, `ZegoVoiceCallModel.join/leave`, or the official SDK media sequence (`loginRoom` -> `startPublishingStream` / `startPlayingStream` -> `stop...` / `logoutRoom`).
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-doc-revert-sync-23] Reverted screen-share recovery docs sync - 2026-06-10
 
 ### Documentation

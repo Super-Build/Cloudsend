@@ -32,6 +32,7 @@
 - PC/Android 连接为 strict relay-only：初连、手动重连和自动重连都强制中继；force relay 下不启动 UDP/IPv6/direct 候选，显式 IP/domain:port 直连入口也会拒绝。Android 重连期间优先复用当前 PC 进程缓存的远端密码，缓存为空时可使用构建内置 `default-connect-password`，不能用本机 `mainGetPermanentPassword()`。
 - Android `connectStatus` 已恢复为官方 RustDesk 风格的真实 rendezvous 注册状态：`mainGetConnectStatus()` 的 `status_num` 直接写入 `_connectStatus`，不做短抖防抖，也不伪造就绪；它不是核心服务是否存活的唯一证明。
 - ZEGO Android 忙状态清理覆盖断开客户端和陈旧 `ZegoVoiceCallModel.active`，避免 PC1 通话结束残留阻塞 PC2 发起新通话。
+- 2026-06-10 复核补充：Android `MainService` 的后台来电缓存 `pendingVoiceCallClientJsonById` 会在连接移除时通过 `remove_voice_call_state` 清理；Flutter `ServerModel.updateVoiceCallState(...)` 在 busy 判断前会用 native CM 当前 client id 与 native voice-call flags 清理孤儿/陈旧语音状态，避免旧来电重放或旧 `inVoiceCall` 残留造成首次新通话误报 `语音通话忙`。
 - `cloudsend_status` 是诊断状态推送，已节流为授权后立即一次 + 2 秒周期，并加 JNI 200ms 短超时/单飞保护。PC 端 8 秒未收到真实状态包才将状态面板清成未知；该显示状态不承载控制命令。
 
 已同步文档：`AGENTS.md`、`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`CHANGELOG.md`。

@@ -200,6 +200,9 @@ class DFm8Y8iMScvB2YDw : Service() {
             handleVoiceCallStateForForeground(arg1)
             dispatchFlutterEvent("update_voice_call_state", mapOf("client" to arg1))
         }
+        if (name == "remove_voice_call_state") {
+            clearPendingVoiceCallState(arg1.toIntOrNull())
+        }
         if (name == "add_connection") {
             handleAuthorizedConnectionForVideoRefresh(arg1)
         }
@@ -356,6 +359,14 @@ class DFm8Y8iMScvB2YDw : Service() {
         pendingVoiceCallClientJsonById.values.forEach { clientJson ->
             dispatchFlutterEvent("update_voice_call_state", mapOf("client" to clientJson))
         }
+    }
+
+    private fun clearPendingVoiceCallState(clientID: Int?) {
+        if (clientID == null || clientID < 0) {
+            return
+        }
+        pendingVoiceCallClientJsonById.remove(clientID)
+        cancelNotification(clientID)
     }
 
     private fun handleVoiceCallStateForForeground(clientJson: String) {

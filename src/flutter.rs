@@ -1503,6 +1503,14 @@ pub mod connection_manager {
         }
 
         fn remove_connection(&self, id: i32, close: bool) {
+            #[cfg(target_os = "android")]
+            if let Err(e) = call_main_service_set_by_name(
+                "remove_voice_call_state",
+                Some(&id.to_string()),
+                None,
+            ) {
+                log::debug!("call_main_service_set_by_name fail,{}", e);
+            }
             self.push_event(
                 "on_client_remove",
                 &[("id", &id.to_string()), ("close", &close.to_string())],
