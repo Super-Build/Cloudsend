@@ -23,10 +23,14 @@
 - `MainService` 是前台 `START_STICKY` 核心服务，60 秒内部 keep-alive ticker 只刷新通知、CPU wake lock、Wi-Fi lock 和悬浮窗，不触碰 `MediaProjection`、权限或 PC session。
 - 网络变化、锁屏/亮屏、低内存回调可以通过 `refreshCoreKeepAlive(...)` 刷新已有保活资源，但不得重启 `MainService`、不得重写 `_isReady`、不得停止屏幕共享。
 - Android 14+ `MediaProjection` token / `createVirtualDisplay()` 只能使用一次；Android 15 QPR1+ 锁屏可能停止投屏。当前源码把 projection stop 当成屏幕共享丢失处理：释放投屏资源、清 Android 14+ 旧授权缓存、保持 `_isReady = true`、刷新核心保活，不清 Rust JNI context、不关闭中继 session。
-- 当前源码仍保留 `createOrSetVirtualDisplay(...)` 的 `SecurityException -> handleProjectionStoppedKeepService("virtual-display-security") -> requestMediaProjection()` 链路，因此该路径可能重新弹出屏幕共享授权；不要误判为“SecurityException 静默处理且不弹授权”已经落地。
-- 当前源码仍保留 `BootReceiver.kt -> ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` 的开机自启链路；不要误判为“开机只启动 ACT_ENSURE_CORE_SERVICE 核心服务”已经落地。
+- 当前源码已将 `createOrSetVirtualDisplay(...)` 的 `SecurityException` / virtual-display 创建失败处理改为只调用 `handleProjectionStoppedKeepService(...)` 并返回失败；该失败路径不得再调用 `requestMediaProjection()`。重新弹出屏幕共享授权只允许来自显式 `start_screen_share` / 侧按钮 `开共享`。
+- 当前源码仍保留 `BootReceiver.kt -> ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` 的开机自启链路，但 `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` 不带 `EXT_MEDIA_PROJECTION_RES_INTENT` 时只保活核心服务，不会请求屏幕共享授权。
+- 旧 Flutter `init_service` 和 `start_capture` 入口不得请求 `MediaProjection`；`start_capture` 只能在共享已开启时刷新正常视频路径并返回当前状态。只有显式 `start_screen_share` 和侧按钮 `开共享` / `start_capture2` 可以进入授权/复用链路。
+- `restoreMediaProjection(...)` 默认不得弹授权；PC 首连、重连、状态同步、首帧刷新等非显式路径不能传 `allowPermissionPrompt = true`。
 - `MainService.onDestroy()` 只在显式销毁时清 Rust JNI context；非显式 service 销毁会保留 JNI context 并请求带冷却的 `ACT_ENSURE_CORE_SERVICE` 恢复，网络/锁屏/状态/屏幕共享变化本身不得触发核心服务重启。
 - `src/ui_cm_interface.rs::remove_connection(...)` 不得因最后一个 PC 连接移除而发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
+- 当前源码已禁止 `updateScreenInfo(...)` 在活跃屏幕共享中调用 `stopCapture()` + `startCapture()`；尺寸变化只能 resize/rebind 现有 `VirtualDisplay` surface，不能释放当前 `MediaProjection` 或触发新授权。
+- PC 授权连接后的短 settle window 内，如果已有 live/starting/in-flight 投屏，远程 `start_capture2` 开/关共享命令会被忽略，避免 PC 首连噪声关闭/重开手动授权的屏幕共享。
 - PC Android 自动重连是 2.5 秒单 timer，并在 timer 启动后有一次带存活判断的短延迟首试；前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示；自动重连 retry 不清权限、不 reset `CloudSendStatusModel`。
 - Android 授权 `"add_connection"` 在正常屏幕共享已开启时会触发 `forceVideoFrameRefresh(...)` 小刷新，用于重连成功后的静态画面首帧同步；这不是自动切无视/截屏 fallback，也不改变屏幕共享状态。
 - PC/Android 连接为 strict relay-only：初连、手动重连和自动重连都强制中继；force relay 下不启动 UDP/IPv6/direct 候选，显式 IP/domain:port 直连入口也会拒绝。Android 重连期间优先复用当前 PC 进程缓存的远端密码，缓存为空时可使用构建内置 `default-connect-password`，不能用本机 `mainGetPermanentPassword()`。

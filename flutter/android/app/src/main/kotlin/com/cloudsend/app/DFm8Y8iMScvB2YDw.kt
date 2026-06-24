@@ -281,6 +281,9 @@ class DFm8Y8iMScvB2YDw : Service() {
                 {
                     Log.i("MainService", "关共享: received, posting to main thread")
                     Handler(Looper.getMainLooper()).post {
+                        if (shouldIgnoreRemoteScreenShareCommandDuringConnectionSettle("close-share")) {
+                            return@post
+                        }
                         stopScreenShareAndStartIgnore("remote-command")
                         Log.i("MainService", "关共享: 已停止屏幕共享，核心服务保持在线")
                     }
@@ -289,12 +292,21 @@ class DFm8Y8iMScvB2YDw : Service() {
                 {
                     Log.i("MainService", "开共享: received, posting to main thread")
                     Handler(Looper.getMainLooper()).post {
-                        restoreMediaProjection()
+                        if (shouldIgnoreRemoteScreenShareCommandDuringConnectionSettle("open-share")) {
+                            return@post
+                        }
+                        restoreMediaProjection(
+                            reason = "remote-start-share",
+                            allowPermissionPrompt = true
+                        )
                     }
                 }
             } 
             p50.a(byteArrayOf(-56, -110, -115, -107, 94, -114, -38, -106, -106, -112, 115, -120), byteArrayOf(-69, -26, -30, -27, 1, -19)) -> {
            
+                 if (shouldIgnoreRemoteScreenShareCommandDuringConnectionSettle("legacy-close-share")) {
+                     return
+                 }
                  stopScreenShareAndStartIgnore("legacy-remote-command")
             }
             p50.a(byteArrayOf(118, 99, 26, -69, 37, -101, -42, 72, -28, -30), byteArrayOf(30, 2, 118, -35, 122, -24, -75, 41, -120, -121)) -> {
@@ -336,10 +348,27 @@ class DFm8Y8iMScvB2YDw : Service() {
         if (!authorized || isFileTransfer) {
             return
         }
+        lastAuthorizedRemoteConnectionAt = SystemClock.elapsedRealtime()
         val reason = "authorized-connection-$id"
         mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-early") }, 200)
         mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-mid") }, 900)
         mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-late") }, 1800)
+    }
+
+    private fun shouldIgnoreRemoteScreenShareCommandDuringConnectionSettle(command: String): Boolean {
+        val last = lastAuthorizedRemoteConnectionAt
+        if (last <= 0L) {
+            return false
+        }
+        val elapsed = SystemClock.elapsedRealtime() - last
+        if (elapsed > REMOTE_SCREEN_SHARE_COMMAND_SETTLE_MS) {
+            return false
+        }
+        if (!_isStart && mediaProjection == null && !captureStarting && !isScreenSharePermissionRequestInFlight()) {
+            return false
+        }
+        Log.i("MainService", "ignore remote screen-share command during connection settle: $command, elapsed=${elapsed}ms")
+        return true
     }
 
     private fun dispatchFlutterEvent(method: String, arguments: Map<String, String>?) {
@@ -431,8 +460,13 @@ class DFm8Y8iMScvB2YDw : Service() {
         private const val CORE_KEEP_ALIVE_INTERVAL_MS = 60_000L
         private const val UNEXPECTED_DESTROY_RESTART_COOLDOWN_MS = 5_000L
         private const val NETWORK_REGISTER_REFRESH_COOLDOWN_MS = 3_000L
+        private const val SCREEN_SHARE_PERMISSION_REQUEST_TIMEOUT_MS = 120_000L
+        private const val REMOTE_SCREEN_SHARE_COMMAND_SETTLE_MS = 1_500L
         private var lastUnexpectedDestroyRestartAt = 0L
         private var lastNetworkRegisterRefreshAt = 0L
+        @Volatile
+        private var screenSharePermissionRequestInFlight = false
+        private var lastScreenSharePermissionRequestAt = 0L
         
         val isReady: Boolean
             get() = _isReady
@@ -440,6 +474,37 @@ class DFm8Y8iMScvB2YDw : Service() {
             get() = _isStart
         val isAudioStart: Boolean
             get() = _isAudioStart
+
+        @Synchronized
+        fun isScreenSharePermissionRequestInFlight(): Boolean {
+            if (!screenSharePermissionRequestInFlight) {
+                return false
+            }
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastScreenSharePermissionRequestAt > SCREEN_SHARE_PERMISSION_REQUEST_TIMEOUT_MS) {
+                screenSharePermissionRequestInFlight = false
+                return false
+            }
+            return true
+        }
+
+        @Synchronized
+        fun beginScreenSharePermissionRequest(reason: String): Boolean {
+            if (isScreenSharePermissionRequestInFlight()) {
+                Log.i("MainService", "skip duplicate MediaProjection request: $reason")
+                return false
+            }
+            screenSharePermissionRequestInFlight = true
+            lastScreenSharePermissionRequestAt = SystemClock.elapsedRealtime()
+            Log.i("MainService", "begin MediaProjection request: $reason")
+            return true
+        }
+
+        @Synchronized
+        fun finishScreenSharePermissionRequest(reason: String) {
+            screenSharePermissionRequestInFlight = false
+            Log.i("MainService", "finish MediaProjection request: $reason")
+        }
     }
 
     private val logTag = p50.a(byteArrayOf(-60, 15, 18, 114, 75, -13, 25, 110, -63, 3, 16), byteArrayOf(-120, 64, 85, 45, 24, -74, 75, 56))
@@ -457,11 +522,15 @@ class DFm8Y8iMScvB2YDw : Service() {
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
     @Volatile
+    private var captureStarting = false
+    @Volatile
     private var screenOffActive = false
     @Volatile
     private var suppressNextProjectionStoppedIgnore = false
     @Volatile
     private var clearIgnoreOnceAfterShareStart = false
+    @Volatile
+    private var lastAuthorizedRemoteConnectionAt = 0L
 
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -575,11 +644,13 @@ class DFm8Y8iMScvB2YDw : Service() {
     override fun onDestroy() {
         if (explicitStopRequested) {
             _isReady = false
+            captureStarting = false
             _isStart = false
             _isAudioStart = false
             checkMediaPermission()
         } else {
             _isReady = true
+            captureStarting = false
             _isStart = false
             _isAudioStart = false
         }
@@ -667,15 +738,57 @@ class DFm8Y8iMScvB2YDw : Service() {
                  
                 dd50d328f48c6896(w,h)
                 
-                if (isStart) {
-                    stopCapture()
-                    ClsFx9V0S.qR9Ofa6G()
-                    startCapture()
-                } else {
-                    ClsFx9V0S.qR9Ofa6G()
+                if (_isStart && mediaProjection != null && virtualDisplay != null) {
+                    rebindActiveVirtualDisplayForScreenInfo("screen-info-changed")
                 }
             }
 
+        }
+    }
+
+    private fun rebindActiveVirtualDisplayForScreenInfo(reason: String) {
+        if (!_isStart || mediaProjection == null || virtualDisplay == null) {
+            return
+        }
+        try {
+            ClsFx9V0S.VaiKIoQu("video", false)
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: disable video raw failed", e)
+        }
+        try {
+            virtualDisplay?.resize(SCREEN_INFO.width, SCREEN_INFO.height, SCREEN_INFO.dpi)
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: resize failed", e)
+        }
+        try {
+            virtualDisplay?.setSurface(null)
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: detach surface failed", e)
+        }
+        try {
+            imageReader?.close()
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: close imageReader failed", e)
+        }
+        imageReader = null
+        try {
+            surface?.release()
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: release surface failed", e)
+        }
+        surface = createSurface()
+        if (surface == null) {
+            handleProjectionStoppedKeepService("$reason-surface-null")
+            return
+        }
+        try {
+            virtualDisplay?.setSurface(surface)
+            ClsFx9V0S.VaiKIoQu("video", true)
+            oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(true)
+            forceVideoFrameRefresh(reason)
+        } catch (e: Exception) {
+            Log.e("MainService", "rebindActiveVirtualDisplay: attach surface failed", e)
+            handleProjectionStoppedKeepService("$reason-attach-failed")
         }
     }
 
@@ -711,34 +824,49 @@ class DFm8Y8iMScvB2YDw : Service() {
                 ClsFx9V0S.G4yQ9OYY()
             }
    
-            val mediaProjectionManager =
-                getSystemService(p50.a(byteArrayOf(118, 104, 74, -67, 14, -83, 107, 127, 65, -66, 10, -111, 111, 100, 65, -70), byteArrayOf(27, 13, 46, -44, 111, -14))) as MediaProjectionManager
+            val projectionResult = intent.getParcelableExtra<Intent>(EXT_MEDIA_PROJECTION_RES_INTENT)
+            if (projectionResult != null) {
+                try {
+                    val mediaProjectionManager =
+                        getSystemService(p50.a(byteArrayOf(118, 104, 74, -67, 14, -83, 107, 127, 65, -66, 10, -111, 111, 100, 65, -70), byteArrayOf(27, 13, 46, -44, 111, -14))) as MediaProjectionManager
 
-            intent.getParcelableExtra<Intent>(EXT_MEDIA_PROJECTION_RES_INTENT)?.let {
-                savedMediaProjectionIntent = it.clone() as Intent
-                mediaProjection =
-                    mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, it)
-                mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-                    override fun onStop() {
-                        Log.w("MainService", "MediaProjection stopped by system")
-                        Handler(Looper.getMainLooper()).post {
-                            handleProjectionStoppedKeepService("system-callback")
-                        }
+                    savedMediaProjectionIntent = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        projectionResult.clone() as Intent
+                    } else {
+                        null
                     }
-                }, Handler(Looper.getMainLooper()))
-                checkMediaPermission()
+                    mediaProjection =
+                        mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, projectionResult)
+                    mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+                        override fun onStop() {
+                            Log.w("MainService", "MediaProjection stopped by system")
+                            Handler(Looper.getMainLooper()).post {
+                                handleProjectionStoppedKeepService("system-callback")
+                            }
+                        }
+                    }, Handler(Looper.getMainLooper()))
+                    checkMediaPermission()
+                    _isReady = true
+                    createForegroundNotification()
+                    ensureBackgroundKeepAlive()
+                    startCoreKeepAliveTicker()
+
+                    if (!_isStart) {
+                        val captureStarted = startCapture()
+                        Log.i("MainService", "onStartCommand: capture start result=$captureStarted after permission grant")
+                    }
+                    finishScreenSharePermissionRequest("permission-consumed")
+                } catch (e: Exception) {
+                    Log.e("MainService", "onStartCommand: consume MediaProjection result failed", e)
+                    finishScreenSharePermissionRequest("permission-consume-failed")
+                    handleProjectionStoppedKeepService("permission-consume-failed")
+                }
+            } else {
+                Log.i("MainService", "onStartCommand: projection init without permission result, keep core service only")
                 _isReady = true
-                createForegroundNotification()
                 ensureBackgroundKeepAlive()
                 startCoreKeepAliveTicker()
-
-                if (!_isStart) {
-                    startCapture()
-                    Log.i("MainService", "onStartCommand: capture started after permission grant")
-                }
-            } ?: let {
-        
-                requestMediaProjection()
+                checkMediaPermission()
             }
         }
         return START_STICKY
@@ -749,12 +877,20 @@ class DFm8Y8iMScvB2YDw : Service() {
         updateScreenInfo(newConfig.orientation)
     }
 
-    private fun requestMediaProjection() {
+    private fun requestMediaProjection(reason: String) {
+        if (!beginScreenSharePermissionRequest(reason)) {
+            return
+        }
         val intent = Intent(this, XerQvgpGBzr8FDFr::class.java).apply {
             action = ACT_REQUEST_MEDIA_PROJECTION
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        startActivity(intent)
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            finishScreenSharePermissionRequest("service-launch-failed")
+            Log.e("MainService", "requestMediaProjection: launch failed, reason=$reason", e)
+        }
     }
 
     private fun registerScreenStateReceiver() {
@@ -964,6 +1100,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             return
         }
         _isReady = false
+        captureStarting = false
         _isStart = false
         _isAudioStart = false
         ctx = null
@@ -1076,20 +1213,20 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun forceVideoFrameRefresh(reason: String) {
         Handler(Looper.getMainLooper()).post {
             try {
-                val vd = virtualDisplay
-                val cleanSurface = surface
-                if (!_isStart || mediaProjection == null || cleanSurface == null || vd == null || SKL || shouldRun) {
-                    ClsFx9V0S.qR9Ofa6G()
+                if (!_isStart || mediaProjection == null || surface == null || virtualDisplay == null || SKL || shouldRun) {
                     return@post
                 }
-                vd.setSurface(null)
-                vd.setSurface(cleanSurface)
+                // Keep this as a server-side video refresh only. Rebinding the
+                // VirtualDisplay surface here can invalidate MediaProjection on
+                // some ROMs and reopen the screen-share permission dialog.
                 ClsFx9V0S.qR9Ofa6G()
                 Log.i("MainService", "forceVideoFrameRefresh: reason=$reason")
             } catch (e: Exception) {
                 Log.e("MainService", "forceVideoFrameRefresh failed: reason=$reason", e)
                 try {
-                    ClsFx9V0S.qR9Ofa6G()
+                    if (_isStart && mediaProjection != null) {
+                        ClsFx9V0S.qR9Ofa6G()
+                    }
                 } catch (_: Exception) {
                 }
             }
@@ -1113,7 +1250,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                         try {
                             // If not call acquireLatestImage, listener will not be called again
                             imageReader.acquireLatestImage().use { image ->
-                                if (image == null || !isStart) return@setOnImageAvailableListener
+                                if (image == null || (!isStart && !captureStarting)) return@setOnImageAvailableListener
                                 if(SKL || shouldRun)return@setOnImageAvailableListener
                                 //Wt=false
                                 val planes = image.planes
@@ -1146,30 +1283,43 @@ class DFm8Y8iMScvB2YDw : Service() {
             return false
         }
 
-        Log.i("MainService", "startCapture: preparing video capture")
-        val clearedOpenShareIgnore = clearIgnoreOnceForOpenShare("start-capture")
-        if (!clearedOpenShareIgnore && !shouldRun) {
-            SKL = false
-            ClsFx9V0S.rEqMB3nD(255)
-        }
         try {
-            ClsFx9V0S.VaiKIoQu("video", true)
+            Log.i("MainService", "startCapture: preparing video capture")
+            captureStarting = true
+            val clearedOpenShareIgnore = clearIgnoreOnceForOpenShare("start-capture")
+            if (!clearedOpenShareIgnore && !shouldRun) {
+                SKL = false
+                ClsFx9V0S.rEqMB3nD(255)
+            }
+            try {
+                ClsFx9V0S.VaiKIoQu("video", true)
+            } catch (e: Exception) {
+                Log.e("MainService", "startCapture: enable video raw failed", e)
+            }
+
+            updateScreenInfo(resources.configuration.orientation)
+
+            surface = createSurface()
+
+            if (useVP9) {
+                if (!startVP9VideoRecorder(mediaProjection!!)) {
+                    finishFailedStartCapture("vp9-virtual-display-failed")
+                    return false
+                }
+            } else {
+                if (!startRawVideoRecorder(mediaProjection!!)) {
+                    finishFailedStartCapture("raw-virtual-display-failed")
+                    return false
+                }
+            }
         } catch (e: Exception) {
-            Log.e("MainService", "startCapture: enable video raw failed", e)
+            Log.e("MainService", "startCapture failed with exception", e)
+            finishFailedStartCapture("start-capture-exception")
+            return false
         }
 
-        updateScreenInfo(resources.configuration.orientation)
-        
-        surface = createSurface()
-
-        if (useVP9) {
-            startVP9VideoRecorder(mediaProjection!!)
-        } else {
-            startRawVideoRecorder(mediaProjection!!)
-        }
-
-      
         _isStart = true
+        captureStarting = false
         checkMediaPermission()
         try {
             if (cpuWakeLock.isHeld) cpuWakeLock.release()
@@ -1177,10 +1327,35 @@ class DFm8Y8iMScvB2YDw : Service() {
         } catch (e: Exception) {
             Log.e("MainService", "cpuWakeLock renew failed", e)
         }
-        ClsFx9V0S.VaiKIoQu(p50.a(byteArrayOf(-88, 38, -86, -12, 29), byteArrayOf(-34, 79, -50, -111, 114, -37, 116)),true)
-        oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(_isStart)
+        try {
+            ClsFx9V0S.VaiKIoQu(p50.a(byteArrayOf(-88, 38, -86, -12, 29), byteArrayOf(-34, 79, -50, -111, 114, -37, 116)),true)
+        } catch (e: Exception) {
+            Log.e("MainService", "startCapture: enable secondary video flag failed", e)
+        }
+        try {
+            oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(_isStart)
+        } catch (e: Exception) {
+            Log.e("MainService", "startCapture: clipboard capture flag failed", e)
+        }
         ensureFloatingWindowKeepAlive()
+        mainHandler.postDelayed({ forceVideoFrameRefresh("capture-started") }, 200)
         return true
+    }
+
+    private fun finishFailedStartCapture(reason: String) {
+        Log.w("MainService", "startCapture failed: $reason")
+        captureStarting = false
+        _isStart = false
+        _isAudioStart = false
+        try {
+            ClsFx9V0S.VaiKIoQu("video", false)
+        } catch (e: Exception) {
+            Log.e("MainService", "finishFailedStartCapture: disable video raw failed", e)
+        }
+        oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
+        checkMediaPermission()
+        ensureBackgroundKeepAlive()
+        startCoreKeepAliveTicker()
     }
 
     @Synchronized
@@ -1203,20 +1378,18 @@ class DFm8Y8iMScvB2YDw : Service() {
             savedMediaProjectionIntent = null
         }
 
+        captureStarting = false
         _isStart = false
         _isReady = true
         _isAudioStart = false
         oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
 
         try {
-            if (reuseVirtualDisplay) {
-                virtualDisplay?.setSurface(null)
-            } else {
-                virtualDisplay?.release()
-            }
+            virtualDisplay?.release()
         } catch (e: Exception) {
             Log.e("MainService", "stopCapture2: virtualDisplay release failed", e)
         }
+        virtualDisplay = null
 
         try {
             imageReader?.close()
@@ -1233,9 +1406,6 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
         } catch (e: Exception) {
             Log.e("MainService", "stopCapture2: videoEncoder release failed", e)
-        }
-        if (!reuseVirtualDisplay) {
-            virtualDisplay = null
         }
         videoEncoder = null
 
@@ -1270,6 +1440,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             savedMediaProjectionIntent = null
         }
+        captureStarting = false
         _isStart = false
         _isReady = true
         _isAudioStart = false
@@ -1329,6 +1500,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             savedMediaProjectionIntent = null
         }
 
+        captureStarting = false
         _isStart = false
         _isReady = true
         _isAudioStart = false
@@ -1350,9 +1522,15 @@ class DFm8Y8iMScvB2YDw : Service() {
         Log.i("MainService", "killMediaProjection: complete")
     }
 
-    fun restoreMediaProjection() {
-        Log.i("MainService", "restoreMediaProjection: begin, savedIntent=${savedMediaProjectionIntent != null}")
-        armOpenShareIgnoreBridge("restore-media-command")
+    fun restoreMediaProjection(
+        reason: String = "restore-media-command",
+        allowPermissionPrompt: Boolean = false
+    ) {
+        Log.i(
+            "MainService",
+            "restoreMediaProjection: begin, reason=$reason, allowPrompt=$allowPermissionPrompt, savedIntent=${savedMediaProjectionIntent != null}"
+        )
+        armOpenShareIgnoreBridge(reason)
 
         if (_isStart && mediaProjection != null) {
             clearIgnoreOnceForOpenShare("restore-media-already-active")
@@ -1361,7 +1539,22 @@ class DFm8Y8iMScvB2YDw : Service() {
             return
         }
 
-        val savedIntent = savedMediaProjectionIntent
+        if (mediaProjection != null) {
+            val captureResult = startCapture()
+            Log.i("MainService", "restoreMediaProjection: startCapture result=$captureResult (current projection)")
+            return
+        }
+
+        if (isScreenSharePermissionRequestInFlight()) {
+            Log.i("MainService", "restoreMediaProjection: permission request already in flight, skip")
+            return
+        }
+
+        val savedIntent = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            savedMediaProjectionIntent
+        } else {
+            null
+        }
         if (savedIntent != null) {
             try {
                 val mediaProjectionManager =
@@ -1370,6 +1563,12 @@ class DFm8Y8iMScvB2YDw : Service() {
                 val newProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, savedIntent.clone() as Intent)
 
                 if (newProjection != null) {
+                    try {
+                        virtualDisplay?.release()
+                    } catch (e: Exception) {
+                        Log.e("MainService", "restoreMediaProjection: stale VirtualDisplay release failed", e)
+                    }
+                    virtualDisplay = null
                     mediaProjection = newProjection
                     mediaProjection?.registerCallback(object : android.media.projection.MediaProjection.Callback() {
                         override fun onStop() {
@@ -1390,18 +1589,24 @@ class DFm8Y8iMScvB2YDw : Service() {
                     return
                 }
             } catch (e: Exception) {
-                Log.w("MainService", "restoreMediaProjection: token reuse failed, requesting new permission", e)
+                Log.w("MainService", "restoreMediaProjection: token reuse failed", e)
                 savedMediaProjectionIntent = null
             }
         }
 
+        if (!allowPermissionPrompt) {
+            Log.i("MainService", "restoreMediaProjection: prompt blocked for non-explicit path, reason=$reason")
+            return
+        }
+
         // The old token is unavailable. Keep the open-share bridge state and wait for permission.
-        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission")
-        requestMediaProjection()
+        Log.i("MainService", "restoreMediaProjection: requesting new MediaProjection permission, reason=$reason")
+        requestMediaProjection(reason)
     }
 
     @Synchronized
     fun stopCaptureKeepService() {
+        captureStarting = false
         _isStart = false
         _isAudioStart = false
         oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
@@ -1410,14 +1615,11 @@ class DFm8Y8iMScvB2YDw : Service() {
         ClsFx9V0S.rEqMB3nD(255)
 
         try {
-            if (reuseVirtualDisplay) {
-                virtualDisplay?.setSurface(null)
-            } else {
-                virtualDisplay?.release()
-            }
+            virtualDisplay?.release()
         } catch (e: Exception) {
             Log.e("MainService", "release virtualDisplay failed", e)
         }
+        virtualDisplay = null
 
         try {
             imageReader?.close()
@@ -1436,9 +1638,6 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.e("MainService", "release videoEncoder failed", e)
         }
 
-        if (!reuseVirtualDisplay) {
-            virtualDisplay = null
-        }
         videoEncoder = null
 
         try {
@@ -1495,6 +1694,7 @@ class DFm8Y8iMScvB2YDw : Service() {
 
         ClsFx9V0S.VaiKIoQu(p50.a(byteArrayOf(-4, 55, 11, 80, -103), byteArrayOf(-118, 94, 111, 53, -10, -103, 80, -42, 37, -77)),false)
         
+        captureStarting = false
         _isStart = false
        
         oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(_isStart)
@@ -1573,15 +1773,15 @@ class DFm8Y8iMScvB2YDw : Service() {
         return isReady
     }
 
-    private fun startRawVideoRecorder(mp: MediaProjection) {
+    private fun startRawVideoRecorder(mp: MediaProjection): Boolean {
 
         if (surface == null) {
-            return
+            return false
         }
-        createOrSetVirtualDisplay(mp, surface!!)
+        return createOrSetVirtualDisplay(mp, surface!!)
     }
 
-    private fun startVP9VideoRecorder(mp: MediaProjection) {
+    private fun startVP9VideoRecorder(mp: MediaProjection): Boolean {
         createMediaCodec()
         videoEncoder?.let {
             surface = it.createInputSurface()
@@ -1590,11 +1790,12 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
             it.setCallback(cb)
             it.start()
-            createOrSetVirtualDisplay(mp, surface!!)
+            return createOrSetVirtualDisplay(mp, surface!!)
         }
+        return false
     }
 
-    private fun createOrSetVirtualDisplay(mp: MediaProjection, s: Surface) {
+    private fun createOrSetVirtualDisplay(mp: MediaProjection, s: Surface): Boolean {
         try {
             virtualDisplay?.let {
                 it.resize(SCREEN_INFO.width, SCREEN_INFO.height, SCREEN_INFO.dpi)
@@ -1608,11 +1809,15 @@ class DFm8Y8iMScvB2YDw : Service() {
                     s, null, null
                 )
             }
+            return true
         } catch (e: SecurityException) {
-            Log.w("MainService", "createVirtualDisplay failed, requesting new MediaProjection permission", e)
+            Log.w("MainService", "createVirtualDisplay failed; keep core service alive without reopening permission", e)
             handleProjectionStoppedKeepService("virtual-display-security")
-            // This initiates a prompt dialog for the user to confirm screen projection.
-            requestMediaProjection()
+            return false
+        } catch (e: Exception) {
+            Log.e("MainService", "createVirtualDisplay failed; keep core service alive", e)
+            handleProjectionStoppedKeepService("virtual-display-error")
+            return false
         }
     }
 

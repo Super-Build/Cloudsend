@@ -121,13 +121,14 @@ PC 侧关键状态在：
 - 服务活着 != 已经有首帧
 - Android core connection/id service != Android screen sharing；`Start service` / `Stop service` 只控制 `MediaProjection` 屏幕共享。
 - Android 14+ `MediaProjection` token / `createVirtualDisplay()` is one-shot. Android 15 QPR1+ may stop projection on lock screen. Treat projection stop as screen-share loss only: release projection resources, clear stale saved intent on Android 14+, keep `MainService` / Rust JNI context / relay connection alive.
-- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` still calls `requestMediaProjection()` after `SecurityException`; do not document it as a silent no-prompt path unless the code is changed again.
-- Current source truth: `BootReceiver.kt` still starts `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` after boot permission checks; do not document boot start as `ACT_ENSURE_CORE_SERVICE` / core-only unless the code is changed again.
+- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` treats `SecurityException` / virtual-display creation failure as screen-share loss only and must not call `requestMediaProjection()` from that failure path. Only explicit `start_screen_share` / side-button `开共享` may request `MediaProjection`.
+- Current source truth: `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` without `EXT_MEDIA_PROJECTION_RES_INTENT` is core-service only and must not request screen-share authorization. `BootReceiver.kt` still uses this action, but it no longer opens the projection dialog without a real permission result.
+- `updateScreenInfo(...)` must not call `stopCapture()` + `startCapture()` while normal screen sharing is active. It may resize/rebind the existing `VirtualDisplay` surface only.
 - `MainService.onDestroy()` clears Rust JNI context only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart; network, lock-screen, memory, status, and screen-share changes must not trigger core-service restart.
 - PC waiting-for-image 不得自动发送"开无视"或截屏 fallback；允许补发正常 `sessionRefreshVideo(...)` 请求来唤醒已授权的正常屏幕共享首帧，不能自动切无视/截屏。
 - 侧按钮 `开共享`/`关共享` 是 Android runtime 的主动操作：`开共享` 可临时无视兜底并在共享恢复后一次性清无视，`关共享` 可在无障碍存在时自动切无视保画面。
 - Android 掉线自动重连是 2.5s 单 timer、不可堆叠；启动后允许一次带存活判断的短延迟首试；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示连接提示。
-- Android 授权 `add_connection` 且正常屏幕共享已开启时，会通过 `forceVideoFrameRefresh(...)` 补正常视频首帧，解决重连后静态屏幕卡在 waiting-for-image；不得用 PC 自动切无视/截屏 fallback 解决该问题。
+- Android 授权 `add_connection` 且正常屏幕共享已开启时，会通过 `forceVideoFrameRefresh(...)` 补正常视频首帧，解决重连后静态屏幕卡在 waiting-for-image；不得用 PC 自动切无视/截屏 fallback 或释放重建 `VirtualDisplay` 解决该问题。
 - Android 授权成功后必须立即向 PC 推送一次真实 JNI 状态包，之后再回到 2s 节流状态推送；不得伪造就绪、共享、无视或黑屏状态。
 - 连接必须是 strict relay-only：PC 侧 `sessionReconnect(..., forceRelay: true)`，Rust `LoginConfigHandler.initialize(...)` 默认 `force_relay = true`；force relay 下不得启动 UDP/IPv6/direct 连接候选，显式 IP/domain:port 直连入口也必须拒绝。
 - Android 自动重连期间如果底层出现 `input-password` / `re-input-password`，优先复用本次 PC 进程缓存的远端密码；缓存为空时可读取构建内置 `default-connect-password` 作为与首次连接同源的固定密码。仍然不能用本机 `mainGetPermanentPassword()` 冒充远端密码。

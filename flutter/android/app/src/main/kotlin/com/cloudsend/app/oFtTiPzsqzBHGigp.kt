@@ -84,15 +84,24 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
     }
 
     private fun requestMediaProjection() {
+        if (!DFm8Y8iMScvB2YDw.beginScreenSharePermissionRequest("activity-request")) {
+            return
+        }
         val intent = Intent(this, XerQvgpGBzr8FDFr::class.java).apply {
             action = ACT_REQUEST_MEDIA_PROJECTION
         }
-        startActivityForResult(intent, REQ_INVOKE_PERMISSION_ACTIVITY_MEDIA_PROJECTION)
+        try {
+            startActivityForResult(intent, REQ_INVOKE_PERMISSION_ACTIVITY_MEDIA_PROJECTION)
+        } catch (e: Exception) {
+            DFm8Y8iMScvB2YDw.finishScreenSharePermissionRequest("activity-launch-failed")
+            Log.e("MainActivity", "requestMediaProjection: launch failed", e)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_INVOKE_PERMISSION_ACTIVITY_MEDIA_PROJECTION && resultCode == RES_FAILED) {
+            DFm8Y8iMScvB2YDw.finishScreenSharePermissionRequest("activity-permission-denied")
             flutterMethodChannel?.invokeMethod(p50.a(byteArrayOf(26, 8, -95, 53, 4, -23, 28, 7, -95, 40, 19, -30, 31, 3, -99, 44, 8, -30, 27, 57, -99, 57, 15, -18, 16, 10, -101, 60), byteArrayOf(117, 102, -2, 88, 97, -115)), null)
         }
     }
@@ -184,19 +193,31 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                     ensureMainServiceStarted()
                     result.success(DFm8Y8iMScvB2YDw.isReady)
                 }
-                "start_screen_share", "start_capture" -> {
+                "start_screen_share" -> {
                     ensureMainServiceStarted()
                     val service = activeMainService()
                     if (DFm8Y8iMScvB2YDw.isStart) {
-                        service?.restoreMediaProjection()
+                        // Already sharing. A repeated start request must not try
+                        // to restore/reuse MediaProjection, otherwise Android 14+
+                        // can reopen the permission dialog and clear the active share.
                         result.success(true)
                     } else if (!DFm8Y8iMScvB2YDw.isReady || service == null) {
                         requestMediaProjection()
                         result.success(true)
                     } else {
-                        service.restoreMediaProjection()
+                        service.restoreMediaProjection(
+                            reason = "flutter-start-screen-share",
+                            allowPermissionPrompt = true
+                        )
                         result.success(true)
                     }
+                }
+                "start_capture" -> {
+                    ensureMainServiceStarted()
+                    if (DFm8Y8iMScvB2YDw.isStart) {
+                        activeMainService()?.forceVideoFrameRefresh("legacy-start-capture")
+                    }
+                    result.success(DFm8Y8iMScvB2YDw.isStart)
                 }
                 "stop_screen_share", "stop_service" -> {
                     activeMainService()?.stopScreenShareOnly("flutter-command")
@@ -291,27 +312,23 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                     result.success(CloudSendAdbManager.cancelWirelessDebugging(applicationContext))
                 }
                 p50.a(byteArrayOf(25, -111, -85, 2, -11, -126, 49, -44, 6, -106, -95, 19), byteArrayOf(112, -1, -62, 118, -86, -15, 84, -90)) -> {
-                    Intent(activity, DFm8Y8iMScvB2YDw::class.java).also {
-                        bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
-                    }
-                    if (DFm8Y8iMScvB2YDw.isReady) {
-                        result.success(false)
-                        return@setMethodCallHandler
-                    }
-                    requestMediaProjection()
+                    // Legacy init_service is core-service initialization only.
+                    // It must not request MediaProjection.
+                    ensureMainServiceStarted()
                     result.success(true)
                 }
                 p50.a(byteArrayOf(46, 62, 72, 107, -102, 86, -108, -32, -47, -34, 40, 56, 76), byteArrayOf(93, 74, 41, 25, -18, 9, -9, -127, -95, -86)) -> {
-                    mainService?.let {
-                        it.restoreMediaProjection()
+                    ensureMainServiceStarted()
+                    if (DFm8Y8iMScvB2YDw.isStart) {
+                        activeMainService()?.forceVideoFrameRefresh("legacy-obfuscated-start-capture")
                         result.success(true)
-                    } ?: let {
+                    } else {
                         result.success(false)
                     }
                 }
                 p50.a(byteArrayOf(116, 82, -111, -105, 68, -98, 108, 117, 80, -105, -124, 126), byteArrayOf(7, 38, -2, -25, 27, -19, 9)) -> {
                   
-                    mainService?.let {
+                    activeMainService()?.let {
                         it.stopScreenShareOnly("legacy-flutter-command")
                         result.success(true)
                     } ?: let {

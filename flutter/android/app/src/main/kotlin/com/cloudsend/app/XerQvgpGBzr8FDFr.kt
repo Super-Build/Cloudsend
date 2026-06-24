@@ -14,17 +14,24 @@ class XerQvgpGBzr8FDFr: Activity() {
  
         when (intent.action) {
             ACT_REQUEST_MEDIA_PROJECTION -> {
-                val mediaProjectionManager =
-                    getSystemService(p50.a(byteArrayOf(29, 22, 127, -73, -85, -66, -112, 19, 31, 25, 126, -67, -66, -120, -113, 15), byteArrayOf(112, 115, 27, -34, -54, -31, -32, 97))) as MediaProjectionManager
+                try {
+                    val mediaProjectionManager =
+                        getSystemService(p50.a(byteArrayOf(29, 22, 127, -73, -85, -66, -112, 19, 31, 25, 126, -67, -66, -120, -113, 15), byteArrayOf(112, 115, 27, -34, -54, -31, -32, 97))) as MediaProjectionManager
 
-                val captureIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    val config = android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay()
-                    mediaProjectionManager.createScreenCaptureIntent(config)
-                } else {
-                    mediaProjectionManager.createScreenCaptureIntent()
+                    val captureIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        val config = android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay()
+                        mediaProjectionManager.createScreenCaptureIntent(config)
+                    } else {
+                        mediaProjectionManager.createScreenCaptureIntent()
+                    }
+
+                    startActivityForResult(captureIntent, REQ_REQUEST_MEDIA_PROJECTION)
+                } catch (e: Exception) {
+                    Log.e("PermissionActivity", "request MediaProjection failed", e)
+                    DFm8Y8iMScvB2YDw.finishScreenSharePermissionRequest("permission-activity-launch-failed")
+                    setResult(RES_FAILED)
+                    finish()
                 }
-
-                startActivityForResult(captureIntent, REQ_REQUEST_MEDIA_PROJECTION)
             }
             else -> finish()
         }
@@ -36,6 +43,7 @@ class XerQvgpGBzr8FDFr: Activity() {
             if (resultCode == RESULT_OK && data != null) {
                 launchService(data)
             } else {
+                DFm8Y8iMScvB2YDw.finishScreenSharePermissionRequest("permission-denied")
                 setResult(RES_FAILED)
                 try {
                     oFtTiPzsqzBHGigp.flutterMethodChannel?.invokeMethod(
@@ -56,10 +64,16 @@ class XerQvgpGBzr8FDFr: Activity() {
         serviceIntent.action = ACT_INIT_MEDIA_PROJECTION_AND_SERVICE
         serviceIntent.putExtra(EXT_MEDIA_PROJECTION_RES_INTENT, mediaProjectionResultIntent)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("PermissionActivity", "launch MediaProjection service failed", e)
+            DFm8Y8iMScvB2YDw.finishScreenSharePermissionRequest("permission-service-launch-failed")
+            setResult(RES_FAILED)
         }
     }
 

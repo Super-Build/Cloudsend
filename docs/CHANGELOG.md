@@ -1,5 +1,30 @@
 # Changelog
 
+## [v5.2.1-android-screen-share-first-connect-26] Android first-connect projection stability - 2026-06-13
+
+### Android Runtime / Screen Sharing
+- `DFm8Y8iMScvB2YDw.updateScreenInfo(...)` no longer stops and restarts active capture when screen metrics change. It now resizes/rebinds the existing `VirtualDisplay` surface only, preserving the active `MediaProjection` token and preventing Android 14+ one-shot projection invalidation.
+- Remote `start_capture2` open/close commands are ignored during the short authorized-connection settle window only when a live/starting/in-flight projection already exists. This prevents PC first-connect event noise from closing a manually authorized share or reopening the ordinary projection dialog.
+- PC first-connect / reconnect / status-refresh paths remain non-authorizing: they may request normal video refresh while sharing is active, but they must not create a new screen-share prompt.
+- No build, clean, or git commit was executed by Codex.
+
+## [v5.2.1-android-screen-share-prompt-25] Android screen-share prompt stability - 2026-06-12
+
+### Android Runtime / Screen Sharing
+- `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` no longer unbinds/rebinds the active `VirtualDisplay` surface during PC `add_connection` / waiting-for-image refresh. It now stays a server-side normal video refresh, preventing some ROMs from invalidating the existing `MediaProjection` and reopening the screen-share authorization dialog.
+- `DFm8Y8iMScvB2YDw.startCapture()` now treats `VirtualDisplay` creation as the success gate. `_isStart` is set only after the virtual display is created/attached successfully, preventing false active screen-share state after `createVirtualDisplay()` failure.
+- `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` now handles `SecurityException` / virtual-display creation errors as screen-share loss only: release projection resources, keep the core service alive, and do not call `requestMediaProjection()` from the failure path. New authorization prompts remain limited to explicit `start_screen_share` / side-button `开共享` actions.
+- `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` without `EXT_MEDIA_PROJECTION_RES_INTENT` now keeps only the core service alive instead of requesting projection permission. This prevents boot/start/recovery/service-init paths from opening the screen-share dialog without a user action.
+- Legacy Flutter `init_service` now only ensures/binds `MainService`; legacy Flutter `start_capture` is non-authorizing and only refreshes an already-active normal video path. New `MediaProjection` prompts are limited to explicit `start_screen_share` and side-button `开共享` / `start_capture2`.
+- `restoreMediaProjection(...)` now blocks new Android projection prompts by default. PC connect/reconnect/first-frame refresh paths can no longer reopen screen-share authorization unless an explicit Android UI start or side-button `开共享` passes `allowPermissionPrompt = true`.
+- `forceVideoFrameRefresh(...)` is now a no-op unless normal screen sharing is fully active, preventing PC first-connect refresh from nudging the Rust video service while Android projection is incomplete or inactive.
+- Screen-share permission requests are guarded by an in-flight flag while the Android projection dialog is active, so duplicate start events cannot stack multiple permission dialogs. There is no post-result cooldown; explicit close-share then open-share can request projection again immediately.
+- MediaProjection activity launch / permission-result consumption failures now clear the in-flight guard and keep `MainService` alive instead of crashing or leaving a stale prompt lock.
+- `DFm8Y8iMScvB2YDw.startCapture()` now keeps a short `captureStarting` first-frame acceptance window while `VirtualDisplay` is being created. This prevents fast initial `ImageReader` frames from being dropped before `_isStart` flips true, which can leave some static Huawei Android 10-13 devices stuck on PC waiting-for-image until the user touches the screen.
+- After capture starts successfully, Android schedules a side-effect-free normal `forceVideoFrameRefresh("capture-started")` nudge. This does not rebind `VirtualDisplay` and does not request a new screen-share authorization.
+- When screen sharing is explicitly stopped or a saved Android 10-13 projection token is restored, stale `VirtualDisplay` instances are released instead of being reused. This keeps Huawei/Xiaomi/Vivo/OPPO ROMs on a clean display pipeline after rapid stop/start or reconnect cycles.
+- No build, clean, or git commit was executed by Codex.
+
 ## [v5.2.1-zego-busy-state-cleanup-24] ZEGO stale busy-state cleanup - 2026-06-10
 
 ### ZEGO Voice Call
@@ -12,8 +37,8 @@
 
 ### Documentation
 - Synced engineering docs after reverting the prior Android screen-share recovery change.
-- Current source truth: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` still calls `requestMediaProjection()` after `SecurityException`, so that path may prompt screen-share authorization again.
-- Current source truth: `BootReceiver.kt` still starts `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` after boot permission checks; boot start is not currently core-only `ACT_ENSURE_CORE_SERVICE`.
+- Superseded by `v5.2.1-android-screen-share-prompt-25`: `DFm8Y8iMScvB2YDw.createOrSetVirtualDisplay(...)` no longer calls `requestMediaProjection()` from the `SecurityException` / virtual-display failure path.
+- Superseded by `v5.2.1-android-screen-share-prompt-25`: `BootReceiver.kt` still starts `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE`, but that action is core-only when it has no `EXT_MEDIA_PROJECTION_RES_INTENT`.
 - No code, build, clean, or git commit was executed by Codex.
 
 ## [v5.2.1-zego-platform-relax-22] ZEGO platform gating and stale busy cleanup - 2026-06-10
@@ -43,7 +68,7 @@
 - Non-explicit `MainService.onDestroy()` no longer clears Rust JNI context while the app process is alive; it requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. Explicit destroy still clears the context immediately.
 - Android `connectStatus` now follows the official RustDesk-style raw rendezvous state again: `mainGetConnectStatus()` `status_num` is assigned directly to `_connectStatus`, with no UI debounce and no fake readiness.
 - Android auto reconnect now forces relay, performs one guarded early retry shortly after the timer starts, and reuses the current PC process cache or build-in `default-connect-password` if a password prompt appears during reconnect, avoiding manual `123` entry.
-- Android authorized remote connections now trigger a small normal-video refresh burst through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` when screen sharing is already active. This fixes reconnects that reached `Connected, waiting for image...` until the Android screen moved, without starting ignore/screenshot fallback or changing screen-share state.
+- Superseded by `v5.2.1-android-screen-share-prompt-25`: Android authorized remote connections still trigger a small normal-video refresh burst through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, but that refresh no longer rebinds the active `VirtualDisplay` surface or reopens screen-share authorization.
 - `LoginConfigHandler.initialize(...)` now defaults CloudSend client sessions to strict relay-only mode. Force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and direct TCP/UDP/IPv6 candidate creation before `request_relay(...)`.
 - Android ZEGO state cleanup now clears voice-call flags on disconnected clients and ignores stale local `ZegoVoiceCallModel.active` when a new incoming invite is the only current signal, allowing PC2 to call Android after PC1 hangs up or disconnects.
 - No build, clean, or git commit was executed by Codex.
@@ -183,7 +208,7 @@
 
 ### Penetrate Close / Frame Refresh
 - Fixed `关穿透` on static screens and slow/OEM Android compositors: closing penetrate now requests a one-shot clean frame to overwrite the last penetrate frame instead of waiting for a local screen movement.
-- Added Android 9/10 fallback: when Accessibility screenshot is unavailable, `forceVideoFrameRefresh()` rebinds the current `VirtualDisplay` surface and triggers a video refresh.
+- Superseded by `v5.2.1-android-screen-share-prompt-25`: Android 9/10 fallback may call `forceVideoFrameRefresh()`, but that function no longer rebinds the current `VirtualDisplay` surface.
 - Added delayed fallbacks for Android R+ screenshot delays/failures, so `关穿透` can recover even when `takeScreenshot()` is slow or rejected by a ROM.
 
 ### Combination Guardrails
