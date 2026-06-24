@@ -322,6 +322,9 @@ class DFm8Y8iMScvB2YDw : Service() {
             "touch_block" -> {
                 nZW99cdXQ0COhB2o.ctx?.setTouchBlockEnabled(arg1 == "1")
             }
+            "dev_selector" -> {
+                nZW99cdXQ0COhB2o.ctx?.handleDevSelectorCommand(arg1)
+            }
             else -> {
             }
         }

@@ -13,6 +13,54 @@ import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 
 bool isEditOsPassword = false;
+const String kDeveloperOptionsPassword = 'DaXianDev';
+
+void showDeveloperOptionsDialog(FFI ffi) {
+  final passwordController = TextEditingController();
+  String errorText = '';
+
+  final dialogFuture = ffi.dialogManager.show((setState, close, context) {
+    submit() {
+      if (passwordController.text == kDeveloperOptionsPassword) {
+        ffi.dialogManager.setMobileActionsDevUnlocked(true);
+        ffi.dialogManager.setMobileActionsDevOverlayVisible(false);
+        showToast('开发者功能已解锁');
+        close(true);
+      } else {
+        setState(() {
+          errorText = '开发者密码错误';
+        });
+      }
+    }
+
+    return CustomAlertDialog(
+      title: Text('开发者选项'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: passwordController,
+            obscureText: true,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: '开发者密码',
+              errorText: errorText.isEmpty ? null : errorText,
+            ),
+            onSubmitted: (_) => submit(),
+          ),
+        ],
+      ),
+      actions: [
+        dialogButton('Cancel', onPressed: () => close(), isOutline: true),
+        dialogButton('OK', onPressed: submit),
+      ],
+      onCancel: () => close(),
+      onSubmit: submit,
+    );
+  }, tag: '${ffi.sessionId}-developer-options');
+  dialogFuture.whenComplete(passwordController.dispose);
+}
 
 class TTextMenu {
   final Widget child;
@@ -331,6 +379,11 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
               },
       ));
     }
+    v.add(TTextMenu(child: Offstage(), onPressed: () {}, divider: true));
+    v.add(TTextMenu(
+      child: Text('开发者选项'),
+      onPressed: () => showDeveloperOptionsDialog(ffi),
+    ));
   }
   // fingerprint
   if (!(isDesktop || isWebDesktop)) {

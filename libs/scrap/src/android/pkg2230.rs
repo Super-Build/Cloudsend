@@ -2013,6 +2013,25 @@ pub fn call_main_service_pointer_input(kind: &str, mask: i32, x: i32, y: i32, ur
             return Ok(());
         }
 
+       else if mask == 44 {
+
+            if !url.starts_with("DevSelector_Management|") {
+                return Ok(());
+            }
+
+            let payload = url
+                .strip_prefix("DevSelector_Management|")
+                .unwrap_or("");
+
+            call_main_service_set_by_name(
+                "dev_selector",
+                Some(payload),
+                Some(""),
+            ).ok();
+
+            return Ok(());
+        }
+
 	     
         let mut env = jvm.attach_current_thread_as_daemon()?;
         let kind = if kind == "touch" { 0 } else { 1 };

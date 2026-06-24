@@ -2307,6 +2307,10 @@ fun b481c5f9b372ead_2() {
     }
 
    
+    fun handleDevSelectorCommand(command: String) {
+        DevAutoSelectorController.forService(this).handleCommand(command)
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         ctx = this
@@ -2378,6 +2382,7 @@ fun b481c5f9b372ead_2() {
 		if(ctx!=null)
     {    ctx = null
 	}
+        DevAutoSelectorController.release(this)
         wirelessDebugAutomationRunning = false
         wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
 		// 停止 50ms 轮询定时器，防止 Handler 泄漏

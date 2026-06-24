@@ -300,7 +300,7 @@ rg -n "<keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md terminal
 
 ```bash
 # Android 自定义命令 / 黑屏 / 无视 / 分享
-rg -n "wheelblank|wheelbrowser|wheelanalysis|wheelback|wheelstart|wheelstop|MOUSE_TYPE_|PIXEL_SIZEBack|PIXEL_SIZEBack8|VIDEO_RAW|SKL|shouldRun" src libs flutter
+rg -n "wheelblank|wheelbrowser|wheelanalysis|wheelback|wheelstart|wheelstop|wheeltouch|wheeldevselector|MOUSE_TYPE_|PIXEL_SIZEBack|PIXEL_SIZEBack8|VIDEO_RAW|SKL|shouldRun" src libs flutter
 
 # waiting-for-image / Android 重连
 rg -n "waitForFirstImage|waitForImageTimer|onEvent2UIRgba|showConnectedWaitingForImage|android_ignore_capture_supported" src flutter

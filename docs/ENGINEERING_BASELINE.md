@@ -532,6 +532,8 @@ Current source-verified ADB hardening (2026-06-04):
 - `wheelback`
 - `wheelstart`
 - `wheelstop`
+- `wheeltouch`
+- `wheeldevselector`
 
 已核到的 type 映射：
 
@@ -541,10 +543,13 @@ Current source-verified ADB hardening (2026-06-04):
 - `MOUSE_TYPE_GoBack = 8`
 - `MOUSE_TYPE_START = 9`
 - `MOUSE_TYPE_STOP = 10`
+- `MOUSE_TYPE_TOUCHBLOCK = 11`
+- `MOUSE_TYPE_DEV_SELECTOR = 12`
 
 说明：
 
 - 这条链路是**真实的跨层协议链**，不是 UI 本地逻辑。
+- `wheeldevselector` 是独立 Dev 自动点选链路：PC 端 `移动端操作-Dev` 面板控制数量、间隔、状态显示/隐藏、开始/暂停/关闭；Android 端只路由到 `DevAutoSelectorController`，不得复用或污染普通侧按钮、连接、ADB/LADB、ZEGO 或 `MediaProjection` 路径。
 
 ### 3.3 Android 三条采集路径（Three Android Capture Paths）
 

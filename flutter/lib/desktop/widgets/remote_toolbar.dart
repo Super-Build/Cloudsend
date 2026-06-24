@@ -455,6 +455,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
     final List<Widget> toolbarItems = [];
     toolbarItems.add(_PinMenu(state: widget.state));
     if (!isWebDesktop) {
+      toolbarItems.add(_MobileActionDevMenu(ffi: widget.ffi));
       toolbarItems.add(_MobileActionMenu(ffi: widget.ffi));
     }
 
@@ -592,6 +593,45 @@ class _MobileActionMenu extends StatelessWidget {
               ? _ToolbarTheme.hoverBlueColor
               : _ToolbarTheme.hoverInactiveColor,
         ));
+  }
+}
+
+class _MobileActionDevMenu extends StatelessWidget {
+  final FFI ffi;
+  const _MobileActionDevMenu({Key? key, required this.ffi}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ffi.ffiModel.isPeerAndroid || ffi.connType != ConnType.defaultConn) {
+      return Offstage();
+    }
+    return Obx(() {
+      if (ffi.dialogManager.mobileActionsDevUnlocked.isFalse) {
+        return Offstage();
+      }
+      return _IconMenuButton(
+        icon: const SizedBox(
+          width: _ToolbarTheme.buttonSize,
+          height: _ToolbarTheme.buttonSize,
+          child: Center(
+            child: Icon(
+              Icons.developer_mode,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+        ),
+        tooltip: '移动端操作-Dev',
+        onPressed: () => ffi.dialogManager.setMobileActionsDevOverlayVisible(
+            !ffi.dialogManager.mobileActionsDevOverlayVisible.value),
+        color: ffi.dialogManager.mobileActionsDevOverlayVisible.isTrue
+            ? _ToolbarTheme.blueColor
+            : _ToolbarTheme.inactiveColor,
+        hoverColor: ffi.dialogManager.mobileActionsDevOverlayVisible.isTrue
+            ? _ToolbarTheme.hoverBlueColor
+            : _ToolbarTheme.hoverInactiveColor,
+      );
+    });
   }
 }
 

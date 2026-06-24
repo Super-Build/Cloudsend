@@ -822,6 +822,260 @@ class DraggableMobileActions extends StatelessWidget {
 }
 
 
+class DraggableMobileActionsDev extends StatefulWidget {
+  const DraggableMobileActionsDev({
+    super.key,
+    required this.position,
+    required this.width,
+    required this.height,
+    required this.scale,
+    this.onCommand,
+    this.onHidePressed,
+  });
+
+  final double scale;
+  final DraggableKeyPosition position;
+  final double width;
+  final double height;
+  final void Function(String)? onCommand;
+  final VoidCallback? onHidePressed;
+
+  @override
+  State<DraggableMobileActionsDev> createState() =>
+      _DraggableMobileActionsDevState();
+}
+
+class _DraggableMobileActionsDevState
+    extends State<DraggableMobileActionsDev> {
+  final TextEditingController _limitController =
+      TextEditingController(text: '20');
+  final TextEditingController _delayController =
+      TextEditingController(text: '600');
+  bool _showProgress = false;
+
+  @override
+  void dispose() {
+    _limitController.dispose();
+    _delayController.dispose();
+    super.dispose();
+  }
+
+  int _readInt(TextEditingController controller, int fallback, int minValue,
+      int maxValue) {
+    final value = int.tryParse(controller.text.trim()) ?? fallback;
+    return value.clamp(minValue, maxValue).toInt();
+  }
+
+  String _payload(String action) {
+    final limit = _readInt(_limitController, 20, 1, 9999);
+    final delay = _readInt(_delayController, 600, 200, 60000);
+    return '$action|$limit|$delay|${_showProgress ? 1 : 0}';
+  }
+
+  void _send(String action) {
+    widget.onCommand?.call(_payload(action));
+  }
+
+  void _setProgressVisible(bool visible) {
+    setState(() {
+      _showProgress = visible;
+    });
+    _send('progress');
+  }
+
+  void _closeFeature() {
+    setState(() {
+      _showProgress = false;
+    });
+    _send('close');
+  }
+
+  Widget _label(String text) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 1 * widget.scale),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10 * widget.scale,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _input(TextEditingController controller, String hint) {
+    return SizedBox(
+      height: 26 * widget.scale,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        style: TextStyle(fontSize: 11 * widget.scale, color: Colors.black87),
+        decoration: InputDecoration(
+          hintText: hint,
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 8 * widget.scale,
+            vertical: 4 * widget.scale,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6 * widget.scale),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _commandButton(String text, Color color, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      height: 26 * widget.scale,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.zero,
+          textStyle: TextStyle(
+            fontSize: 11 * widget.scale,
+            fontWeight: FontWeight.w600,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6 * widget.scale),
+          ),
+        ),
+        child: Text(text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Draggable(
+      position: widget.position,
+      width: widget.width,
+      height: widget.height,
+      builder: (_, onPanUpdate) {
+        return GestureDetector(
+          onPanUpdate: onPanUpdate,
+          child: Card(
+            color: Colors.transparent,
+            shadowColor: Colors.transparent,
+            margin: EdgeInsets.zero,
+            child: Container(
+              width: widget.width,
+              height: widget.height,
+              padding: EdgeInsets.all(6 * widget.scale),
+              decoration: BoxDecoration(
+                color: MyTheme.accent.withOpacity(0.45),
+                    BorderRadius.all(Radius.circular(7 * widget.scale)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '移动端操作-Dev',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11 * widget.scale,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                          width: 20 * widget.scale,
+                          height: 20 * widget.scale,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          color: Colors.white,
+                          onPressed: widget.onHidePressed,
+                          splashRadius: kDesktopIconButtonSplashRadius,
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          iconSize: 17 * widget.scale,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _label('最多点选数'),
+                      _input(_limitController, '20'),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _label('点击间隔毫秒'),
+                      _input(_delayController, '600'),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _commandButton(
+                          '打开状态',
+                          Colors.teal,
+                          () => _setProgressVisible(true),
+                        ),
+                      ),
+                      SizedBox(width: 5 * widget.scale),
+                      Expanded(
+                        child: _commandButton(
+                          '关闭状态',
+                          Colors.black45,
+                          () => _setProgressVisible(false),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _commandButton(
+                          '开始',
+                          Colors.blue,
+                          () => _send('start'),
+                        ),
+                      ),
+                      SizedBox(width: 5 * widget.scale),
+                      Expanded(
+                        child: _commandButton(
+                          '暂停',
+                          Colors.red,
+                          () => _send('pause'),
+                        ),
+                      ),
+                      SizedBox(width: 5 * widget.scale),
+                      Expanded(
+                        child: _commandButton(
+                          '关闭',
+                          Colors.black87,
+                          _closeFeature,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+
 // class DraggableMobileActions extends StatefulWidget {
 //   DraggableMobileActions({
 //     Key? key,
@@ -1192,16 +1446,19 @@ class DraggableKeyPosition {
 class DraggablePositions {
   static const kChatWindow = 'draggablePositionChat';
   static const kMobileActions = 'draggablePositionMobile';
+  static const kMobileActionsDev = 'draggablePositionMobileDev';
   static const kIOSDraggable = 'draggablePositionIOS';
 
   static const kInvalidDraggablePosition = Offset(-999999, -999999);
   final chatWindow = DraggableKeyPosition(kChatWindow);
   final mobileActions = DraggableKeyPosition(kMobileActions);
+  final mobileActionsDev = DraggableKeyPosition(kMobileActionsDev);
   final iOSDraggable = DraggableKeyPosition(kIOSDraggable);
 
   load() {
     chatWindow.load();
     mobileActions.load();
+    mobileActionsDev.load();
     iOSDraggable.load();
   }
 }

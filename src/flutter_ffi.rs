@@ -1673,6 +1673,7 @@ pub fn session_send_mouse(session_id: SessionID, msg: String) {
 	        "wheelstart" => MOUSE_TYPE_START, 
 	        "wheelstop" => MOUSE_TYPE_STOP,  
 	        "wheeltouch" => MOUSE_TYPE_TOUCHBLOCK,
+	        "wheeldevselector" => MOUSE_TYPE_DEV_SELECTOR,
                 _ => 0,
             };
         }

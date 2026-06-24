@@ -777,7 +777,10 @@ class OverlayDialogManager {
   int _tagCount = 0;
 
   OverlayEntry? _mobileActionsOverlayEntry;
+  OverlayEntry? _mobileActionsDevOverlayEntry;
   RxBool mobileActionsOverlayVisible = true.obs;
+  RxBool mobileActionsDevOverlayVisible = false.obs;
+  RxBool mobileActionsDevUnlocked = false.obs;
 
   setMobileActionsOverlayVisible(bool v, {store = true}) {
     if (store) {
@@ -791,6 +794,17 @@ class OverlayDialogManager {
   loadMobileActionsOverlayVisible() {
     mobileActionsOverlayVisible.value =
         bind.getLocalFlutterOption(k: kOptionShowMobileAction) != 'N';
+  }
+
+  setMobileActionsDevUnlocked(bool v) {
+    mobileActionsDevUnlocked.value = v;
+    if (!v) {
+      setMobileActionsDevOverlayVisible(false);
+    }
+  }
+
+  setMobileActionsDevOverlayVisible(bool v) {
+    mobileActionsDevOverlayVisible.value = v && mobileActionsDevUnlocked.isTrue;
   }
 
   void setOverlayState(OverlayKeyState overlayKeyState) {
@@ -934,6 +948,12 @@ class OverlayDialogManager {
     showMobileActionsOverlay(ffi: ffi);
   }
 
+  void resetMobileActionsDevOverlay({FFI? ffi}) {
+    if (_mobileActionsDevOverlayEntry == null) return;
+    hideMobileActionsDevOverlay();
+    showMobileActionsDevOverlay(ffi: ffi);
+  }
+
 /*
  Future<void> logToFile(String message) async {
   final timestamp = DateTime.now().toIso8601String();
@@ -1073,6 +1093,51 @@ void logToFile(String message) {
     }
   }
 
+  void showMobileActionsDevOverlay({FFI? ffi}) {
+    if (mobileActionsDevUnlocked.isFalse) return;
+    if (_mobileActionsDevOverlayEntry != null) return;
+    final overlayState = _overlayKeyState.state;
+    if (overlayState == null) return;
+    final overlay = makeMobileActionsDevOverlayEntry(
+      () => hideMobileActionsDevOverlay(),
+      ffi: ffi,
+    );
+    overlayState.insert(overlay);
+    _mobileActionsDevOverlayEntry = overlay;
+    setMobileActionsDevOverlayVisible(true);
+  }
+
+  void removeMobileActionsDevOverlayEntry({bool keepVisible = true}) {
+    if (_mobileActionsDevOverlayEntry != null) {
+      try {
+        _mobileActionsDevOverlayEntry!.remove();
+      } catch (e) {
+        debugPrint("remove mobile actions dev overlay catch error: $e");
+      }
+      _mobileActionsDevOverlayEntry = null;
+    }
+    if (!keepVisible) {
+      setMobileActionsDevOverlayVisible(false);
+    }
+  }
+
+  void hideMobileActionsDevOverlay() {
+    if (_mobileActionsDevOverlayEntry != null) {
+      removeMobileActionsDevOverlayEntry(keepVisible: false);
+      return;
+    }
+    setMobileActionsDevOverlayVisible(false);
+  }
+
+  void toggleMobileActionsDevOverlay({FFI? ffi}) {
+    if (mobileActionsDevUnlocked.isFalse) return;
+    if (_mobileActionsDevOverlayEntry == null) {
+      showMobileActionsDevOverlay(ffi: ffi);
+    } else {
+      hideMobileActionsDevOverlay();
+    }
+  }
+
   bool existing(String tag) {
     return _dialogs.keys.contains(tag);
   }
@@ -1130,6 +1195,48 @@ makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi}) {
       return makeMobileActions(context, c.scale * 2.0);
     } else {
       return makeMobileActions(globalKey.currentContext!, 1.0);
+    }
+  });
+}
+
+makeMobileActionsDevOverlayEntry(VoidCallback? onHide, {FFI? ffi}) {
+  makeMobileActionsDev(BuildContext context, double s) {
+    final session = ffi ?? gFFI;
+    const double overlayW = 150;
+    const double overlayH = 210;
+    final screenSize = MediaQuery.of(context).size;
+    final tabBarHeight = isDesktop ? kDesktopRemoteTabBarHeight : 0.0;
+    final top = screenSize.height * 0.12;
+    final availableHeight = max(
+      overlayH,
+      screenSize.height - tabBarHeight - top,
+    );
+    final scale = min(max(s, 0.85), availableHeight / overlayH);
+    computeOverlayPosition() {
+      return Offset(screenSize.width * 0.14, top);
+    }
+
+    if (draggablePositions.mobileActionsDev.isInvalid()) {
+      draggablePositions.mobileActionsDev.update(computeOverlayPosition());
+    } else {
+      draggablePositions.mobileActionsDev.tryAdjust(overlayW, overlayH, scale);
+    }
+    return DraggableMobileActionsDev(
+      scale: scale,
+      position: draggablePositions.mobileActionsDev,
+      width: overlayW * scale,
+      height: overlayH * scale,
+      onCommand: (input) => session.inputModel.onDevSelectorCommand(input),
+      onHidePressed: onHide,
+    );
+  }
+
+  return OverlayEntry(builder: (context) {
+    if (isDesktop) {
+      final c = Provider.of<CanvasModel>(context);
+      return makeMobileActionsDev(context, c.scale * 2.0);
+    } else {
+      return makeMobileActionsDev(globalKey.currentContext!, 1.0);
     }
   });
 }

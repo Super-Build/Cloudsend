@@ -295,9 +295,10 @@ class _ViewCameraPageState extends State<ViewCameraPage>
             children: [
               _ffi.ffiModel.pi.isSet.isTrue &&
                       _ffi.ffiModel.waitForFirstImage.isTrue
-                  ? emptyOverlay()
+                  ? Offstage()
                   : () {
-                      if (!_ffi.ffiModel.isPeerAndroid) {
+                      if (!_ffi.ffiModel.isPeerAndroid ||
+                          _ffi.connType != ConnType.defaultConn) {
                         return Offstage();
                       } else {
                         return Obx(() => Offstage(
@@ -307,6 +308,28 @@ class _ViewCameraPageState extends State<ViewCameraPage>
                                 makeMobileActionsOverlayEntry(
                                   () => _ffi.dialogManager
                                       .setMobileActionsOverlayVisible(false),
+                                  ffi: _ffi,
+                                )
+                              ]),
+                            ));
+                      }
+                    }(),
+              _ffi.ffiModel.pi.isSet.isTrue &&
+                      _ffi.ffiModel.waitForFirstImage.isTrue
+                  ? emptyOverlay()
+                  : () {
+                      if (!_ffi.ffiModel.isPeerAndroid) {
+                        return Offstage();
+                      } else {
+                        return Obx(() => Offstage(
+                              offstage: _ffi.dialogManager
+                                      .mobileActionsDevUnlocked.isFalse ||
+                                  _ffi.dialogManager
+                                      .mobileActionsDevOverlayVisible.isFalse,
+                              child: Overlay(initialEntries: [
+                                makeMobileActionsDevOverlayEntry(
+                                  () => _ffi.dialogManager
+                                      .setMobileActionsDevOverlayVisible(false),
                                   ffi: _ffi,
                                 )
                               ]),

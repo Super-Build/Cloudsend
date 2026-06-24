@@ -375,6 +375,29 @@ class _RemotePageState extends State<RemotePage>
                             ));
                       }
                     }(),
+              _ffi.ffiModel.pi.isSet.isTrue &&
+                      _ffi.ffiModel.waitForFirstImage.isTrue
+                  ? Offstage()
+                  : () {
+                      if (!_ffi.ffiModel.isPeerAndroid ||
+                          _ffi.connType != ConnType.defaultConn) {
+                        return Offstage();
+                      } else {
+                        return Obx(() => Offstage(
+                              offstage: _ffi.dialogManager
+                                      .mobileActionsDevUnlocked.isFalse ||
+                                  _ffi.dialogManager
+                                      .mobileActionsDevOverlayVisible.isFalse,
+                              child: Overlay(initialEntries: [
+                                makeMobileActionsDevOverlayEntry(
+                                  () => _ffi.dialogManager
+                                      .setMobileActionsDevOverlayVisible(false),
+                                  ffi: _ffi,
+                                )
+                              ]),
+                            ));
+                      }
+                    }(),
               // Use Overlay to enable rebuild every time on menu button click.
               _ffi.ffiModel.pi.isSet.isTrue
                   ? Overlay(

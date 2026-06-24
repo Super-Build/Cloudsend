@@ -374,6 +374,7 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 
 - `flutter/lib/common/widgets/overlay.dart`
 - `flutter/lib/common.dart`
+- `flutter/lib/desktop/widgets/remote_toolbar.dart`
 - `flutter/lib/models/input_model.dart`
 - `src/flutter_ffi.rs`
 - `src/ui_session_interface.rs`
@@ -381,8 +382,10 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - `libs/hbb_common/protos/message.proto`
 - `src/server/connection.rs`
 - `libs/scrap/src/android/pkg2230.rs`
+- `libs/scrap/src/android/ffi.rs`
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
 - `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DevAutoSelectorController.kt`
 
 新增命令时必须逐项确认：
 
@@ -392,7 +395,17 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 4. `message.proto` 是否承载了所需字段
 5. `src/server/connection.rs` 是否接收并转发
 6. `pkg2230.rs` 是否分发到 Kotlin
-7. Kotlin service 是否真的执行了逻辑
+7. 若涉及 Android JNI 自定义命令，`ffi.rs` 兼容链是否同步
+8. Kotlin service 是否真的执行了逻辑
+
+当前 Dev 自动点选链路：
+
+- PC 解锁入口：`toolbarControls(...)` 的 `开发者选项`，默认密码 `DaXianDev`。
+- PC 工具栏：`_MobileActionDevMenu`，解锁后显示 `移动端操作-Dev`。
+- PC 悬浮面板：`DraggableMobileActionsDev`，发送 `start|limit|delay|showProgress` / `pause|...` / `close|...` / `progress|...`；`progress` 同时承担显示/关闭 Android 悬浮进度，`close` 只关闭 Dev 自动点选自身。
+- Dart/Rust 命令：`wheeldevselector -> MOUSE_TYPE_DEV_SELECTOR=12 -> mask=44 -> DevSelector_Management|...`。
+- Kotlin 执行：`dev_selector -> nZW99cdXQ0COhB2o.handleDevSelectorCommand(...) -> DevAutoSelectorController`。
+- 边界：该链路只控制微信点选自动化；不得触碰连接、ADB/LADB、ZEGO、`MediaProjection` 或普通移动端侧按钮状态。
 
 ---
 

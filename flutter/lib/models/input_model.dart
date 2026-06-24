@@ -840,6 +840,10 @@ class InputModel {
   Future<void> tapTouchBlock(MouseButtons button,parameters) async {
     await sendMouse('wheeltouch', button,url:parameters);
   }
+
+  Future<void> tapDevSelector(MouseButtons button, parameters) async {
+    await sendMouse('wheeldevselector', button, url: parameters);
+  }
   
   /// Send scroll event with scroll distance [y].
   Future<void> scroll(int y) async {
@@ -874,6 +878,7 @@ class InputModel {
           'wheelback',
           'wheelstart',
           'wheeltouch',
+          'wheeldevselector',
         }.contains(type);
     if (!keyboardPerm && !isAndroidControlCommand) return;
     if (isViewCamera) return;
@@ -973,6 +978,11 @@ class InputModel {
           }
 
           url= 'TouchBlock_Management'  + url + '|'+ "0|1";
+    }
+
+    else if(type=="wheeldevselector")
+    {
+          url = 'DevSelector_Management|$url';
     }
     
     await bind.sessionSendMouse(
@@ -1643,6 +1653,8 @@ class InputModel {
 
    void onScreenTouchBlock(parameters) => tapTouchBlock(MouseButtons.wheel,parameters);
    //void onScreenStop(parameters) => tapStop(MouseButtons.wheel,parameters);
+   void onDevSelectorCommand(parameters) =>
+      tapDevSelector(MouseButtons.wheel, parameters);
   
   // Simulate a key press event.
   // `usbHidUsage` is the USB HID usage code of the key.

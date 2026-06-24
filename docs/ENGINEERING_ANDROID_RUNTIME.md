@@ -175,6 +175,23 @@ Current source truth:
 - 第一次远程事件可能因 flag 尚未切换而被吸收；PC 活跃窗口内本地触摸可能穿透。
 - 完美本地触摸隔离需要设备管理员、root、OEM API 或系统签名能力。
 
+### 0.2.1 Dev 自动点选是独立 Android 控制链
+
+2026-06-24 已新增 PC 远程控制的 Dev 自动点选链路，来源功能为 `C:\Users\Administrator\Desktop\XuanZe` 的微信联系人选择页自动点选逻辑：
+
+- PC `控制操作` 菜单底部有 `开发者选项`，默认密码 `DaXianDev`；解锁后仅在默认远控连接工具栏显示 `移动端操作-Dev`，默认灰色关闭。
+- `移动端操作-Dev` 悬浮面板只包含 Dev 自动点选控制：最大点选数、点击间隔毫秒、打开状态、关闭状态、开始、暂停、关闭；默认最大点选数为 `20`，默认点击间隔为 `600` ms。
+- 命令链为 `wheeldevselector -> MOUSE_TYPE_DEV_SELECTOR=12 -> mask=44 -> DevSelector_Management|... -> dev_selector`。
+- `DFm8Y8iMScvB2YDwSBN("dev_selector", arg1, ...)` 只路由到 `nZW99cdXQ0COhB2o.ctx?.handleDevSelectorCommand(arg1)`。
+- `DevAutoSelectorController` 仅在 Android 无障碍服务内执行：校验当前窗口 package 为 `com.tencent.mm`，Android R+ 使用 `takeScreenshot()` 识别未选圆圈，旧系统使用坐标/滚动 fallback。
+- Android 端进度显示使用独立小尺寸 `TYPE_ACCESSIBILITY_OVERLAY`，只显示状态和 `selectedCount/limit`，由 PC 端 `打开状态` / `关闭状态` 控制；悬浮进度可在 Android 端上下拖动调整位置。
+- PC 端 `关闭` 只关闭 Dev 自动点选自身：停止运行、清 Dev 进度状态、隐藏 Dev 进度悬浮窗；不得触碰普通移动端操作、连接、ADB/LADB、ZEGO 或 `MediaProjection`。
+
+边界：
+
+- Dev 自动点选不得启动/停止 `MediaProjection`，不得改变 `shouldRun`、`SKL`、`BIS`、`touchBlockOverlay` 或普通移动端侧按钮状态。
+- Dev 自动点选不得触碰连接/reconnect、ADB/LADB、ZEGO 语音、状态监测、等待首帧或普通截图/无视/穿透链路。
+
 ### 0.3 Android 状态监测推送链路
 
 2026-04-18 已新增 Android 被控端状态 JSON 聚合与 PC 端监测面板：
