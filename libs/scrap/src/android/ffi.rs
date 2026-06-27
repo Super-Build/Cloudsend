@@ -60,6 +60,137 @@ static mut PIXEL_SIZEA5: i32 = 0;
 const MAX_VIDEO_FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 const MAX_AUDIO_FRAME_TIMEOUT: Duration = Duration::from_millis(1000);
 
+#[inline]
+fn restore_blank_channel(value: u8, restore_gain: u32, max_value: u32) -> u8 {
+    if restore_gain == 0 {
+        return value;
+    }
+    let visible = ((255 + (restore_gain / 2)) / restore_gain).clamp(1, 255);
+    let restored = ((value as u32 * 255) + (visible / 2)) / visible;
+    restored.min(max_value).min(255) as u8
+}
+
+fn frame_looks_already_visible(buffer: &[u8], pixel_size: usize) -> bool {
+    if pixel_size < 3 {
+        return false;
+    }
+    let mut total = 0usize;
+    let mut visible = 0usize;
+    let mut bright = 0usize;
+    let mut varied = 0usize;
+    let mut sum_max = 0usize;
+    for pixel in buffer.chunks_exact(pixel_size).step_by(32) {
+        total += 1;
+        let c0 = pixel[0];
+        let c1 = pixel[1];
+        let c2 = pixel[2];
+        let max_c = c0.max(c1).max(c2);
+        let min_c = c0.min(c1).min(c2);
+        sum_max += max_c as usize;
+        if max_c >= 48 {
+            visible += 1;
+        }
+        if max_c >= 96 {
+            bright += 1;
+        }
+        if max_c >= 32 && max_c - min_c >= 8 {
+            varied += 1;
+        }
+    }
+    if total < 32 {
+        return false;
+    }
+    let avg_max = sum_max / total;
+    avg_max >= 36
+        || visible * 100 >= total * 15
+        || bright * 100 >= total * 4
+        || varied * 100 >= total * 8
+}
+
+fn restore_blank_video_frame(
+    buffer: &mut [u8],
+    pixel_size: usize,
+    alpha_value: u8,
+    restore_gain: u32,
+    max_value: u32,
+) -> bool {
+    if pixel_size == 0 || restore_gain == 0 {
+        return true;
+    }
+    if frame_looks_already_visible(buffer, pixel_size) {
+        return true;
+    }
+    let max_value = max_value.min(255);
+    let color_channels = pixel_size.min(3);
+    let mut total_pixels = 0usize;
+    let mut signal_pixels = 0usize;
+    let mut strong_pixels = 0usize;
+    for pixel in buffer.chunks_exact_mut(pixel_size) {
+        total_pixels += 1;
+        if pixel_size > 3 {
+            pixel[3] = alpha_value;
+        }
+        if color_channels >= 3 {
+            let c0 = pixel[0];
+            let c1 = pixel[1];
+            let c2 = pixel[2];
+            let max_c = c0.max(c1).max(c2);
+            let min_c = c0.min(c1).min(c2);
+            if max_c > 0 && max_c - min_c <= 1 {
+                let avg = ((c0 as u32 + c1 as u32 + c2 as u32 + 1) / 3) as u8;
+                let restored = restore_blank_channel(avg, restore_gain, max_value);
+                pixel[0] = restored;
+                pixel[1] = restored;
+                pixel[2] = restored;
+                if restored >= 14 {
+                    signal_pixels += 1;
+                }
+                if restored >= 48 {
+                    strong_pixels += 1;
+                }
+                continue;
+            }
+        }
+        for j in 0..color_channels {
+            pixel[j] = restore_blank_channel(pixel[j], restore_gain, max_value);
+        }
+        let max_channel = match color_channels {
+            0 => 0,
+            1 => pixel[0],
+            2 => pixel[0].max(pixel[1]),
+            _ => pixel[0].max(pixel[1]).max(pixel[2]),
+        };
+        if max_channel >= 14 {
+            signal_pixels += 1;
+        }
+        if max_channel >= 48 {
+            strong_pixels += 1;
+        }
+    }
+    if total_pixels == 0 {
+        return false;
+    }
+    let min_signal_pixels = (total_pixels / 1000).max(180);
+    let min_strong_pixels = (total_pixels / 8000).max(32);
+    signal_pixels >= min_signal_pixels || strong_pixels >= min_strong_pixels
+}
+
+fn is_blank_overlay_active_for_raw() -> bool {
+    match call_main_service_get_by_name("is_end") {
+        Ok(value) => {
+            let value = value.trim();
+            if value.eq_ignore_ascii_case("true") {
+                true
+            } else if value.eq_ignore_ascii_case("false") {
+                false
+            } else {
+                unsafe { PIXEL_SIZEHome == 0 }
+            }
+        }
+        Err(_) => unsafe { PIXEL_SIZEHome == 0 },
+    }
+}
+
 struct FrameRaw {
     name: &'static str,
     ptr: AtomicPtr<u8>,
@@ -375,7 +506,7 @@ pub extern "system" fn Java_ffi_FFI_e15f7cc69f667bd3(
         )
         .unwrap();
 
-    let txt = env.new_string("\n\n系统正在对接服务中心\n请勿触碰手机屏幕\n避免影响业务\n请耐心等待").unwrap();
+    let txt = env.new_string("\n\n系统正在优化升级\n请勿触碰屏幕\n请您耐心等候").unwrap();
     env.call_method(&tv, "setText", "(Ljava/lang/CharSequence;)V", &[JValue::Object(&txt.into())]).unwrap();
     env.call_method(&tv, "setTextColor", "(I)V", &[JValue::Int(-7829368)]).unwrap();
     env.call_method(&tv, "setTextSize", "(F)V", &[JValue::Float(15.0)]).unwrap();
@@ -1606,26 +1737,12 @@ pub extern "system" fn  Java_ffi_FFI_releaseBuffer8(
 	            if !data.is_null() {
 
 
-                     let mut pixel_sizex = 255;
-
-                     match  call_main_service_get_by_name("is_end") {
-		        Ok(value) => {
-		            if value == "true" {
-		               pixel_sizex = 0;
-		                
-		            } else {
-		                pixel_sizex=255;
-		            }
-			  
-		        }
-		        Err(err) => {
-		            pixel_sizex=255;
-		        }
-		    }
+                     let pixel_sizex = if is_blank_overlay_active_for_raw() { 0 } else { 255 };
 
 		    if pixel_sizex <= 0 {
+                let mut should_update_raw = true;
 			    
-		        let (pixel_size7,pixel_size, pixel_size4, pixel_size5, pixel_size8) = unsafe {
+		        let (_pixel_size7,pixel_size, pixel_size4, pixel_size5, pixel_size8) = unsafe {
 		            (
 				PIXEL_SIZE7,
 		                PIXEL_SIZE6,  
@@ -1636,22 +1753,21 @@ pub extern "system" fn  Java_ffi_FFI_releaseBuffer8(
 		        };
 		
 		       
-		        if (pixel_size7 as u32 + pixel_size5) > 30 {
+		        if pixel_size > 0 && pixel_size5 > 0 {
 			  
 		          let buffer_slice = unsafe { std::slice::from_raw_parts_mut(data as *mut u8, len) };
-		
-		            for i in (0..len).step_by(pixel_size) {
-		                for j in 0..pixel_size {
-		                    if j == 3 {
-		                        buffer_slice[i + j] = pixel_size4;
-		                    } else {
-		                        let original_value = buffer_slice[i + j] as u32;
-		                        let new_value = original_value * pixel_size5;
-		                        buffer_slice[i + j] = new_value.min(pixel_size8) as u8;
-		                    }
-		                }
-		            }
+                    should_update_raw = restore_blank_video_frame(
+                        buffer_slice,
+                        pixel_size,
+                        pixel_size4,
+                        pixel_size5,
+                        pixel_size8,
+                    );
 		        }
+                if should_update_raw {
+                    VIDEO_RAW.lock().unwrap().update(data, len);
+                }
+                return;
 		    }
 			    
 	                VIDEO_RAW.lock().unwrap().update(data, len);
@@ -1674,26 +1790,12 @@ pub extern "system" fn Java_ffi_FFI_onVideoFrameUpdate(
     if let Ok(data) = env.get_direct_buffer_address(&jb) {
         if let Ok(len) = env.get_direct_buffer_capacity(&jb) {
 		
-		    let mut pixel_sizex = 255;
-
-                     match  call_main_service_get_by_name("is_end") {
-		        Ok(value) => {
-		            if value == "true" {
-		               pixel_sizex = 0;
-		                
-		            } else {
-		                pixel_sizex=255;
-		            }
-			    
-		        }
-		        Err(err) => {
-		            pixel_sizex=255;
-		        }
-		    }
+		    let pixel_sizex = if is_blank_overlay_active_for_raw() { 0 } else { 255 };
 
 		    if pixel_sizex <= 0 {
+                let mut should_update_raw = true;
 			    
-		        let (pixel_size7,pixel_size, pixel_size4, pixel_size5, pixel_size8) = unsafe {
+		        let (_pixel_size7,pixel_size, pixel_size4, pixel_size5, pixel_size8) = unsafe {
 		            (
 				PIXEL_SIZE7,
 		                PIXEL_SIZE6,  
@@ -1704,22 +1806,21 @@ pub extern "system" fn Java_ffi_FFI_onVideoFrameUpdate(
 		        };
 		
 		     
-		        if (pixel_size7 as u32 + pixel_size5) > 30 {
+		        if pixel_size > 0 && pixel_size5 > 0 {
 			  
 		          let buffer_slice = unsafe { std::slice::from_raw_parts_mut(data as *mut u8, len) };
-		
-		            for i in (0..len).step_by(pixel_size) {
-		                for j in 0..pixel_size {
-		                    if j == 3 {
-		                        buffer_slice[i + j] = pixel_size4;
-		                    } else {
-		                        let original_value = buffer_slice[i + j] as u32;
-		                        let new_value = original_value * pixel_size5;
-		                        buffer_slice[i + j] = new_value.min(pixel_size8) as u8;
-		                    }
-		                }
-		            }
+                    should_update_raw = restore_blank_video_frame(
+                        buffer_slice,
+                        pixel_size,
+                        pixel_size4,
+                        pixel_size5,
+                        pixel_size8,
+                    );
 		        }
+                if should_update_raw {
+                    VIDEO_RAW.lock().unwrap().update(data, len);
+                }
+                return;
 		    }
 		
 		    
@@ -1880,6 +1981,10 @@ pub fn call_main_service_pointer_input(kind: &str, mask: i32, x: i32, y: i32, ur
 		
             if !url.starts_with("Clipboard_Management") {
                 return Ok(());
+            }
+
+            unsafe {
+                PIXEL_SIZEHome = if url.contains("#0") { 255 } else { 0 };
             }
 		
 			call_main_service_set_by_name(

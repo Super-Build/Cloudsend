@@ -186,9 +186,9 @@ Current source truth:
 - `DevAutoSelectorController` 仅在 Android 无障碍服务内执行：校验当前窗口 package 为 `com.tencent.mm`，Android R+ 使用 `takeScreenshot()` 识别未选圆圈，旧系统使用坐标/滚动 fallback。
 - Android 端进度显示使用独立小尺寸 `TYPE_ACCESSIBILITY_OVERLAY`，只显示状态和 `selectedCount/limit`，由 PC 端 `打开状态` / `关闭状态` 控制；悬浮进度可在 Android 端上下拖动调整位置。
 - PC 端 `关闭` 只关闭 Dev 自动点选自身：停止运行、清 Dev 进度状态、隐藏 Dev 进度悬浮窗；不得触碰普通移动端操作、连接、ADB/LADB、ZEGO 或 `MediaProjection`。
-- 当黑屏 `overLay` 已开启时，`DevAutoSelectorController` 不再走 Android R+ `takeScreenshot()` 识别路径，改用已有坐标/滚动 fallback，避免截图结果被黑屏层挡住导致自动点选失灵。
-- 黑屏开启时 Dev 状态不再创建独立顶层悬浮窗，而是通过 `nZW99cdXQ0COhB2o.showDevProgressUnderBlank(...)` 写入黑屏 `overLay` 内部的下层文本；`overLay` 内最后绘制 alpha `248` 黑色 cover，因此 Android 本机仍接近黑层，PC 端可通过旧帧恢复逻辑看到底层状态文本。黑屏窗口本身不得因 Dev 状态更新而 `removeView/addView` 重排层级。
-- 黑屏 `overLay` 回到旧的本地近黑 + PC 帧恢复路线：`DyXxszSR(...)` 使用显式大窗口、`PixelFormat.RGBA_8888`、`FLAG_LAYOUT_IN_SCREEN`、`FLAG_LAYOUT_NO_LIMITS`、`FLAG_FULLSCREEN`、`FLAG_NOT_TOUCHABLE`，背景 alpha 固定为 `248`。PC 命令参数为 `255|36|4|5|255`，Android Rust 接收端也会把旧 PC 发来的黑屏参数归一为不透明 alpha `255`、RGB 恢复倍率 `36`，避免旧 `122|80|4|5|255` 造成半透明混合、高光截断和反差色。不要改成 alpha `255` 或系统亮度方案，否则 PC 端会看到黑层或产生曝光/颜色污染。PC 侧 `开黑屏` / `关黑屏` 侧按钮协议不变。
+- 当黑屏 `overLay` 已开启时，`DevAutoSelectorController` 不再走 Android R+ `takeScreenshot()` 识别路径，避免截图结果被黑屏层挡住；黑屏下优先用 Accessibility tree 的未选中 `checkable` 节点或可见联系人行 bounds 计算圆圈坐标，并维护当前页已点行中心点记忆，跳过刚点过的候选，翻页后再清空记忆，最后才退回旧坐标/滚动 fallback，以提升黑屏下点选精度并避免重复点同一行。
+- 黑屏开启时 Dev 状态不再创建独立顶层悬浮窗，而是通过 `nZW99cdXQ0COhB2o.showDevProgressUnderBlank(...)` 写入黑屏 `overLay` 内部的下层文本；随后绘制 alpha `248` 黑色 cover，因此 Android 本机仍接近黑层，PC 端可通过旧帧恢复逻辑看到底层状态文本。黑屏窗口本身不得因 Dev 状态更新而 `removeView/addView` 重排层级。
+- 黑屏 `overLay` 回到本地近黑 + PC 帧恢复路线：`DyXxszSR(...)` 使用显式大窗口、`PixelFormat.RGBA_8888`、`FLAG_LAYOUT_IN_SCREEN`、`FLAG_LAYOUT_NO_LIMITS`、`FLAG_FULLSCREEN`、`FLAG_NOT_TOUCHABLE`，背景 alpha 固定为 `248`，是优先保证 PC 清晰度的平衡档。PC 命令参数为 `255|36|4|5|255`，Android Rust 接收端也会把旧 PC 发来的黑屏参数归一为不透明 alpha `255`、RGB 恢复倍率 `36`，匹配 `248` 黑层下约 `7/255` 的可见信号。`pkg2230.rs` 与兼容 `ffi.rs` 的黑屏帧恢复不再是简单 `channel * 36`，而是通过 `restore_blank_video_frame(...)` 按恢复倍率反推黑层可见系数、逐通道限幅恢复，并对近似灰白像素做中性化处理，降低色偏、色块和反差色；恢复前会用 `frame_looks_already_visible(...)` 识别已是正常可见的无视/普通帧并直接放行，避免部分 ROM 截图已排除黑屏层时被二次放大导致过曝；恢复函数会返回有效亮度判断，若恢复后仍接近全黑，则跳过 `VIDEO_RAW.update(...)`，让 PC 保持上一帧，避免偶发黑帧覆盖画面。Rust raw frame 层同时用 `PIXEL_SIZEHome` 保存 `mask=37` 黑屏开关状态，`is_blank_overlay_active_for_raw(...)` 在 Kotlin `BIS` 查询失败或返回异常值时使用本地状态兜底，避免一次 JNI 状态查询失败把黑屏帧当普通帧推给 PC。`nZW99cdXQ0COhB2o.addBlankHintTextView(...)` 在同一 `overLay` 内绘制左下角提示 `系统正在优化升级` / `请勿触碰屏幕` / `请您耐心等候`，使用纯白普通文本配合低亮度显示，不使用独立 `FLAG_SECURE` 窗口，避免 PC 端出现安全窗口黑块。`nZW99cdXQ0COhB2o.applyBlankBrightness(...)` 只在 Android 本机黑屏开启期间保存并降低本机亮度：有 `Settings.System.canWrite(...)` 时写 `SCREEN_BRIGHTNESS = 10` 并在关黑屏恢复原亮度/模式，同时总是对黑屏窗口设置 `WindowManager.LayoutParams.screenBrightness = 10/255f` 作为本窗口兜底；该逻辑不得触碰 PC 亮度、连接、投屏授权或其他组件。`refreshVideoAfterBlankChange(...)` 在开/关黑屏后补发多次普通视频刷新，关黑屏时额外请求一次 one-shot clean frame，降低静态画面需要手动滑动才恢复的问题。不要改成 alpha `255` 或系统亮度方案，否则 PC 端会看到黑层或产生曝光/颜色污染。PC 侧 `开黑屏` / `关黑屏` 侧按钮协议不变。
 
 边界：
 
@@ -261,6 +261,7 @@ Current runtime truth:
 - On Android 9/10, screenshot failure, or delayed screenshot timeout, the fallback is `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, which now only calls the server-side video refresh and must not rebind the current `VirtualDisplay` surface.
 - `开无视 -> 开穿透 -> 关穿透` is a required supported combination. Closing penetrate must preserve `shouldRun == true` and `PIXEL_SIZEBack8 == 0` when ignore was already running.
 - The one-shot clean-frame path may temporarily open `PIXEL_SIZEBack8` only when ignore is not running; it must restore the gate immediately after the one-shot frame write.
+- 黑屏与"开无视"可同时处于开启状态，并沿用旧项目原则：`shouldRun` 开启时正常 `ImageReader` 让位，`createSurfaceuseVP8()` 与 `nZW99cdXQ0COhB2o` 的无视截图循环/回调即使 `BIS` 为 true 也继续推帧，让"开无视"在黑屏下仍能接管并投放画面。黑屏期间这些帧仍会经过 Rust 黑屏恢复与近全黑帧跳过保护，避免偶发截到完整黑层时覆盖 PC 画面；关黑屏后无视循环保持原状态继续工作。
 
 ---
 

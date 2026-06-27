@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -23,6 +24,7 @@ import android.widget.TextView
 import androidx.annotation.RequiresApi
 import java.util.WeakHashMap
 import java.util.concurrent.Executor
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -72,11 +74,17 @@ class DevAutoSelectorController private constructor(
     private var noCircleScreens = 0
     private var pageIndex = 0
     private var coordinateRowIndex = 0
+    private val blankTappedRows = mutableListOf<Int>()
 
     private var progressView: TextView? = null
     private var progressParams: WindowManager.LayoutParams? = null
     private var progressDragStartRawY = 0f
     private var progressDragStartY = 0
+    private enum class BlankTapResult {
+        TAPPED,
+        NEED_SCROLL,
+        UNAVAILABLE
+    }
     private val windowManager: WindowManager by lazy {
         service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
@@ -108,6 +116,7 @@ class DevAutoSelectorController private constructor(
         noCircleScreens = 0
         pageIndex = 0
         coordinateRowIndex = 0
+        blankTappedRows.clear()
         updateStatus("运行中 0/$limit")
         handler.post { selectNext() }
     }
@@ -115,6 +124,7 @@ class DevAutoSelectorController private constructor(
     private fun stopSelecting(message: String) {
         running = false
         screenshotInProgress = false
+        blankTappedRows.clear()
         handler.removeCallbacksAndMessages(null)
         updateStatus(message)
     }
@@ -128,6 +138,7 @@ class DevAutoSelectorController private constructor(
         noCircleScreens = 0
         pageIndex = 0
         coordinateRowIndex = 0
+        blankTappedRows.clear()
         handler.removeCallbacksAndMessages(null)
         hideProgressOverlay()
         service.hideDevProgressUnderBlank()
@@ -136,6 +147,7 @@ class DevAutoSelectorController private constructor(
     private fun release() {
         running = false
         screenshotInProgress = false
+        blankTappedRows.clear()
         handler.removeCallbacksAndMessages(null)
         hideProgressOverlay()
         service.hideDevProgressUnderBlank()
@@ -155,12 +167,38 @@ class DevAutoSelectorController private constructor(
         }
 
         if (service.isBlankOverlayActiveForDev()) {
-            selectByCoordinateFallback(root)
+            selectByBlankPreciseFallback(root)
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             selectByScreenshot()
         } else {
             selectByCoordinateFallback(root)
         }
+    }
+
+    private fun selectByBlankPreciseFallback(root: AccessibilityNodeInfo?) {
+        if (root != null) {
+            when (tapNextAccessibilityCircle(root)) {
+                BlankTapResult.TAPPED -> {
+                    onSelected("节点点选")
+                    return
+                }
+                BlankTapResult.NEED_SCROLL -> {
+                    if (swipeUp() || scrollForward(root)) {
+                        coordinateRowIndex = 0
+                        blankTappedRows.clear()
+                        pageIndex++
+                        updateStatus("滑动中 $selectedCount/$limit")
+                        handler.postDelayed({ selectNext() }, max(delayMs, 900L))
+                    } else {
+                        stopSelecting("没有更多可点选项")
+                    }
+                    return
+                }
+                BlankTapResult.UNAVAILABLE -> {
+                }
+            }
+        }
+        selectByCoordinateFallback(root)
     }
 
     private fun selectByCoordinateFallback(root: AccessibilityNodeInfo?) {
@@ -171,12 +209,176 @@ class DevAutoSelectorController private constructor(
 
         if (swipeUp() || (root != null && scrollForward(root))) {
             coordinateRowIndex = 0
+            blankTappedRows.clear()
             pageIndex++
             updateStatus("滑动中 $selectedCount/$limit")
             handler.postDelayed({ selectNext() }, max(delayMs, 850L))
         } else {
             stopSelecting("没有更多可点选项")
         }
+    }
+
+    private fun tapNextAccessibilityCircle(root: AccessibilityNodeInfo): BlankTapResult {
+        val uncheckedCircle = findTopUncheckedCheckableCircle(root)
+        if (uncheckedCircle != null) {
+            return if (tap(uncheckedCircle.centerX(), uncheckedCircle.centerY())) {
+                rememberBlankTappedRow(uncheckedCircle.centerY())
+                BlankTapResult.TAPPED
+            } else {
+                BlankTapResult.UNAVAILABLE
+            }
+        }
+
+        val allRowCenters = visibleContactRowCenters(root)
+        if (allRowCenters.isEmpty()) return BlankTapResult.UNAVAILABLE
+        val rowCenters = allRowCenters.filterNot { isKnownBlankTappedRow(it) }
+        if (rowCenters.isEmpty()) return BlankTapResult.NEED_SCROLL
+
+        val y = rowCenters.first()
+        return if (tap(circleX(), y)) {
+            rememberBlankTappedRow(y)
+            BlankTapResult.TAPPED
+        } else {
+            BlankTapResult.UNAVAILABLE
+        }
+    }
+
+    private fun findTopUncheckedCheckableCircle(root: AccessibilityNodeInfo): Rect? {
+        val metrics = service.resources.displayMetrics
+        val maxLeft = max(120, (metrics.widthPixels * 0.18f).toInt())
+        val minY = (metrics.heightPixels * 0.12f).toInt()
+        val maxY = metrics.heightPixels - max(dp(72), (metrics.heightPixels * 0.06f).toInt())
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        val candidates = mutableListOf<Rect>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.isVisibleToUser && node.isCheckable && !node.isChecked) {
+                val rect = Rect()
+                node.getBoundsInScreen(rect)
+                val centerY = rect.centerY()
+                if (!rect.isEmpty &&
+                    rect.left >= 0 &&
+                    rect.left <= maxLeft &&
+                    centerY in minY..maxY &&
+                    !isKnownBlankTappedRow(centerY) &&
+                    rect.width() <= max(120, (metrics.widthPixels * 0.20f).toInt()) &&
+                    rect.height() in dp(18)..dp(72)
+                ) {
+                    candidates.add(Rect(rect))
+                }
+            }
+            for (index in 0 until node.childCount) {
+                node.getChild(index)?.let { queue.add(it) }
+            }
+        }
+        return candidates.minByOrNull { it.top }
+    }
+
+    private fun visibleContactRowCenters(root: AccessibilityNodeInfo): List<Int> {
+        val metrics = service.resources.displayMetrics
+        val minY = (metrics.heightPixels * 0.13f).toInt()
+        val maxY = metrics.heightPixels - max(dp(74), (metrics.heightPixels * 0.06f).toInt())
+        val minTextX = max(100, (metrics.widthPixels * 0.18f).toInt())
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        val centers = mutableListOf<Int>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.isVisibleToUser && hasMeaningfulText(node)) {
+                val rowBounds = rowBoundsForNode(node, metrics.widthPixels)
+                val centerY = rowBounds?.centerY()
+                val textBounds = Rect()
+                node.getBoundsInScreen(textBounds)
+                if (centerY != null &&
+                    centerY in minY..maxY &&
+                    textBounds.centerX() >= minTextX &&
+                    !looksLikeToolbarText(node)
+                ) {
+                    centers.add(centerY)
+                }
+            }
+            for (index in 0 until node.childCount) {
+                node.getChild(index)?.let { queue.add(it) }
+            }
+        }
+        return mergeRowCenters(centers)
+    }
+
+    private fun rowBoundsForNode(node: AccessibilityNodeInfo, screenWidth: Int): Rect? {
+        var current: AccessibilityNodeInfo? = node
+        var best: Rect? = null
+        var depth = 0
+        while (current != null && depth < 7) {
+            val rect = Rect()
+            current.getBoundsInScreen(rect)
+            val height = rect.height()
+            if (!rect.isEmpty &&
+                rect.width() >= (screenWidth * 0.42f).toInt() &&
+                height in dp(38)..dp(104)
+            ) {
+                best = Rect(rect)
+            }
+            current = current.parent
+            depth++
+        }
+        if (best != null) return best
+        val textRect = Rect()
+        node.getBoundsInScreen(textRect)
+        return if (!textRect.isEmpty && textRect.height() in dp(12)..dp(80)) {
+            val rowHalfHeight = max(dp(24), textRect.height())
+            Rect(0, textRect.centerY() - rowHalfHeight, screenWidth, textRect.centerY() + rowHalfHeight)
+        } else {
+            null
+        }
+    }
+
+    private fun mergeRowCenters(rawCenters: List<Int>): List<Int> {
+        if (rawCenters.isEmpty()) return emptyList()
+        val tolerance = dp(20)
+        val result = mutableListOf<Int>()
+        for (center in rawCenters.sorted()) {
+            val last = result.lastOrNull()
+            if (last == null || abs(center - last) > tolerance) {
+                result.add(center)
+            }
+        }
+        return result
+    }
+
+    private fun rememberBlankTappedRow(centerY: Int) {
+        if (isKnownBlankTappedRow(centerY)) return
+        blankTappedRows.add(centerY)
+        if (blankTappedRows.size > 80) {
+            blankTappedRows.removeAt(0)
+        }
+    }
+
+    private fun isKnownBlankTappedRow(centerY: Int): Boolean {
+        val tolerance = dp(24)
+        return blankTappedRows.any { abs(it - centerY) <= tolerance }
+    }
+
+    private fun hasMeaningfulText(node: AccessibilityNodeInfo): Boolean {
+        val value = node.text?.toString()?.trim()
+            ?: node.contentDescription?.toString()?.trim()
+            ?: return false
+        if (value.length < 2) return false
+        return value != "搜索" &&
+            value != "取消" &&
+            value != "完成" &&
+            value != "确定" &&
+            value != "返回"
+    }
+
+    private fun looksLikeToolbarText(node: AccessibilityNodeInfo): Boolean {
+        val value = node.text?.toString()?.trim()
+            ?: node.contentDescription?.toString()?.trim()
+            ?: return false
+        return value.contains("选择") ||
+            value.contains("搜索") ||
+            value.contains("完成") ||
+            value.contains("取消")
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
@@ -265,6 +467,7 @@ class DevAutoSelectorController private constructor(
         val root = service.rootInActiveWindow
         if (swipeUp() || (root != null && scrollForward(root))) {
             coordinateRowIndex = 0
+            blankTappedRows.clear()
             pageIndex++
             updateStatus("滑动中 $selectedCount/$limit")
             handler.postDelayed({ selectNext() }, max(delayMs, 900L))
@@ -278,7 +481,13 @@ class DevAutoSelectorController private constructor(
         screenshotFailCount = 0
         noCircleScreens = 0
         updateStatus("$prefix $selectedCount/$limit")
-        val nextDelay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val nextDelay = if (service.isBlankOverlayActiveForDev()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                max(delayMs, 1500L)
+            } else {
+                max(delayMs, 1000L)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             max(delayMs, 1500L)
         } else if (selectedCount == 1) {
             max(delayMs, 1100L)

@@ -1254,7 +1254,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                             // If not call acquireLatestImage, listener will not be called again
                             imageReader.acquireLatestImage().use { image ->
                                 if (image == null || (!isStart && !captureStarting)) return@setOnImageAvailableListener
-                                if(SKL || shouldRun)return@setOnImageAvailableListener
+                                if (SKL || shouldRun) return@setOnImageAvailableListener
                                 //Wt=false
                                 val planes = image.planes
                                 val buffer = planes[0].buffer
