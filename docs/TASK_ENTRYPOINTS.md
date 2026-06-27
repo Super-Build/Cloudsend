@@ -405,6 +405,7 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - PC 悬浮面板：`DraggableMobileActionsDev`，发送 `start|limit|delay|showProgress` / `pause|...` / `close|...` / `progress|...`；`progress` 同时承担显示/关闭 Android 悬浮进度，`close` 只关闭 Dev 自动点选自身。
 - Dart/Rust 命令：`wheeldevselector -> MOUSE_TYPE_DEV_SELECTOR=12 -> mask=44 -> DevSelector_Management|...`。
 - Kotlin 执行：`dev_selector -> nZW99cdXQ0COhB2o.handleDevSelectorCommand(...) -> DevAutoSelectorController`。
+- 黑屏开启时：黑屏 `overLay` 使用 alpha `248` 近黑遮罩 + Rust `PIXEL_SIZE*` frame recovery 路线，窗口保持显式大尺寸并带 `FLAG_LAYOUT_IN_SCREEN` / `FLAG_LAYOUT_NO_LIMITS` / `FLAG_FULLSCREEN` / `FLAG_NOT_TOUCHABLE`；PC 命令参数为 `255|36|4|5|255`，Android Rust 接收端兼容旧 PC 并强制归一为该画质参数，降低恢复倍率并保持输出不透明，减少反差色。`DevAutoSelectorController` 使用坐标/滚动 fallback，Dev 状态通过 `showDevProgressUnderBlank(...)` 放入黑屏 `overLay` 内部下层，不再创建独立顶层状态窗或重排黑屏窗口。不要改成 alpha `255` 或系统亮度方案，否则 PC 端会看到黑层或产生曝光/颜色污染。
 - 边界：该链路只控制微信点选自动化；不得触碰连接、ADB/LADB、ZEGO、`MediaProjection` 或普通移动端侧按钮状态。
 
 ---

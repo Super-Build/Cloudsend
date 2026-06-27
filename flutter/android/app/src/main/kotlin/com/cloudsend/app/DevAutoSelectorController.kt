@@ -52,6 +52,11 @@ class DevAutoSelectorController private constructor(
                 controllers.remove(service)?.release()
             }
         }
+
+        fun onBlankOverlayChanged(service: nZW99cdXQ0COhB2o, active: Boolean) {
+            val controller = synchronized(controllers) { controllers[service] }
+            controller?.onBlankOverlayChanged(active)
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -125,6 +130,7 @@ class DevAutoSelectorController private constructor(
         coordinateRowIndex = 0
         handler.removeCallbacksAndMessages(null)
         hideProgressOverlay()
+        service.hideDevProgressUnderBlank()
     }
 
     private fun release() {
@@ -132,6 +138,7 @@ class DevAutoSelectorController private constructor(
         screenshotInProgress = false
         handler.removeCallbacksAndMessages(null)
         hideProgressOverlay()
+        service.hideDevProgressUnderBlank()
     }
 
     private fun selectNext() {
@@ -147,7 +154,9 @@ class DevAutoSelectorController private constructor(
             return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (service.isBlankOverlayActiveForDev()) {
+            selectByCoordinateFallback(root)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             selectByScreenshot()
         } else {
             selectByCoordinateFallback(root)
@@ -427,10 +436,38 @@ class DevAutoSelectorController private constructor(
 
     private fun updateStatus(message: String) {
         if (showProgress) {
-            showProgressOverlay()
-            progressView?.text = compactProgressText(message)
+            val text = compactProgressText(message)
+            if (service.showDevProgressUnderBlank(text)) {
+                hideProgressOverlay(clearBlankUnderlay = false)
+            } else {
+                service.hideDevProgressUnderBlank()
+                showProgressOverlay()
+                progressView?.text = text
+            }
         } else {
             hideProgressOverlay()
+            service.hideDevProgressUnderBlank()
+        }
+    }
+
+    private fun onBlankOverlayChanged(active: Boolean) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { onBlankOverlayChanged(active) }
+            return
+        }
+        if (!showProgress) {
+            hideProgressOverlay()
+            service.hideDevProgressUnderBlank()
+            return
+        }
+        val text = compactProgressText(if (running) "运行中" else "已就绪")
+        if (active) {
+            service.showDevProgressUnderBlank(text)
+            hideProgressOverlay(clearBlankUnderlay = false)
+        } else {
+            service.hideDevProgressUnderBlank()
+            showProgressOverlay()
+            progressView?.text = text
         }
     }
 
@@ -444,6 +481,7 @@ class DevAutoSelectorController private constructor(
 
     @SuppressLint("ClickableViewAccessibility")
     private fun showProgressOverlay() {
+        if (service.isBlankOverlayActiveForDev()) return
         if (progressView != null) return
         val view = TextView(service).apply {
             text = compactProgressText("已就绪")
@@ -507,7 +545,7 @@ class DevAutoSelectorController private constructor(
         }
     }
 
-    private fun hideProgressOverlay() {
+    private fun hideProgressOverlay(clearBlankUnderlay: Boolean = true) {
         val view = progressView ?: return
         try {
             windowManager.removeView(view)
@@ -516,6 +554,9 @@ class DevAutoSelectorController private constructor(
         } finally {
             progressView = null
             progressParams = null
+            if (clearBlankUnderlay) {
+                service.hideDevProgressUnderBlank()
+            }
         }
     }
 

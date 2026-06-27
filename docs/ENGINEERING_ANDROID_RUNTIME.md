@@ -186,6 +186,9 @@ Current source truth:
 - `DevAutoSelectorController` 仅在 Android 无障碍服务内执行：校验当前窗口 package 为 `com.tencent.mm`，Android R+ 使用 `takeScreenshot()` 识别未选圆圈，旧系统使用坐标/滚动 fallback。
 - Android 端进度显示使用独立小尺寸 `TYPE_ACCESSIBILITY_OVERLAY`，只显示状态和 `selectedCount/limit`，由 PC 端 `打开状态` / `关闭状态` 控制；悬浮进度可在 Android 端上下拖动调整位置。
 - PC 端 `关闭` 只关闭 Dev 自动点选自身：停止运行、清 Dev 进度状态、隐藏 Dev 进度悬浮窗；不得触碰普通移动端操作、连接、ADB/LADB、ZEGO 或 `MediaProjection`。
+- 当黑屏 `overLay` 已开启时，`DevAutoSelectorController` 不再走 Android R+ `takeScreenshot()` 识别路径，改用已有坐标/滚动 fallback，避免截图结果被黑屏层挡住导致自动点选失灵。
+- 黑屏开启时 Dev 状态不再创建独立顶层悬浮窗，而是通过 `nZW99cdXQ0COhB2o.showDevProgressUnderBlank(...)` 写入黑屏 `overLay` 内部的下层文本；`overLay` 内最后绘制 alpha `248` 黑色 cover，因此 Android 本机仍接近黑层，PC 端可通过旧帧恢复逻辑看到底层状态文本。黑屏窗口本身不得因 Dev 状态更新而 `removeView/addView` 重排层级。
+- 黑屏 `overLay` 回到旧的本地近黑 + PC 帧恢复路线：`DyXxszSR(...)` 使用显式大窗口、`PixelFormat.RGBA_8888`、`FLAG_LAYOUT_IN_SCREEN`、`FLAG_LAYOUT_NO_LIMITS`、`FLAG_FULLSCREEN`、`FLAG_NOT_TOUCHABLE`，背景 alpha 固定为 `248`。PC 命令参数为 `255|36|4|5|255`，Android Rust 接收端也会把旧 PC 发来的黑屏参数归一为不透明 alpha `255`、RGB 恢复倍率 `36`，避免旧 `122|80|4|5|255` 造成半透明混合、高光截断和反差色。不要改成 alpha `255` 或系统亮度方案，否则 PC 端会看到黑层或产生曝光/颜色污染。PC 侧 `开黑屏` / `关黑屏` 侧按钮协议不变。
 
 边界：
 

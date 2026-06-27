@@ -961,7 +961,7 @@ class InputModel {
             url = '';
           }
 
-        url= 'Clipboard_Management|'+ '122|80|4|5|255'+ "|#"+ url; 
+        url= 'Clipboard_Management|'+ '255|36|4|5|255'+ "|#"+ url;
 
     }
 

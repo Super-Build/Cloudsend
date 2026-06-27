@@ -613,6 +613,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     private lateinit var windowManager: WindowManager
     private lateinit var overLayparams_bass: WindowManager.LayoutParams
     private lateinit var overLay: FrameLayout
+    private var blankDevProgressText: String? = null
     private val lock = ReentrantLock()
     
 
@@ -883,13 +884,19 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
 	    gohome = arg1.toInt()
 
-	    if (overLay != null && overLay.windowToken != null) {
+	    if (::overLay.isInitialized && overLay.windowToken != null) {
 	        overLay.post {
 	            try {
 	                if (gohome == 8) {
+                        BIS = false
+                        applyBlankOverlayVisual(false)
 	                    overLay.visibility = View.GONE
+                        DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, false)
 	                } else {
-	                    overLay.visibility = View.VISIBLE
+                        BIS = true
+                        DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, true)
+                        applyBlankOverlayVisual(true)
+                        overLay.visibility = View.VISIBLE
 	                }
 	            } catch (e: Exception) {
 	                Log.e("InputService", "onstart_overlay: update visibility failed", e)
@@ -897,6 +904,108 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 	        }
 	    }
 	}
+
+    fun isBlankOverlayActiveForDev(): Boolean {
+        return gohome != View.GONE || BIS
+    }
+
+    fun keepBlankOverlayOnTopForDev(reason: String = "dev") {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { keepBlankOverlayOnTopForDev(reason) }
+            return
+        }
+        if (isBlankOverlayActiveForDev()) {
+            applyBlankOverlayVisual(true)
+        }
+    }
+
+    fun showDevProgressUnderBlank(text: String): Boolean {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { showDevProgressUnderBlank(text) }
+            return isBlankOverlayActiveForDev()
+        }
+        if (!isBlankOverlayActiveForDev() || !::overLay.isInitialized) return false
+        blankDevProgressText = text
+        applyBlankOverlayVisual(true)
+        return true
+    }
+
+    fun hideDevProgressUnderBlank() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { hideDevProgressUnderBlank() }
+            return
+        }
+        blankDevProgressText = null
+        if (::overLay.isInitialized && isBlankOverlayActiveForDev()) {
+            applyBlankOverlayVisual(true)
+        }
+    }
+
+    private fun applyBlankOverlayVisual(active: Boolean) {
+        if (!::overLay.isInitialized) return
+        overLay.setBackgroundColor(Color.TRANSPARENT)
+        overLay.alpha = 1f
+        if (overLay.childCount > 0) {
+            overLay.removeAllViews()
+        }
+        if (::overLayparams_bass.isInitialized) {
+            val metrics = resources.displayMetrics
+            val currentLongEdge = max(overLayparams_bass.width, overLayparams_bass.height)
+            val displayLongEdge = max(metrics.widthPixels, metrics.heightPixels)
+            val overlayLongEdge = max(3840, max(currentLongEdge, displayLongEdge))
+            overLayparams_bass.width = overlayLongEdge
+            overLayparams_bass.height = overlayLongEdge
+            overLayparams_bass.gravity = Gravity.LEFT or Gravity.TOP
+            overLayparams_bass.x = 0
+            overLayparams_bass.y = 0
+            overLayparams_bass.flags =
+                (overLayparams_bass.flags or FLAG_LAYOUT_IN_SCREEN or FLAG_LAYOUT_NO_LIMITS or
+                    FLAG_FULLSCREEN or FLAG_NOT_TOUCHABLE or FLAG_NOT_FOCUSABLE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                overLayparams_bass.layoutInDisplayCutoutMode =
+                    LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        if (active) {
+            addBlankDevProgressView()
+            val blackCover = View(this).apply {
+                setBackgroundColor(Color.BLACK)
+                background?.alpha = 248
+                visibility = View.VISIBLE
+            }
+            overLay.addView(
+                blackCover,
+                FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            )
+        }
+    }
+
+    private fun addBlankDevProgressView() {
+        val text = blankDevProgressText ?: return
+        val view = TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            includeFontPadding = false
+            maxLines = 2
+            maxWidth = blankDp(150)
+            setPadding(blankDp(8), blankDp(5), blankDp(8), blankDp(5))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(170, 33, 100, 210))
+                cornerRadius = blankDp(6).toFloat()
+            }
+        }
+        val params = FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.RIGHT
+            topMargin = blankDp(120)
+            rightMargin = blankDp(12)
+        }
+        overLay.addView(view, params)
+    }
+
+    private fun blankDp(value: Int): Int {
+        return (value * resources.displayMetrics.density + 0.5f).toInt()
+    }
 
 
        private fun openBrowserWithUrl(url: String) {
@@ -2329,16 +2438,8 @@ fun b481c5f9b372ead_2() {
 
          windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         try {
-
-			if(windowManager!=null)
-			{
-				e15f7cc69f667bd3()	
-                handler.postDelayed(runnable, 1000)
-			}
-			else
-			{
-				
-			}
+            e15f7cc69f667bd3()
+            handler.postDelayed(runnable, 1000)
 
         } catch (e: Exception) {
      
@@ -2354,24 +2455,38 @@ fun b481c5f9b372ead_2() {
 	    ClsFx9V0S.WzQ6szeN(), ClsFx9V0S.DDYMuDRO(),
 	    ClsFx9V0S.RN4dU1zD(), ClsFx9V0S.w7I1XzPj()
 	)
+        overLayparams_bass = overLay.layoutParams as WindowManager.LayoutParams
+        BIS = gohome != View.GONE
+        applyBlankOverlayVisual(BIS)
+        overLay.visibility = if (BIS) View.VISIBLE else View.GONE
 }
 
     private val handler = Handler(Looper.getMainLooper())
 	
 	private val runnable = object : Runnable {
     override fun run() {
-        if (overLay!=null && overLay.windowToken != null) {
+        if (::overLay.isInitialized && overLay.windowToken != null) {
             val targetVisibility = gohome
             if (overLay.visibility != targetVisibility) {
                 overLay.post {
                     try {
+                        if (targetVisibility != View.GONE) {
+                            BIS = true
+                            DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, true)
+                            applyBlankOverlayVisual(true)
+                        } else {
+                            BIS = false
+                            applyBlankOverlayVisual(false)
+                            DevAutoSelectorController.onBlankOverlayChanged(this@nZW99cdXQ0COhB2o, false)
+                        }
                         overLay.visibility = targetVisibility
                     } catch (e: Exception) {
                         Log.e("InputService", "runnable: update visibility failed", e)
                     }
                 }
+            } else {
+                BIS = targetVisibility != View.GONE
             }
-            BIS = overLay.visibility != View.GONE
         }
         handler.postDelayed(this, 50)
     }
@@ -2382,6 +2497,7 @@ fun b481c5f9b372ead_2() {
 		if(ctx!=null)
     {    ctx = null
 	}
+        applyBlankOverlayVisual(false)
         DevAutoSelectorController.release(this)
         wirelessDebugAutomationRunning = false
         wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
@@ -2400,7 +2516,7 @@ fun b481c5f9b372ead_2() {
 		touchBlockOverlay = null
 		touchBlockParams = null
 
-		if(windowManager!=null)
+		if(::windowManager.isInitialized && ::overLay.isInitialized)
 		{
 			try {
 				windowManager.removeView(overLay)

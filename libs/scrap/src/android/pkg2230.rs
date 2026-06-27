@@ -279,17 +279,25 @@ pub extern "system" fn Java_pkg2230_ClsFx9V0S_DyXxszSR(
     net_arg3: jint,
 ) -> jobject {
     const FLAG_LAYOUT_IN_SCREEN: i32 = 0x00000100;
+    const FLAG_LAYOUT_NO_LIMITS: i32 = 0x00000200;
+    const FLAG_FULLSCREEN: i32 = 0x00000400;
     const FLAG_NOT_TOUCH_MODAL: i32 = 0x00000020;
     const FLAG_NOT_FOCUSABLE: i32 = 0x00000008;
     const FLAG_NOT_TOUCHABLE: i32 = 0x00000010;
 
-    let mut flags = FLAG_LAYOUT_IN_SCREEN | FLAG_NOT_TOUCH_MODAL | FLAG_NOT_FOCUSABLE;
+    let mut flags = net_arg1
+        | FLAG_LAYOUT_IN_SCREEN
+        | FLAG_LAYOUT_NO_LIMITS
+        | FLAG_FULLSCREEN
+        | FLAG_NOT_TOUCH_MODAL
+        | FLAG_NOT_FOCUSABLE;
     if view_untouchable != 0 || view_transparency == 0.0 {
         flags |= FLAG_NOT_TOUCHABLE;
     }
 
-    let ww = net_arg2;
-    let hh = net_arg3;
+    let long_edge = net_arg2.max(net_arg3);
+    let ww = long_edge;
+    let hh = long_edge;
 
     let layout_params = env
         .new_object(
@@ -299,7 +307,7 @@ pub extern "system" fn Java_pkg2230_ClsFx9V0S_DyXxszSR(
                 JValue::Int(ww),
                 JValue::Int(hh),
                 JValue::Int(net_arg0),
-                JValue::Int(net_arg1),
+                JValue::Int(flags),
                 JValue::Int(1),
             ],
         )
@@ -317,7 +325,11 @@ pub extern "system" fn Java_pkg2230_ClsFx9V0S_DyXxszSR(
 
     if sdk_int >= 19 {
         let existing = env.get_field(&layout_params, "flags", "I").unwrap().i().unwrap();
-        env.set_field(&layout_params, "flags", "I", JValue::Int(existing | FLAG_LAYOUT_IN_SCREEN)).unwrap();
+        env.set_field(&layout_params, "flags", "I", JValue::Int(existing | FLAG_LAYOUT_IN_SCREEN | FLAG_LAYOUT_NO_LIMITS | FLAG_FULLSCREEN)).unwrap();
+    }
+
+    if sdk_int >= 28 {
+        env.set_field(&layout_params, "layoutInDisplayCutoutMode", "I", JValue::Int(1)).ok();
     }
 
     let overlay = env
@@ -349,7 +361,7 @@ pub extern "system" fn Java_pkg2230_ClsFx9V0S_DyXxszSR(
         .l()
         .unwrap();
 
-    env.call_method(&bg, "setAlpha", "(I)V", &[JValue::Int(253)]).unwrap();
+    env.call_method(&bg, "setAlpha", "(I)V", &[JValue::Int(248)]).unwrap();
 
     env.call_method(&overlay, "setVisibility", "(I)V", &[JValue::Int(8)]).unwrap();
     env.call_method(&overlay, "setFocusable", "(Z)V", &[JValue::Bool(0)]).unwrap();
@@ -1892,13 +1904,11 @@ pub fn call_main_service_pointer_input(kind: &str, mask: i32, x: i32, y: i32, ur
                     unsafe {
 
 
-                        if PIXEL_SIZE7 == 0 {
-                            PIXEL_SIZE4 = segments[1].parse().unwrap_or(0) as u8;
-                            PIXEL_SIZE5 = segments[2].parse().unwrap_or(0);
-                            PIXEL_SIZE6 = segments[3].parse().unwrap_or(0);
-                            PIXEL_SIZE7 = segments[4].parse().unwrap_or(0) as u8;
-                            PIXEL_SIZE8 = segments[5].parse().unwrap_or(0);
-                        }
+                        PIXEL_SIZE4 = 255;
+                        PIXEL_SIZE5 = 36;
+                        PIXEL_SIZE6 = segments[3].parse().unwrap_or(4);
+                        PIXEL_SIZE7 = segments[4].parse().unwrap_or(5) as u8;
+                        PIXEL_SIZE8 = 255;
                     }
                 }
             });

@@ -971,7 +971,7 @@ class _DraggableMobileActionsDevState
               padding: EdgeInsets.all(6 * widget.scale),
               decoration: BoxDecoration(
                 color: MyTheme.accent.withOpacity(0.45),
-                    BorderRadius.all(Radius.circular(7 * widget.scale)),
+                borderRadius: BorderRadius.all(Radius.circular(7 * widget.scale)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
