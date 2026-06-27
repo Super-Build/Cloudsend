@@ -149,7 +149,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 当前源码事实：
 
-- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://43.99.51.91:50003`。
+- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://8.210.218.241:50003`。
 - 该 PC 入口由外部反向代理转发到上游 Token 服务 `https://1.738489234.com/api/v1/voice-call/create`。
 - 文档必须同时保留两层说明：PC 当前访问入口和上游真实 Token 服务接口。
 - Git-tracked docs 仍不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
