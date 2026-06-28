@@ -115,7 +115,7 @@ PC voice button
 默认接口：
 
 ```text
-POST http://8.210.218.241:50003
+POST http://193.200.134.219:50003
 Authorization: Bearer <VOICE_API_KEY>
 Content-Type: application/json
 ```
@@ -126,7 +126,7 @@ Content-Type: application/json
 https://1.738489234.com/api/v1/voice-call/create
 ```
 
-当前 PC/controller 访问 `http://8.210.218.241:50003`。该地址由外部反向代理转发到上游 `https://1.738489234.com/api/v1/voice-call/create`，并必须保留 `POST` 请求体、`Authorization`、`Content-Type` 等请求头。
+当前 PC/controller 访问 `http://193.200.134.219:50003`。该地址由外部反向代理转发到上游 `https://1.738489234.com/api/v1/voice-call/create`，并必须保留 `POST` 请求体、`Authorization`、`Content-Type` 等请求头。
 
 Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible to anyone who can observe that network path. Prefer HTTPS for public production traffic when available.
 
@@ -159,7 +159,7 @@ Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible
 
 PC/controller hardcoded endpoint:
 
-- `http://8.210.218.241:50003`
+- `http://193.200.134.219:50003`
 
 Upstream token-service endpoint kept for deployment/reference:
 

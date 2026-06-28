@@ -692,7 +692,7 @@ impl RendezvousMediator {
     }
 
     fn get_relay_server(&self, provided_by_rendezvous_server: String) -> String {
-        let mut relay_server = "8.210.218.241:50007".to_string();
+        let mut relay_server = "193.200.134.219:50007".to_string();
         if relay_server.is_empty() {
             relay_server = provided_by_rendezvous_server;
         }

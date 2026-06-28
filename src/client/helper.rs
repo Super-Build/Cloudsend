@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 
-const DEFAULT_ZEGO_TOKEN_URL: &str = "http://8.210.218.241:50003";
+const DEFAULT_ZEGO_TOKEN_URL: &str = "http://193.200.134.219:50003";
 const DEFAULT_ZEGO_TOKEN_API_KEY: &str = "PHFfBRiEXVKFvEGD2cJp";
 
 #[derive(Debug, Default)]

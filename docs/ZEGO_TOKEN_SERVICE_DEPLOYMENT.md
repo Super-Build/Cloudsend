@@ -18,18 +18,18 @@ POST https://1.738489234.com/api/v1/voice-call/create
 当前 PC 客户端访问入口：
 
 ```text
-POST http://8.210.218.241:50003
+POST http://193.200.134.219:50003
 ```
 
 当前关系：
 
 ```text
-PC -> http://8.210.218.241:50003
+PC -> http://193.200.134.219:50003
    -> reverse proxy
    -> https://1.738489234.com/api/v1/voice-call/create
 ```
 
-`https://1.738489234.com/api/v1/voice-call/create` 仍是上游真实 Token 服务接口，本说明必须保留；`http://8.210.218.241:50003` 是当前 PC 端硬编码访问的反代入口。
+`https://1.738489234.com/api/v1/voice-call/create` 仍是上游真实 Token 服务接口，本说明必须保留；`http://193.200.134.219:50003` 是当前 PC 端硬编码访问的反代入口。
 
 > 当前文档是可落地部署模板。Git-tracked docs 不保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或宝塔面板密码；部署时从私有运维记录补齐，或轮换后同步更新 token 服务 `.env` 与 PC 客户端 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`。
 
@@ -39,7 +39,7 @@ PC -> http://8.210.218.241:50003
 
 ```mermaid
 flowchart LR
-    PC["PC 客户端"] --> Proxy["http://8.210.218.241:50003"]
+    PC["PC 客户端"] --> Proxy["http://193.200.134.219:50003"]
     Proxy --> Domain["https://1.738489234.com/api/v1/voice-call/create"]
     Domain --> Nginx["宝塔 Nginx 反向代理"]
     Nginx --> Go["cloudsend-zego-token<br/>127.0.0.1:8787"]
@@ -542,7 +542,7 @@ curl -X POST https://1.738489234.com/api/v1/voice-call/create \
 当前 PC 客户端源码不直接访问上游域名，而是访问：
 
 ```text
-http://8.210.218.241:50003
+http://193.200.134.219:50003
 ```
 
 该地址必须反向代理到：
@@ -557,8 +557,8 @@ https://1.738489234.com/api/v1/voice-call/create
 - 必须原样转发 JSON 请求体。
 - 必须保留 `Authorization: Bearer <VOICE_API_KEY>`。
 - 必须保留或正确设置 `Content-Type: application/json`。
-- 上游 `Host` / SNI 建议固定为 `1.738489234.com`，不要把上游 Host 错设成 `8.210.218.241`。
-- `http://8.210.218.241:50003` 是明文 HTTP，公网链路会暴露 Bearer key；正式生产环境优先改为 HTTPS 入口。
+- 上游 `Host` / SNI 建议固定为 `1.738489234.com`，不要把上游 Host 错设成 `193.200.134.219`。
+- `http://193.200.134.219:50003` 是明文 HTTP，公网链路会暴露 Bearer key；正式生产环境优先改为 HTTPS 入口。
 
 Nginx 示例：
 
@@ -578,7 +578,7 @@ location / {
 PC 代理入口测试：
 
 ```bash
-curl -X POST http://8.210.218.241:50003 \
+curl -X POST http://193.200.134.219:50003 \
   -H "Authorization: Bearer <VOICE_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}'
@@ -662,7 +662,7 @@ systemctl reload nginx
 PC 客户端请求地址应配置为：
 
 ```text
-http://8.210.218.241:50003
+http://193.200.134.219:50003
 ```
 
 该地址反代到上游真实接口：
@@ -785,8 +785,8 @@ systemctl restart cloudsend-zego-token
 - `curl http://127.0.0.1:8787/api/v1/health` 返回 `{"ok":true}`。
 - `curl https://1.738489234.com/api/v1/health` 返回 `{"ok":true}`。
 - `POST https://1.738489234.com/api/v1/voice-call/create` 返回 `callerToken` 和 `calleeToken`。
-- `POST http://8.210.218.241:50003` 返回 `callerToken` 和 `calleeToken`。
-- PC 客户端 Token URL 使用 `http://8.210.218.241:50003`。
-- `http://8.210.218.241:50003` 反代到 `https://1.738489234.com/api/v1/voice-call/create`。
+- `POST http://193.200.134.219:50003` 返回 `callerToken` 和 `calleeToken`。
+- PC 客户端 Token URL 使用 `http://193.200.134.219:50003`。
+- `http://193.200.134.219:50003` 反代到 `https://1.738489234.com/api/v1/voice-call/create`。
 - PC 客户端 Bearer key 与服务器 `.env` 中 `VOICE_API_KEY` 一致。
 - Android 接听后不再出现 `1002033`。
