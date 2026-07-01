@@ -120,13 +120,13 @@ Authorization: Bearer <VOICE_API_KEY>
 Content-Type: application/json
 ```
 
-反代上游接口：
+当前部署方式：
 
 ```text
-https://1.738489234.com/api/v1/voice-call/create
+PC/controller -> http://193.200.134.219:50003 -> cloudsend-zego-token
 ```
 
-当前 PC/controller 访问 `http://193.200.134.219:50003`。该地址由外部反向代理转发到上游 `https://1.738489234.com/api/v1/voice-call/create`，并必须保留 `POST` 请求体、`Authorization`、`Content-Type` 等请求头。
+当前 PC/controller 直接访问 `http://193.200.134.219:50003`，由当前服务器上的 Token 服务直接处理，不再反向代理到任何上游域名。服务端必须兼容当前 PC 请求的 `POST /`，同时保留标准路径 `POST /api/v1/voice-call/create` 供运维测试。
 
 Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible to anyone who can observe that network path. Prefer HTTPS for public production traffic when available.
 
@@ -160,10 +160,6 @@ Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible
 PC/controller hardcoded endpoint:
 
 - `http://193.200.134.219:50003`
-
-Upstream token-service endpoint kept for deployment/reference:
-
-- `https://1.738489234.com/api/v1/voice-call/create`
 
 PC/controller Bearer key source anchor:
 

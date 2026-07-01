@@ -100,7 +100,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - 不新增竞争性 memory docs。
 - 新增工程事实优先进入 `ENGINEERING_BASELINE.md` / `ENGINEERING_ANDROID_RUNTIME.md` / `TASK_ENTRYPOINTS.md`。
 - 专题文档只承载对应专题，不反向替代全仓工程主套件。
-- 部署文档不得保存真实服务端密钥、密码或私有 token。
+- 除 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 作为私有落地部署文档已按当前运维值补全 ZEGO token 服务参数外，其他部署文档不得保存真实服务端密钥、密码或私有 token。
 
 ---
 
@@ -118,13 +118,13 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 - 2026-06-09 复核：ZEGO 来电 3 秒自动接听由 `flutter/lib/models/server_model.dart::ServerModel._startVoiceCallAutoAcceptTimer(...)` 持有，弹窗倒计时只是可见 UI，不再是唯一自动接听机制。
 - 2026-06-09 复核：ZEGO PC 业务提示必须使用 `custom-nook-nocancel-hasclose-*`，不能使用会触发 `closeConnection()` 的普通 `error` / `warning` 弹窗类型。
 - `docs/ADB_LADB_INTEGRATION_MEMORY.md` 修正无线调试自动化事实：当前已有 best-effort AccessibilityService 自动化链路，不再是纯 placeholder。
-- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 必须保持可落地模板，但不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是当前私有落地部署文档，已按用户要求补全 `ZEGO_SERVER_SECRET` 与 `VOICE_API_KEY`；一键部署脚本为 `scripts/deploy_zego_token_service.sh`，不得公开发布或截图外发。
 
 可信度调整：
 
 - `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` 仍是固定日期源码审计，但它内部的 `Trusted Guidance Set` 已被 2026-06-03 主套件覆盖。
 - `docs/ADB_LADB_INTEGRATION_MEMORY.md` 从“实现记忆 + 未来方案”调整为“已落地 ADB/LADB 专题文档 + 后续风险边界”，但其 ADB-CODE/LADB review 章节仍属于参考背景。
-- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是部署模板，不是密钥仓库。真实部署值必须从私有运维记录获取。
+- `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 当前包含 ZEGO token 服务完整部署值，仅用于私有工程交接；其他文档不再重复扩散这些密钥。
 
 ---
 
@@ -150,9 +150,9 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 当前源码事实：
 
 - `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://193.200.134.219:50003`。
-- 该 PC 入口由外部反向代理转发到上游 Token 服务 `https://1.738489234.com/api/v1/voice-call/create`。
-- 文档必须同时保留两层说明：PC 当前访问入口和上游真实 Token 服务接口。
-- Git-tracked docs 仍不得保存真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
+- 该 PC 入口由当前服务器上的 IP + 端口 Token 服务直接处理，不再依赖域名或反向代理。
+- 文档必须以 IP + 端口直连为当前事实；新部署流程不再包含域名/反代清理步骤。
+- 除 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 的私有落地值外，Git-tracked docs 不得继续扩散真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。
 
 已同步文档：
 
@@ -292,7 +292,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 结论：
 
 - ZEGO 语音通话任务可优先阅读这些文档。
-- `ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是部署操作文档，必须使用占位符表达密钥，不得保存真实 `ZEGO_SERVER_SECRET`、服务器密码或私有 token。
+- `ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 是私有部署操作文档，当前按用户要求写入完整 ZEGO token 服务部署值；不要公开发布。
 - 任何 ZEGO 运行时判断仍必须回到源码锚点：`ZegoVoiceCallInfo`、`ZegoVoiceCallModel`、`src/client/helper.rs`、`src/client/io_loop.rs`、`src/server/connection.rs`。
 
 ### 2.4 `docs/ADB_LADB_INTEGRATION_MEMORY.md` — 等级 B+

@@ -17,7 +17,6 @@
 ```mermaid
 sequenceDiagram
     participant PC as "PC Flutter + Rust session"
-    participant Proxy as "HTTP reverse proxy"
     participant Token as "CloudSend ZEGO Token Service"
     participant Conn as "Existing CloudSend control channel"
     participant AndroidRust as "Android Rust connection-manager"
@@ -25,8 +24,7 @@ sequenceDiagram
     participant ZegoPC as "ZEGO SDK on PC"
     participant ZegoAndroid as "ZEGO SDK on Android"
 
-    PC->>Proxy: POST http://193.200.134.219:50003(pcPeerId, androidPeerId=remotePeerId, cloudsendSessionId)
-    Proxy->>Token: reverse proxy to https://1.738489234.com/api/v1/voice-call/create
+    PC->>Token: POST http://193.200.134.219:50003(pcPeerId, androidPeerId=remotePeerId, cloudsendSessionId)
     Token-->>PC: roomId, caller/callee userId, caller/callee streamId, caller/callee token
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
@@ -115,7 +113,7 @@ UI rule:
 Room and stream isolation:
 
 - PC obtains ZEGO metadata from the token service per call.
-- Current PC endpoint is `http://193.200.134.219:50003`, which is expected to reverse proxy to `https://1.738489234.com/api/v1/voice-call/create`.
+- Current PC endpoint is `http://193.200.134.219:50003`, handled directly by the IP + port token service deployment. It does not use a domain or reverse proxy.
 - `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp`.
 - Token service must create unique `roomId`, `callerUserId`, `calleeUserId`, `callerStreamId`, and `calleeStreamId`.
 - PC sends only the Android/callee token to the controlled side; caller token stays in PC memory.

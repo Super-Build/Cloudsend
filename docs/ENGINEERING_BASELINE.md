@@ -228,7 +228,7 @@ Current handoff truth:
   - ADB/LADB: `docs/ADB_LADB_INTEGRATION_MEMORY.md`
 - `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` is a fixed-date audit. It must not override the 2026-06-03 engineering doc set.
 - `PC-Build.md`, `terminal.md`, `README.md`, and `docs/README-ZH.md` are useful background, but any implementation claim in them must be checked against source and the engineering main docs.
-- Git-tracked deployment docs must not contain server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials. If a deploy step needs a secret, use a placeholder and obtain the real value from private ops records.
+- Except for the private deployment runbook `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, which is intentionally filled with the current ZEGO token-service values for this private project, Git-tracked deployment docs must not spread server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials.
 - PowerShell readers must use UTF-8 when inspecting Chinese docs, for example `Get-Content -Encoding UTF8`, otherwise Chinese text may appear as mojibake.
 
 ## 1. 项目身份（Project Identity）
@@ -820,7 +820,7 @@ Current source truth:
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
 - PC/controller hardcodes the ZEGO Token endpoint in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`; local override and legacy fallback are intentionally not used.
-- Current PC/controller ZEGO Token endpoint is `http://193.200.134.219:50003`; this endpoint is expected to reverse proxy to upstream `https://1.738489234.com/api/v1/voice-call/create`.
+- Current PC/controller ZEGO Token endpoint is `http://193.200.134.219:50003`; this endpoint is handled directly by the IP + port token service deployment and does not use a domain or reverse proxy.
 - PC/controller also hardcodes a Bearer key in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`; treat it as a deployed client credential that must match the token service `.env`, but do not duplicate the real value in Git-tracked docs.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
 - `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp` when requesting the token service. The deployed token API field remains `androidPeerId` for compatibility, but the client now fills it with the current remote peer id so each established PC-controlled endpoint connection gets an isolated 1v1 ZEGO room even if the platform string was not recognized.
@@ -888,13 +888,13 @@ Current source truth:
 - PC and Android voice-call status text is Chinese.
 - PC toolbar no longer shows old `AudioInput(isVoiceCall: true)` under `_VoiceCallMenu`.
 - Windows child Flutter engines created by `desktop_multi_window` must register ZEGO in `flutter/windows/runner/flutter_window.cpp`; otherwise the remote window raises `MissingPluginException` for `createEngineWithProfile`.
-- Token service deployment and operational contract are documented in `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
+- Token service deployment and operational contract are documented in `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`; the current one-click Linux installer is `scripts/deploy_zego_token_service.sh`.
 - Project integration map is documented in `docs/ZEGO_VOICE_CALL_INTEGRATION.md`; diagram-level architecture is documented in `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`.
 
 Isolation rule:
 
 - Do not modify video frame paths, `MediaProjection`, ADB/LADB, side-button commands, file transfer, clipboard, terminal, or port-forwarding for ZEGO voice-call changes unless a future bug is proven in that subsystem.
-- Do not place `ZEGO_SERVER_SECRET` in PC, Android, Flutter, Rust client code, or Git-tracked docs.
+- Do not place `ZEGO_SERVER_SECRET` in PC, Android, Flutter, or Rust client code. The only documented exception is the private deployment runbook `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, which is not for public release.
 
 ---
 

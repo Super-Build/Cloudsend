@@ -192,7 +192,7 @@ flowchart LR
 - 先信当前源码，再信工程主套件。
 - 专题文档只服务对应专题，不能覆盖全仓主事实。
 - `README.md`、`docs/README-ZH.md`、`terminal.md`、`PC-Build.md` 的历史/上游语境必须回源码核验。
-- Git 跟踪文档不得保存服务器密码、`ZEGO_SERVER_SECRET`、私有 token 或真实运维凭据；部署时从私有运维记录补齐。
+- 除私有落地文档 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 已按当前部署值补全 ZEGO token 服务参数外，其他 Git 跟踪文档不得保存服务器密码、`ZEGO_SERVER_SECRET`、私有 token 或真实运维凭据。
 
 ---
 
@@ -211,7 +211,7 @@ flowchart LR
 | 源码审计 | `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` | 2026-05-18 命名/源码事实审计记录 | 固定日期审计，不自动代表未来 |
 | ZEGO 专题 | `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md` | ZEGO 语音工程链路、图、官方 Demo 对齐 | ZEGO 方案主设计文档 |
 | ZEGO 专题 | `docs/ZEGO_VOICE_CALL_INTEGRATION.md` | ZEGO 接入边界、协议、运行时规则 | ZEGO 实现维护文档 |
-| ZEGO 专题 | `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` | 宝塔/Nginx/Go Token 服务部署 | 部署操作文档，不能写真实密钥 |
+| ZEGO 专题 | `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, `scripts/deploy_zego_token_service.sh` | IP + Port / Go Token 服务一键脚本部署 | 私有落地部署文档与脚本，当前已补全 ZEGO token 服务参数，勿公开 |
 | ADB 专题 | `docs/ADB_LADB_INTEGRATION_MEMORY.md` | ADB/LADB 集成上下文和后续方案 | 仅 ADB/LADB 任务使用 |
 | Agent 入口 | `AGENTS.md`, `CLAUDE.md` | Codex / Claude Code 快速入口和常用锚点 | 补充导航，不高于工程主套件 |
 | 构建背景 | `PC-Build.md` | Windows Server 构建环境背景和旧上游流程 | 环境参考；当前命令以 `new-build.cmd` 为准 |

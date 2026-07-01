@@ -55,7 +55,7 @@
 - `docs/ENGINEERING_*`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md` 是工程主套件。
 - `AGENTS.md` / `CLAUDE.md` 是 agent 补充入口。
 - `PC-Build.md` / `terminal.md` / README / 贡献文档是背景或历史参考，不作为当前实现真相。
-- Git-tracked docs must not store server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials.
+- Git-tracked docs must not store server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials, except the private ZEGO deployment runbook when explicitly maintained as a filled deploy document.
 
 ### 1.3 平台打包与资源
 
@@ -218,7 +218,7 @@
 
 - Rust 只承载邀请、接受、挂断、Token metadata 分发和状态同步。
 - ZEGO media 不走 RustDesk `audio_service` 的旧语音帧链路。
-- PC Token endpoint / client key 的源码锚点是 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` / `DEFAULT_ZEGO_TOKEN_API_KEY`；真实服务端密钥不得写入 Git-tracked docs。
+- PC Token endpoint / client key 的源码锚点是 `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` / `DEFAULT_ZEGO_TOKEN_API_KEY`；真实服务端密钥只允许出现在私有部署文档 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`，不得写入客户端源码。
 
 ---
 
@@ -390,6 +390,7 @@ ADB/LADB files:
 - `ZEGO_VOICE_CALL_ARCHITECTURE.md`
 - `ZEGO_VOICE_CALL_INTEGRATION.md`
 - `ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`
+- `../scripts/deploy_zego_token_service.sh`
 - `ADB_LADB_INTEGRATION_MEMORY.md`
 - `CHANGELOG.md`
 

@@ -146,7 +146,7 @@ Documentation maintenance rules:
 - Do not create a new competing memory document when an existing engineering doc can carry the fact.
 - Prefer classifying and cross-linking existing docs over moving files, unless a future task explicitly asks for physical relocation.
 - Keep implementation facts in `ENGINEERING_BASELINE.md`, Android runtime facts in `ENGINEERING_ANDROID_RUNTIME.md`, task entry files in this document, and trust boundaries in `DOCUMENT_AUDIT.md`.
-- Keep deployment docs free of real server passwords, `ZEGO_SERVER_SECRET`, private API keys, and private tokens.
+- Keep deployment docs free of real server passwords, `ZEGO_SERVER_SECRET`, private API keys, and private tokens, except for the private runbook `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` when the user explicitly asks for a fully filled deploy document.
 - Treat `README.md`, `docs/README-ZH.md`, `docs/CONTRIBUTING*.md`, `docs/CODE_OF_CONDUCT*.md`, `docs/SECURITY.md`, and `docs/DEVCONTAINER.md` as community/reference docs, not current engineering truth.
 
 Current document categories:
