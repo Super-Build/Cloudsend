@@ -1,7 +1,9 @@
 # 工程总索引 / Engineering Index
 
 最后一次基于全仓源码核验：2026-06-09
-最近一次文档一致性复核：2026-06-09
+最近一次入口层级复核：2026-07-12
+
+> 2026-07-12 封版说明：所有 AI 先从根目录 `PROJECT_START_HERE.md` 进入，再读 `.codex/AI_RULES.md` 与 `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`；开发使用 `TASK_TEMPLATE.md` + `docs/BASELINE/`，长期决定查 `docs/ADR/`，验证查 `TEST_MATRIX.md`。新的当前架构真相层是 `docs/AI_ENGINEERING/`；本文件保留为旧主索引与历史细节，不删除。
 
 > 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
@@ -160,13 +162,12 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 
 当没有任何历史对话、上下文或本机记忆时，按下面顺序建立项目认知：
 
-1. 先读 `AGENTS.md`，确认项目身份、构建纪律和 Codex 入口规则。
-2. 读 `docs/ENGINEERING_INDEX.md` 的 `Current CloudSend Source Truth`、`Reading Order`、`Document Catalog`。
-3. 读 `docs/ENGINEERING_BASELINE.md` 的项目身份、顶层架构、主链路和当前风险。
-4. 如果任务涉及 Android 被控端、屏幕共享、首帧、无视/穿透/黑屏/重连，继续读 `docs/ENGINEERING_ANDROID_RUNTIME.md`。
-5. 如果任务涉及定位代码入口，读 `docs/TASK_ENTRYPOINTS.md`，再进入对应源码。
-6. 如果任务涉及目录结构或跨层关系，读 `docs/REPO_TRUE_STRUCTURE_MAP.md`。
-7. 如果任务涉及文档可信度、历史文档或上游 README，先读 `docs/DOCUMENT_AUDIT.md`。
+1. 先读根目录 `PROJECT_START_HERE.md`。
+2. 读 `.codex/AI_RULES.md` 与 `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`，确认行为权限和任务状态。
+3. 读 `docs/AI_ENGINEERING/00_PROJECT_OVERVIEW.md`、`01_ARCHITECTURE.md` 与 `02_SOURCE_MAP.md`。
+4. 按任务读取对应 AI domain document 与 CloudSend Skill。
+5. 需要历史细节时，再查本索引、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md` 和 `REPO_TRUE_STRUCTURE_MAP.md`。
+6. 如果任务涉及旧文档可信度或上游 README，读取新 `DOCUMENT_AUDIT_REPORT.md` 和旧 `DOCUMENT_AUDIT.md`，但最终回到源码核验。
 
 快速心智模型：
 
@@ -202,7 +203,8 @@ flowchart LR
 
 | 分类 | 文档 | 用途 | 可信边界 |
 |---|---|---|---|
-| 工程入口 | `docs/ENGINEERING_INDEX.md` | 全仓文档入口、阅读顺序、写法规则 | 第一入口，但不承载全部实现细节 |
+| 当前第一入口 | `PROJECT_START_HERE.md` | AI/maintainer 启动、权限提醒和分流 | 唯一第一入口；不承载全部实现细节 |
+| 旧工程索引 | `docs/ENGINEERING_INDEX.md` | 2026-07-12 前的阅读顺序、目录和历史细节 | 历史导航；当前入口以根目录 Start Here 为准 |
 | 工程真相 | `docs/ENGINEERING_BASELINE.md` | 项目身份、架构、关键链路、构建/品牌现实 | 高可信；仍以源码为最终真相 |
 | Android 运行时 | `docs/ENGINEERING_ANDROID_RUNTIME.md` | Android service/frame/waiting/runtime 不变量 | Android 任务必须阅读 |
 | 任务导航 | `docs/TASK_ENTRYPOINTS.md` | 按任务类型给出第一批源码入口 | 入口地图，不是设计文档 |
@@ -368,11 +370,13 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 - 解释用中文
 - 代码锚点用英文原文
 - 每个结论都能回到真实文件和真实符号
-- 不额外扩散新的记忆文档
+- 完整工程事实只进入 `docs/AI_ENGINEERING/`；`.codex/` 只保存薄摘要、决定、任务和规则，不再扩散竞争性记忆正文
 
 ---
 
 ## 9. Codex Skill 适配评估（Skill Suitability）
+
+> 2026-07-12 superseded note：项目 owner 已明确授权并建立 `.agents/skills/` 下 8 个领域 Skill。它们只保存使用场景、流程、禁止事项、检查清单、验证方式和 canonical docs 指针，不复制完整架构。以下“单一 `cloudsend-engineering` Skill”内容保留为历史提案，不再代表当前结构。
 
 当前项目适合做一个轻量 Codex skill，但 skill 不应复制整套仓库文档。
 

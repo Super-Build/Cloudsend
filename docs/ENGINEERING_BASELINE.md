@@ -1,7 +1,9 @@
 # 工程基线 / Engineering Baseline
 
 最后一次从全仓源码核验：2026-06-09
-最近一次文档一致性复核：2026-06-09
+最近一次入口层级复核：2026-07-12
+
+> 2026-07-12 接管说明：本文件保留 2026-07-12 前的详细工程基线；当前架构、风险和维护规则以 `docs/AI_ENGINEERING/` 与 `.codex/AI_RULES.md` 为新入口。旧事实未经重新核验时不得自动提升为当前结论。
 
 > 本文件只记录**已经通过当前源码核验**的事实。
 > 这里的中文用于解释，English symbol / path 用于保证 Codex / Claude Code 检索稳定。
@@ -13,7 +15,7 @@
 
 - 后续修改只能改代码/文档，不替用户执行 `git commit`。
 - 用户明确要求不由 Codex 执行编译命令；验证优先使用源码检索、静态 diff、定向 grep。
-- 重要代码变更后必须同步当前 docs 文档体系，不恢复已废弃的 `DOCS.md` / `docs/CHANGELOG.md` / 旧项目记忆文档。
+- 重要代码变更后必须同步当前 docs 文档体系；旧文档不得自动删除或整份恢复，先按 `docs/AI_ENGINEERING/LEGACY_DOCUMENT_MIGRATION_REPORT.md` 提取和映射知识。当前存在的 `docs/CHANGELOG.md` 仅作为不完整历史记录，不属于架构真相层。
 - 文档永远是辅助记忆；若文档与源码冲突，以当前源码和当前 diff 为准。
 
 ### 0.1 2026-04-16 黑屏 overlay 输入性能基线
@@ -228,7 +230,7 @@ Current handoff truth:
   - ADB/LADB: `docs/ADB_LADB_INTEGRATION_MEMORY.md`
 - `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` is a fixed-date audit. It must not override the 2026-06-03 engineering doc set.
 - `PC-Build.md`, `terminal.md`, `README.md`, and `docs/README-ZH.md` are useful background, but any implementation claim in them must be checked against source and the engineering main docs.
-- Except for the private deployment runbook `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, which is intentionally filled with the current ZEGO token-service values for this private project, Git-tracked deployment docs must not spread server passwords, `ZEGO_SERVER_SECRET`, private tokens, or private operational credentials.
+- No Git-tracked deployment document or script may contain real server passwords, server secrets, private tokens, or operational credentials. The existing literals in `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`, related scripts, and Git history are a 2026-07-12 security incident record, not an allowed exception; never copy their values.
 - PowerShell readers must use UTF-8 when inspecting Chinese docs, for example `Get-Content -Encoding UTF8`, otherwise Chinese text may appear as mojibake.
 
 ## 1. 项目身份（Project Identity）

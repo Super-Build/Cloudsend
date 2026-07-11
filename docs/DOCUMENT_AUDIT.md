@@ -1,7 +1,9 @@
 # 文档真实性审计 / Document Audit
 
 最后一次从关键源码锚点与文档一致性核验：2026-06-09
-最近一次文档分层与可读性整理：2026-06-09
+最近一次入口层级复核：2026-07-12
+
+> 本文件是旧版 A/B/C 审计。2026-07-12 全量 39 份 tracked Markdown 的 A/B/C/D 结果、漂移证据和迁移策略见 `docs/AI_ENGINEERING/DOCUMENT_AUDIT_REPORT.md` 与 `LEGACY_DOCUMENT_MIGRATION_REPORT.md`；本文件保留，不删除。
 
 > 本文件用于回答两个问题：
 >
@@ -86,9 +88,11 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 本次整理没有移动文档文件，避免破坏已有链接和检索路径；整理方式是把现有文档按用途归类，并在入口文档中写清可信边界。
 
-当前文档分层：
+当前文档分层（2026-07-12 migration override）：
 
-- 工程主套件（等级 A）：`docs/ENGINEERING_INDEX.md`、`docs/ENGINEERING_BASELINE.md`、`docs/ENGINEERING_ANDROID_RUNTIME.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md`。
+- 当前架构真相层：`docs/AI_ENGINEERING/`；源码仍永远优先。
+- 长期薄记忆：`.codex/`，只保存摘要、决定、任务和规则。
+- 原工程主套件：`docs/ENGINEERING_INDEX.md`、`docs/ENGINEERING_BASELINE.md`、`docs/ENGINEERING_ANDROID_RUNTIME.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/REPO_TRUE_STRUCTURE_MAP.md`、`docs/DOCUMENT_AUDIT.md`，保留为旧主套件和历史细节。
 - 固定日期审计（等级 A-）：`docs/SOURCE_TRUTH_AUDIT_2026_05_18.md`，只能代表 2026-05-18 当日核验事实。
 - 专题工程文档（等级 A-/B+）：`docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`、`docs/ZEGO_VOICE_CALL_INTEGRATION.md`、`docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`、`docs/ADB_LADB_INTEGRATION_MEMORY.md`。它们只在对应专题任务中作为主参考。
 - Agent 入口（等级 A-）：`AGENTS.md`、`CLAUDE.md`，只做补充导航，必须服从工程主套件。
@@ -97,10 +101,10 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 维护结论：
 
-- 不新增竞争性 memory docs。
-- 新增工程事实优先进入 `ENGINEERING_BASELINE.md` / `ENGINEERING_ANDROID_RUNTIME.md` / `TASK_ENTRYPOINTS.md`。
+- 不新增竞争性 memory docs；`.codex/` 不复制完整架构。
+- 新增工程事实优先进入对应的 `docs/AI_ENGINEERING/` 领域文档，再按需回链旧专题。
 - 专题文档只承载对应专题，不反向替代全仓工程主套件。
-- 除 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 作为私有落地部署文档已按当前运维值补全 ZEGO token 服务参数外，其他部署文档不得保存真实服务端密钥、密码或私有 token。
+- 任何 Git-tracked 文档和脚本都不得保存真实服务端密钥、密码或私有 token；`docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 与相关历史中的现有字面 credential 已列为安全事件，不得继续复制。
 
 ---
 
@@ -169,8 +173,8 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 状态：
 
-- 可作为第一入口
-- 当前作用是定义真相层级、阅读顺序、文档同步规则
+- 在 2026-07-12 前可作为第一入口；当前第一入口已迁移到根目录 `PROJECT_START_HERE.md`
+- 当前作用是保留旧真相层级、阅读顺序和文档同步规则的历史细节
 
 注意：
 

@@ -1,7 +1,9 @@
 # 任务入口点 / Task Entrypoints
 
 最后一次从全仓源码核验：2026-06-09
-最近一次文档入口整理：2026-06-09
+最近一次入口层级复核：2026-07-12
+
+> 2026-07-12 接管说明：当前源码地图和领域入口先读 `docs/AI_ENGINEERING/02_SOURCE_MAP.md` 与对应的 `03_MODULE_DESIGN.md`—`10_SECURITY_MODEL.md`。本文件保留旧任务导航和历史路径。
 
 > 本文件按“改动类型”给出第一批应该打开的文件。
 > 目标是让 Codex / Claude Code 从**最短、最对的调用链入口**开始。
@@ -161,14 +163,14 @@ Current document categories:
 
 When a new engineer or a new Codex thread needs to understand the project without prior chat history, start here:
 
-- `AGENTS.md`
-- `docs/ENGINEERING_INDEX.md`
-- `docs/ENGINEERING_BASELINE.md`
-- `docs/REPO_TRUE_STRUCTURE_MAP.md`
-- `docs/TASK_ENTRYPOINTS.md`
-- `docs/DOCUMENT_AUDIT.md`
+- `PROJECT_START_HERE.md`
+- `.codex/AI_RULES.md`
+- `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`
+- `docs/AI_ENGINEERING/00_PROJECT_OVERVIEW.md`
+- `docs/AI_ENGINEERING/01_ARCHITECTURE.md`
+- `docs/AI_ENGINEERING/02_SOURCE_MAP.md`
 
-Then choose the topic-specific entrypoint below.
+Then choose the topic-specific entrypoint below. Use `ENGINEERING_*`, `REPO_TRUE_STRUCTURE_MAP.md` and old `DOCUMENT_AUDIT.md` only for retained historical detail and re-check claims against current source.
 
 Do not start from `README.md`, `docs/README-ZH.md`, `terminal.md`, or `PC-Build.md` unless the task is explicitly about upstream/community background, terminal history, or Windows build-environment background.
 

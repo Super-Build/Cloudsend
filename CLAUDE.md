@@ -1,16 +1,20 @@
 # CLAUDE.md — CloudSend / 云计划 v5.2.1
 
-最后一次与全仓源码对齐：2026-06-09
-最近一次文档分层整理：2026-06-09
+最后一次与全仓源码对齐：2026-07-12
+最近一次文档分层整理：2026-07-12
 
 > 本文件是 **Claude Code** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
 > 每次会话开始时请优先阅读：
 >
-> 1. `docs/ENGINEERING_INDEX.md`
-> 2. `docs/ENGINEERING_BASELINE.md`
-> 3. 若任务涉及 Android 运行时，再读 `docs/ENGINEERING_ANDROID_RUNTIME.md`
-> 4. `docs/TASK_ENTRYPOINTS.md`
+> 1. `PROJECT_START_HERE.md`
+> 2. `.codex/AI_RULES.md`
+> 3. `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`
+> 4. 开发任务建立 `TASK_TEMPLATE.md` 并引用 `docs/BASELINE/BASELINE_INDEX.md`
+> 5. `docs/AI_ENGINEERING/00_PROJECT_OVERVIEW.md`、`01_ARCHITECTURE.md`、`02_SOURCE_MAP.md` 和对应领域文档
+> 6. 长期决定读 `docs/ADR/README.md`；验证读 `TEST_MATRIX.md`
+> 7. 开发任务再读 `DEVELOPMENT_WORKFLOW.md`；仓外依赖再读 `EXTERNAL_ASSET_REGISTRY.md`
+> 8. `docs/ENGINEERING_*` 与 `docs/TASK_ENTRYPOINTS.md` 只作 2026-07-12 前的旧主套件和历史细节
 >
 > 本文件中的中文用于解释；**代码路径、类名、函数名、常量、构建产物名一律保留英文原文**，以避免检索歧义。
 
@@ -199,6 +203,8 @@ Rust 映射：
 
 ## 6. 构建命令（Build Commands）
 
+> 以下命令只记录正式环境入口，不构成 AI 执行授权。默认禁止自动 build/test/analyze/codegen；需要验证时先遵守 `.codex/AI_RULES.md`，并按 `docs/AI_ENGINEERING/09_DEBUG_SYSTEM.md` 输出《编译验证需求》。构建事实以 `docs/AI_ENGINEERING/08_BUILD_SYSTEM.md` 为准。
+
 ### Android（Linux 构建机）
 
 ```bash
@@ -278,29 +284,38 @@ cargo test
 | 插件 | `src/plugin/`, `flutter/lib/plugin/` |
 | 隐私模式/虚拟显示 | `src/privacy_mode.rs`, `src/privacy_mode/win_*`, `src/virtual_display_manager.rs` |
 | 构建/命名 | `build.sh`, `Cargo.toml`, `config.rs`, `native_model.dart`, `main.cpp` |
-| 文档整理 | `docs/ENGINEERING_INDEX.md`, `docs/DOCUMENT_AUDIT.md`, `docs/TASK_ENTRYPOINTS.md`, `docs/REPO_TRUE_STRUCTURE_MAP.md` |
+| AI 工程入口/规则 | `PROJECT_START_HERE.md`, `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `TASK_TEMPLATE.md`, `DEVELOPMENT_WORKFLOW.md` |
+| 决策/基线/测试 | `docs/ADR/README.md`, `docs/BASELINE/BASELINE_INDEX.md`, `TEST_MATRIX.md` |
+| 旧文档/结构审计 | `docs/ENGINEERING_INDEX.md`, `docs/DOCUMENT_AUDIT.md`, `docs/TASK_ENTRYPOINTS.md`, `docs/REPO_TRUE_STRUCTURE_MAP.md` |
 
 ---
 
 ## 9. 修改注意事项（Mutation Rules）
 
-1. **先读工程文档主套件，再改代码**
+1. **先读 `PROJECT_START_HERE.md`、`AI_RULES` 和 Task Protocol，通过确认门后再改代码**
 2. **保持中文解释 + English anchor 写法**
 3. **改 Android JNI 后主动检查 `ffi.rs`**
 4. **改命令链必须检查完整跨层链路**
 5. **改品牌 / 命名 / deep link / SO / DLL 时做全链路核对**
 6. **改 terminal 时不要再直接相信 `terminal.md`**
 7. **改 Android runtime 时不要把 service state 与 frame state 混为一谈**
-8. **代码事实发生变化后，同步更新 `docs/ENGINEERING_*` 文档**
+8. **获准修改且事实发生变化后，按 Task Protocol 同步 `docs/AI_ENGINEERING/`、Decision Log、Task History 和 External Asset Registry**
 
 ---
 
 ## 10. 本文件与其他文档的关系
 
-- 真相层：`docs/ENGINEERING_*`
-- 任务导航：`docs/TASK_ENTRYPOINTS.md`
-- 结构地图：`docs/REPO_TRUE_STRUCTURE_MAP.md`
-- 文档可信度审计：`docs/DOCUMENT_AUDIT.md`
-- 本文件：Claude Code 的补充入口与速查表
+- 唯一第一入口：`PROJECT_START_HERE.md`
+- AI 行为与权限：`.codex/AI_RULES.md`
+- 逐任务状态机：`docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`
+- 当前工程真相层：源码 + `docs/AI_ENGINEERING/`
+- 架构决策：`docs/ADR/README.md`
+- 工程基线：`docs/BASELINE/BASELINE_INDEX.md`
+- 任务模板：`TASK_TEMPLATE.md`
+- 测试矩阵：`TEST_MATRIX.md`
+- 开发流程：`DEVELOPMENT_WORKFLOW.md`
+- 仓外资产：`EXTERNAL_ASSET_REGISTRY.md`
+- 原 `docs/ENGINEERING_*` / `TASK_ENTRYPOINTS.md` / structure map：历史细节和 no-regression 参考
+- 本文件：Claude Code 的补充速查表，不提供额外权限
 
-若本文件与工程文档冲突，以工程文档和源码为准。
+若本文件与新入口、规则、当前工程文档或源码冲突，按 `PROJECT_START_HERE.md` 定义的层级处理，源码仍是实现真相。

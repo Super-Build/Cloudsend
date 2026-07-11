@@ -1,7 +1,7 @@
 > [!IMPORTANT]
-> Current project source truth (verified 2026-05-18): this repository builds the CloudSend runtime, with Android visible app name `云计划`, Android package `com.cloudsend.app`, version `5.2.1` (`flutter` package `5.2.1+59`), Android SO `libcloudsend.so`, Windows DLL `cloudsend.dll`, and Windows build entry `new-build.cmd`.
+> Current project identity (source-verified 2026-07-12): this repository builds the CloudSend runtime, with Android visible app name `云计划`, Android package `com.cloudsend.app`, version `5.2.1` (`flutter` package `5.2.1+59`), Android SO `libcloudsend.so`, Windows DLL `cloudsend.dll`, and Windows build entry `new-build.cmd`.
 >
-> The upstream RustDesk README below is retained as inherited background only. For current engineering facts, use `CLAUDE.md`, `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, and `docs/TASK_ENTRYPOINTS.md`.
+> The upstream RustDesk README below is retained as inherited background only. Every AI or maintainer must start with `PROJECT_START_HERE.md`, then follow `.codex/AI_RULES.md` and `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`. Current domain truth lives in `docs/AI_ENGINEERING/`; the former `ENGINEERING_*` suite remains historical detail.
 
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
